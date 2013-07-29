@@ -30,6 +30,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     deferredPageRequest: undefined,
     spine: undefined,
     fontSize:100,
+    currentIframe: 1,
 
     lastViewPortSize : {
         width: undefined,
@@ -58,11 +59,11 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         this.$el.html(this.template({}));
 
         this.$viewport = $("#viewport_reflowable", this.$el);
-        this.$iframe = $("#epubContentIframe", this.$el);
+        this.$iframe = $(".epubContentIframe", this.$el);
 
         this.$iframe.css("left", "");
         this.$iframe.css("right", "");
-        this.$iframe.css(this.spine.isLeftToRight() ? "left" : "right", "0px");
+        this.$iframe.eq(this.currentIframe).css(this.spine.isLeftToRight() ? "left" : "right", "0px");
 
         //We will call onViewportResize after user stopped resizing window
         var lazyResize = _.debounce(this.onViewportResize, 100);
@@ -114,11 +115,28 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         if(this.currentSpineItem != spineItem) {
 
             this.paginationInfo.currentSpreadIndex = 0;
+            var forwardDirection = true;
+            if(this.currentSpineItem) forwardDirection = (this.currentSpineItem.index < spineItem.index);
             this.currentSpineItem = spineItem;
             this.isWaitingFrameRender = true;
 
             var src = this.spine.getItemUrl(spineItem);
-            ReadiumSDK.Helpers.LoadIframe(this.$iframe[0], src, this.onIFrameLoad, this);
+            var newIframe = this.$iframe.eq((this.currentIframe == 0)?1:0);
+            var oldIframe = this.$iframe.eq((this.currentIframe == 0)?0:1);
+
+            //turn off iframe transitions for newIframe to align it for the direction we're moving
+            newIframe.css("transition", "");
+            newIframe.css("-webkit-transition", "");
+
+            //update the viewport size to be sure we calculate positions on recent data
+            this.updateViewportSize();
+            var frameWidth = this.lastViewPortSize.width;
+            var adjustProperty = this.spine.isLeftToRight() ? "left" : "right";
+
+            //position the iframes in the correct order
+            newIframe.css(adjustProperty, (forwardDirection)?frameWidth+"px":"-"+frameWidth+"px");
+
+            ReadiumSDK.Helpers.LoadIframe(newIframe[0], src, this.onIFrameLoad, this);
         }
     },
 
@@ -131,6 +149,12 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     },
 
     onIFrameLoad : function(success) {
+        var oldIframe = this.$iframe.eq(this.currentIframe);
+        this.currentIframe = (this.currentIframe == 0)?1:0;
+        var newIframe = this.$iframe.eq(this.currentIframe);
+
+        var frameWidth = this.lastViewPortSize.width;
+        var adjustProperty = this.spine.isLeftToRight() ? "left" : "right";
 
         this.isWaitingFrameRender = false;
 
@@ -145,12 +169,25 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
             return;
         }
 
-        var epubContentDocument = this.$iframe[0].contentDocument;
+        var epubContentDocument = newIframe[0].contentDocument;
         this.$epubHtml = $("html", epubContentDocument);
 
         this.$epubHtml.css("height", "100%");
         this.$epubHtml.css("position", "absolute");
         this.$epubHtml.css("-webkit-column-axis", "horizontal");
+
+        //Slower browsers / devices need a little extra time loading the document for this
+        //transition to complete properly. (Kindle Fire HD)
+        setTimeout(function() {
+            //reconfigure the transition property for our animation
+            newIframe.css("transition", "left 0.25s linear, right 0.25s linear");
+            newIframe.css("-webkit-transition", "left 0.25s linear, right 0.25s linear");
+
+            //animate the iframes to simulate the page slide
+            var goingForward = (newIframe.position().left > 0)?true:false;
+            oldIframe.css(adjustProperty, (goingForward)?"-"+frameWidth+"px":frameWidth+"px");
+            newIframe.css(adjustProperty, newIframe.parents().offset().left+"px");
+        }, 100);
 
         this.updateHtmlFontSizeAndColumnGap();
 
@@ -196,7 +233,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         }
 
         var pageIndex = undefined;
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe);
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
 
         if(pageRequest.spineItemPageIndex !== undefined) {
             pageIndex = pageRequest.spineItemPageIndex;
@@ -356,7 +393,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         //we do this because CSS will floor column with by itself if it is not a round number
         this.paginationInfo.columnWidth = Math.floor(this.paginationInfo.columnWidth);
 
-        this.$epubHtml.css("width", this.paginationInfo.columnWidth);
+        this.$epubHtml.css("width", this.paginationInfo.columnWidth + "px");
 
         this.shiftBookOfScreen();
 
@@ -382,10 +419,14 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
             //We do this to force re-rendering of the document in the iframe.
             //There is a bug in WebView control with right to left columns layout - after resizing the window html document
             //is shifted in side the containing div. Hiding and showing the html element puts document in place.
+            self.$epubHtml.css("transition", "");
+            self.$epubHtml.css("-webkit-transition", "");
             self.$epubHtml.hide();
             setTimeout(function() {
                 self.$epubHtml.show();
                 self.onPaginationChanged();
+                self.$epubHtml.css("transition", "left 0.25s linear, right 0.25s linear");
+                self.$epubHtml.css("-webkit-transition", "left 0.25s linear, right 0.25s linear");
             }, 50);
 
         }, 100);
@@ -407,7 +448,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
         var topOffset = columnsLeftOfViewport * this.$viewport.height();
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe);
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
         return navigation.getFirstVisibleElementCfi(topOffset);
     },
 
