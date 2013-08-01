@@ -185,7 +185,8 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
             //animate the iframes to simulate the page slide
             var goingForward = (newIframe.position().left > 0)?true:false;
-            oldIframe.css(adjustProperty, (goingForward)?"-"+frameWidth+"px":frameWidth+"px");
+            var viewOffset = oldIframe.parents().position().left * 2;
+            oldIframe.css(adjustProperty, (goingForward)?"-"+(frameWidth)+"px":(frameWidth+viewOffset)+"px");
             newIframe.css(adjustProperty, newIframe.parents().offset().left+"px");
         }, 100);
 
@@ -479,6 +480,30 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         }
 
         return new ReadiumSDK.Models.BookmarkData(this.currentSpineItem.idref, this.getFirstVisibleElementCfi());
-    }
+    },
 
+    firstVisibleElementContent: function() {
+        var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
+        var topOffset = columnsLeftOfViewport * this.$viewport.height();
+
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
+        var firstElement = navigation.findFirstVisibleElement(topOffset);
+
+        if(!firstElement.$element) {
+            console.log("Could not get context. No visible element on page");
+            return "";
+        }
+
+        if(firstElement.$element.nodeType === Node.TEXT_NODE) {
+            return firstElement.$element.nodeValue.substring(0, 64);
+        } else {
+            return firstElement.$element.attr("alt").substring(0, 64);
+        }
+    },
+
+    setFontSize: function(newSize){
+        this.fontSize = newSize;
+        this.updateHtmlFontSizeAndColumnGap();
+//        this.updatePagination();
+    }
 });

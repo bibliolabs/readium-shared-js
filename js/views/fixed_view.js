@@ -210,6 +210,36 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
         }
 
         return new ReadiumSDK.Models.BookmarkData("", "");
+    },
+
+    firstVisibleElementContent: function() {
+        var viewsToCheck = [];
+
+        if( this.spine.isLeftToRight() ) {
+            viewsToCheck = [this.leftPageView, this.centerPageView, this.rightPageView];
+        }
+        else {
+            viewsToCheck = [this.rightPageView, this.centerPageView, this.leftPageView];
+        }
+
+        for(var i = 0; i < viewsToCheck.length; i++) {
+            if(viewsToCheck[i].isDisplaying()) {
+                var navigation = new ReadiumSDK.Views.CfiNavigationLogic(viewsToCheck[i].$el, viewsToCheck[i].$iframe);
+                var firstElement = navigation.findFirstVisibleElement(0);
+
+                if(!firstElement.$element) {
+                    console.log("Could not get context. No visible element on page");
+                    return "";
+                }
+
+                if(firstElement.$element.nodeType === Node.TEXT_NODE) {
+                    return firstElement.$element.nodeValue.substring(0, 64);
+                } else {
+                    return firstElement.$element.attr("alt").substring(0, 64);
+                }
+            }
+        }
+
     }
 
 });
