@@ -31,7 +31,7 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
 
     initialize: function() {
 
-        this.viewerSettings = new ReadiumSDK.Models.ViewerSettings(true, 20, 20);
+        this.viewerSettings = new ReadiumSDK.Models.ViewerSettings({isSyntheticSpread:true, fontSize:20, columnGap:20});
 
     },
 
