@@ -232,10 +232,15 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
                     return "";
                 }
 
-                if(firstElement.$element.nodeType === Node.TEXT_NODE) {
-                    return firstElement.$element.nodeValue.substring(0, 64);
+                if(firstElement.$element.get(0).nodeType === Node.ELEMENT_NODE &&
+                firstElement.$element.get(0).nodeName.toLowerCase() === "img") {
+                    var altAttr = firstElement.$element.attr("alt");
+                    if(altAttr) {
+                        return "[image] "+altAttr.substring(0, 64);
+                    }
+                    return "[image]";
                 } else {
-                    return firstElement.$element.attr("alt").substring(0, 64);
+                    return firstElement.$element.text().substring(0, 64);
                 }
             }
         }
