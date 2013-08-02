@@ -259,6 +259,16 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         }
     },
 
+    isCfiVisible: function(cfi) {
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
+        var pageIndex = navigation.getPageForElementCfi(cfi);
+
+        if(this.paginationInfo.currentSpreadIndex == Math.floor(pageIndex / this.paginationInfo.visibleColumnCount)) {
+            return true;
+        }
+        return false;
+    },
+
     redraw: function() {
 
         var offsetVal =  -this.paginationInfo.pageOffset + "px";
@@ -482,28 +492,28 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         return new ReadiumSDK.Models.BookmarkData(this.currentSpineItem.idref, this.getFirstVisibleElementCfi());
     },
 
-    firstVisibleElementContent: function() {
+    bookmarkCurrentPageWithContext: function() {
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
         var topOffset = columnsLeftOfViewport * this.$viewport.height();
 
         var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
-        var firstElement = navigation.findFirstVisibleElement(topOffset);
+        cfiData = navigation.findFirstVisibleTextOffsetCfi(topOffset);
 
-        if(!firstElement.$element) {
-            console.log("Could not get context. No visible element on page");
-            return "";
-        }
+        var bookmark = new ReadiumSDK.Models.BookmarkData(this.currentSpineItem.idref, cfiData.cfi);
 
-        if(firstElement.$element.get(0).nodeType === Node.ELEMENT_NODE &&
-        firstElement.$element.get(0).nodeName.toLowerCase() === "img") {
-            var altAttr = firstElement.$element.attr("alt");
+        if(cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
+        cfiData.elementData.$element.get(0).nodeName.toLowerCase() === "img") {
+            var altAttr = cfiData.elementData.$element.attr("alt");
             if(altAttr) {
-                return "[image] "+altAttr.substring(0, 64);
+                bookmark.context = "[image] "+altAttr.substring(0, 64);
+            } else {
+                bookmark.context = "[image]";
             }
-            return "[image]";
         } else {
-            return firstElement.$element.text().substring(0, 64);
+            bookmark.context = cfiData.elementData.$element.text().substring(cfiData.elementData.textOffset, cfiData.elementData.textOffset+64);
         }
+
+        return bookmark;
     },
 
     setFontSize: function(newSize){

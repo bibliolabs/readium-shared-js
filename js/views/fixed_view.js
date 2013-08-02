@@ -212,7 +212,8 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
         return new ReadiumSDK.Models.BookmarkData("", "");
     },
 
-    firstVisibleElementContent: function() {
+    bookmarkCurrentPageWithContext: function() {
+
         var viewsToCheck = [];
 
         if( this.spine.isLeftToRight() ) {
@@ -225,26 +226,25 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
         for(var i = 0; i < viewsToCheck.length; i++) {
             if(viewsToCheck[i].isDisplaying()) {
                 var navigation = new ReadiumSDK.Views.CfiNavigationLogic(viewsToCheck[i].$el, viewsToCheck[i].$iframe);
-                var firstElement = navigation.findFirstVisibleElement(0);
+                cfiData = navigation.findFirstVisibleTextOffsetCfi(0);
+                var bookmark = new ReadiumSDK.Models.BookmarkData(viewsToCheck[i].currentSpineItem.idref, cfiData.cfi);
 
-                if(!firstElement.$element) {
-                    console.log("Could not get context. No visible element on page");
-                    return "";
-                }
-
-                if(firstElement.$element.get(0).nodeType === Node.ELEMENT_NODE &&
-                firstElement.$element.get(0).nodeName.toLowerCase() === "img") {
-                    var altAttr = firstElement.$element.attr("alt");
+                if(cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
+                cfiData.elementData.$element.get(0).nodeName.toLowerCase() === "img") {
+                    var altAttr = cfiData.elementData.$element.attr("alt");
                     if(altAttr) {
-                        return "[image] "+altAttr.substring(0, 64);
+                        bookmark.context = "[image] "+altAttr.substring(0, 64);
+                    } else {
+                        bookmark.context = "[image]";
                     }
-                    return "[image]";
                 } else {
-                    return firstElement.$element.text().substring(0, 64);
+                    bookmark.context = cfiData.elementData.$element.text().substring(0, 0+64);
                 }
+                return bookmark;
             }
         }
 
+        return new ReadiumSDK.Models.BookmarkData("", "");
     }
 
 });

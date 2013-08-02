@@ -416,8 +416,7 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
      * @returns {string} Stringified ReadiumSDK.Models.BookmarkData plus textual context
      */
      bookmarkCurrentPageWithContext: function() {
-        var bookmark = this.currentView.bookmarkCurrentPage();
-        bookmark.context = this.currentView.firstVisibleElementContent();
+        var bookmark = this.currentView.bookmarkCurrentPageWithContext();
         return JSON.stringify(bookmark);
      },
 

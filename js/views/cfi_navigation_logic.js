@@ -35,6 +35,10 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
 
     };
 
+    this.isCfiVisible = function(elementCfi, topOffset) {
+
+    }
+
     //we look for text and images
     this.findFirstVisibleElement = function (topOffset) {
 
@@ -89,6 +93,116 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
 
         return {$element: $firstVisibleTextNode, percentY: percentOfElementHeight};
     };
+
+
+    //we look for text and images
+    this.findFirstVisibleElementWithTextOffset = function (topOffset) {
+
+        var $elements;
+        var $firstVisibleTextNode = null;
+        var percentOfElementHeight = 0;
+        var self = this;
+
+        $elements = $("body", this.getRootElement()).find(":not(iframe)").contents().filter(function () {
+            return this.nodeType === Node.TEXT_NODE || this.nodeName.toLowerCase() === 'img';
+        });
+
+        // Find the first visible text node
+        $.each($elements, function() {
+
+            var $element;
+
+            if(this.nodeType === Node.TEXT_NODE)  { //text node
+                // Heuristic to find a text node with actual text
+                var nodeText = this.nodeValue.replace(/\n/g, "");
+                nodeText = nodeText.replace(/ /g, "");
+
+                if(nodeText.length > 0) {
+                    $element = $(this).parent();
+                }
+                else {
+                    return true; //next element
+                }
+            }
+            else {
+                $element = $(this); //image
+            }
+
+            var elementRect = ReadiumSDK.Helpers.Rect.fromElement($element);
+
+            if (elementRect.bottom() > topOffset) {
+
+                $firstVisibleTextNode = $element;
+
+                if(elementRect.top > topOffset) {
+                    characterOffset = 0;
+                    percentOfElementHeight = 0;
+                }
+                else {
+                    characterOffset = 0;
+                    if(this.nodeType === Node.TEXT_NODE) {
+                        //find the character offset that is first visible
+                        characterOffset = self.findFirstVisibleTextOffset($element, $(this), topOffset);
+                    }
+                    percentOfElementHeight = Math.ceil(((topOffset - elementRect.top) / elementRect.height) * 100);
+                }
+
+                // Break the loop
+                return false;
+            }
+
+            return true; //next element
+        });
+
+        return {$element: $firstVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
+    };
+
+    this.findFirstVisibleTextOffset = function($element, $textNode, topOffset) {
+        var text = $textNode[0].nodeValue;
+
+        //add text back one word at a time until $element is once again passing topOffset
+        var words = text.split(' ');
+        var size = words.length;
+        var i = 0;
+        var textOffset = 0;
+        var currentTextNode = $textNode[0];
+        var tempTextNode;
+        for(;i < size; i++) {
+            var newText = words.slice(0, i+1).join(' ');
+            tempTextNode = document.createTextNode(newText);
+            $element[0].replaceChild(tempTextNode, currentTextNode);
+            currentTextNode = tempTextNode;
+
+            var elementRect = ReadiumSDK.Helpers.Rect.fromElement($element);
+            if(elementRect.bottom() > topOffset) {
+                break;
+            }
+            textOffset = newText.length;
+        }
+        if(text.charAt(textOffset) == ' ') textOffset++;
+
+        //replace our original text
+        $element[0].replaceChild($textNode[0], currentTextNode);
+
+        return textOffset;
+    }
+
+    this.findFirstVisibleTextOffsetCfi = function(topOffset) {
+        var foundElement = this.findFirstVisibleElementWithTextOffset(topOffset);
+
+        if(!foundElement.$element) {
+            console.log("Could not generate CFI. The page has no visible elements.");
+            return undefined;
+        }
+
+        var cfi = EPUBcfi.Generator.generateElementCFIComponent(foundElement.$element[0]);
+
+        if(cfi[0] == "!") {
+            cfi = cfi.substring(1);
+        }
+
+        return { cfi: cfi + "@0:" + foundElement.percentY, elementData: foundElement };
+    }
 
     this.getFirstVisibleElementCfi = function(topOffset) {
 
