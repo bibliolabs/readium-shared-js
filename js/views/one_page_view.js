@@ -25,6 +25,7 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
 
     currentSpineItem: undefined,
     spine: undefined,
+    currentIframe: 1,
 
     meta_size : {
         width: 0,
@@ -50,7 +51,13 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
             this.template = _.template($("#template-ope-fixed-page-view").html(), {});
             this.setElement(this.template);
             this.$el.addClass(this.options.class);
-            this.$iframe = $("iframe", this.$el);
+            //this.$iframe = $("iframe", this.$el);
+
+            this.$iframe = $(".fixed_iframe", this.$el);
+
+            this.$iframe.css("left", "");
+            this.$iframe.css("right", "");
+            this.$iframe.eq(this.currentIframe).css(this.spine.isLeftToRight() ? "left" : "right", "0px");
         }
 
         return this;
@@ -67,10 +74,34 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
     onIFrameLoad:  function(success) {
 
         if(success) {
-            var epubContentDocument = this.$iframe[0].contentDocument;
+            var oldIframe = this.$iframe.eq(this.currentIframe);
+            this.currentIframe = (this.currentIframe == 0)?1:0;
+            var newIframe = this.$iframe.eq(this.currentIframe);
+
+            var frameWidth = $(viewport_fixed).width();
+console.log('got viewport width as '+frameWidth);
+            var adjustProperty = this.spine.isLeftToRight() ? "left" : "right";
+
+            var epubContentDocument = newIframe[0].contentDocument;
             this.$epubHtml = $("html", epubContentDocument);
             this.$epubHtml.css("overflow", "hidden");
+            this.$epubHtml.css("position", "absolute");
             this.fitToScreen();
+
+            //Slower browsers / devices need a little extra time loading the document for this
+            //transition to complete properly. (Kindle Fire HD)
+            setTimeout(function() {
+                //reconfigure the transition property for our animation
+                newIframe.css("transition", "left 0.25s linear, right 0.25s linear");
+                newIframe.css("-webkit-transition", "left 0.25s linear, right 0.25s linear");
+
+                //animate the iframes to simulate the page slide
+                var goingForward = (newIframe.position().left >= 0)?true:false;
+                var viewOffset = oldIframe.parents().position().left * 2;
+                console.log('goingForward: '+((goingForward)?"true":"false")+', newIframe.position().left: '+newIframe.position().left);
+                oldIframe.css(adjustProperty, (goingForward)?"-"+(frameWidth)+"px":(frameWidth+viewOffset)+"px");
+                newIframe.css(adjustProperty, newIframe.parents().offset().left+"px");
+            }, 100);
         }
 
         this.trigger("PageLoaded");
@@ -124,7 +155,7 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
 
     updateMetaSize: function() {
 
-        var contentDocument = this.$iframe[0].contentDocument;
+        var contentDocument = this.$iframe.eq(this.currentIframe)[0].contentDocument;
 
         // first try to read viewport size
         var content = $('meta[name=viewport]', contentDocument).attr("content");
@@ -159,10 +190,30 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
 
         if(this.currentSpineItem != spineItem) {
 
+            var forwardDirection = true;
+            if(this.currentSpineItem) forwardDirection = (this.currentSpineItem.index < spineItem.index);
+
             this.currentSpineItem = spineItem;
             var src = this.spine.getItemUrl(spineItem);
 
-            ReadiumSDK.Helpers.LoadIframe(this.$iframe[0], src, this.onIFrameLoad, this);
+            var newIframe = this.$iframe.eq((this.currentIframe == 0)?1:0);
+            var oldIframe = this.$iframe.eq((this.currentIframe == 0)?0:1);
+
+            //turn off iframe transitions for newIframe to align it for the direction we're moving
+            newIframe.css("transition", "");
+            newIframe.css("-webkit-transition", "");
+
+            //update the viewport size to be sure we calculate positions on recent data
+            this.updateMetaSize();
+            var frameWidth = $(viewport_fixed).width();
+console.log('got viewport width as '+frameWidth);
+            var adjustProperty = this.spine.isLeftToRight() ? "left" : "right";
+            console.log('forwardDirection: '+((forwardDirection)?"true":"false"));
+
+            //position the iframes in the correct order
+            newIframe.css(adjustProperty, (forwardDirection)?frameWidth+"px":"-"+frameWidth+"px");
+
+            ReadiumSDK.Helpers.LoadIframe(newIframe[0], src, this.onIFrameLoad, this);
         }
     },
 
@@ -200,7 +251,7 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
 
     getFirstVisibleElementCfi: function(){
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$el, this.$iframe);
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$el, this.$iframe.eq(this.currentIframe));
         return navigation.getFirstVisibleElementCfi(0);
 
     }
