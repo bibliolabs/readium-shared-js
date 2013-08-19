@@ -28,10 +28,12 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
     package: undefined,
     spine: undefined,
     viewerSettings:undefined,
+    defaultFontSize: 100,
+    currentLocation:undefined,
 
     initialize: function() {
 
-        this.viewerSettings = new ReadiumSDK.Models.ViewerSettings({isSyntheticSpread:false, fontSize:20, columnGap:20});
+        this.viewerSettings = new ReadiumSDK.Models.ViewerSettings({isSyntheticSpread:false, fontSize:this.defaultFontSize, columnGap:20});
 
     },
 
@@ -420,7 +422,41 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
         return JSON.stringify(bookmark);
      },
 
-    resizeText: function(newSize){
+    /**
+     * Resizes the viewer's content based on a scale value.
+     *
+     * @method resizeViewerContent
+     *
+     * @param {number} floating point scale for the content size where 1.0 represents 100%
+     */
+    resizeViewerContent: function(newScale) {
+        if(this.currentView.isReflowable()) {
+            //font size value passed to resizeText should be a percent.
+            //Default font size is 20%, so this tweaks the passed in value
+            //to make 1.0 equal to the default font size.
+            this.resizeText(newScale * 100);
+        } else {
+            //Just in case for the future
+        }
+    },
+
+    updatePagination: function() {
+        //When the pagination updates, we need to reload our position to make sure we're at the same spot
+        var self = this;
+        var pageCallback = function() {
+            //now revisit our current location
+            self.currentView.off("ViewPaginationChanged", pageCallback);
+            if(self.currentLocation) {
+                self.openSpineItemElementCfi(self.currentLocation.idref, self.currentLocation.contentCFI);
+            }
+        };
+
+        this.currentView.on("ViewPaginationChanged", pageCallback);
+        //Force a pagination update to make sure the viewer pages correctly
+        this.currentView.updatePagination();
+    },
+
+    resizeText: function(newSize) {
         this.viewerSettings.fontSize = newSize;
         this.currentView.setFontSize(newSize);
     }
