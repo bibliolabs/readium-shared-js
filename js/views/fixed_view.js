@@ -245,6 +245,23 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
         }
 
         return new ReadiumSDK.Models.BookmarkData("", "");
+    },
+
+    getIframe: function() {
+        var viewsToCheck = [];
+
+        if( this.spine.isLeftToRight() ) {
+            viewsToCheck = [this.leftPageView, this.centerPageView, this.rightPageView];
+        }
+        else {
+            viewsToCheck = [this.rightPageView, this.centerPageView, this.leftPageView];
+        }
+        for(var i = 0; i < viewsToCheck.length; i++) {
+            if(viewsToCheck[i].isDisplaying()) {
+              return viewsToCheck[i].getIframe();
+            }
+        }
+        return null;
     }
 
 });

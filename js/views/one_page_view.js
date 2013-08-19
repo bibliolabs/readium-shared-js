@@ -254,6 +254,9 @@ console.log('got viewport width as '+frameWidth);
         var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$el, this.$iframe.eq(this.currentIframe));
         return navigation.getFirstVisibleElementCfi(0);
 
-    }
+    },
 
+    getIframe: function() {
+        return this.$iframe.eq(this.currentIframe);
+    }
 });

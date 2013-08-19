@@ -520,5 +520,9 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         this.fontSize = newSize;
         this.updateHtmlFontSizeAndColumnGap();
 //        this.updatePagination();
+    },
+
+    getIframe: function() {
+        return this.$iframe.eq(this.currentIframe);
     }
 });
