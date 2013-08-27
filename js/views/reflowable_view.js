@@ -358,7 +358,11 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
     onPaginationChanged: function() {
 
-        this.paginationInfo.pageOffset = (this.paginationInfo.columnWidth + this.paginationInfo.columnGap) * this.paginationInfo.visibleColumnCount * this.paginationInfo.currentSpreadIndex;
+        var newPageOffset = (this.paginationInfo.columnWidth + this.paginationInfo.columnGap) * this.paginationInfo.visibleColumnCount * this.paginationInfo.currentSpreadIndex;
+        if(this.paginationInfo.pageOffset == newPageOffset) {
+            this.onPageTurnComplete();
+        }
+        this.paginationInfo.pageOffset = newPageOffset;
         this.redraw();
     },
 
