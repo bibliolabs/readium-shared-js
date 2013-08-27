@@ -72,6 +72,13 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         return this;
     },
 
+    onPageTurnComplete: function() {
+        //hide the old iframe
+        var oldIframe = this.$iframe.eq((this.currentIframe == 0)?1:0);
+        oldIframe.css("display", "none");
+        this.trigger("ViewPaginationChanged");
+    },
+
     remove: function() {
 
         $(window).off("resize.ReadiumSDK.reflowableView");
@@ -127,6 +134,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
             //turn off iframe transitions for newIframe to align it for the direction we're moving
             newIframe.css("transition", "");
             newIframe.css("-webkit-transition", "");
+            newIframe.css("display", "block");
 
             //update the viewport size to be sure we calculate positions on recent data
             this.updateViewportSize();
@@ -169,12 +177,23 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
             return;
         }
 
+        if(this.$epubHtml) {
+            this.$epubHtml.off("transitionend webkitTransitionEnd oTransitionEnd MSTransitionEnd");
+        }
+        oldIframe.off("transitionend webkitTransitionEnd oTransitionEnd MSTransitionEnd");
+
         var epubContentDocument = newIframe[0].contentDocument;
         this.$epubHtml = $("html", epubContentDocument);
 
         this.$epubHtml.css("height", "100%");
         this.$epubHtml.css("position", "absolute");
         this.$epubHtml.css("-webkit-column-axis", "horizontal");
+
+        var self = this;
+        this.$epubHtml.on("transitionend webkitTransitionEnd oTransitionEnd MSTransitionEnd", 
+            _.bind(this.onPageTurnComplete, this));
+        newIframe.on("transitionend webkitTransitionEnd oTransitionEnd MSTransitionEnd",
+            _.bind(this.onPageTurnComplete, this));
 
         //Slower browsers / devices need a little extra time loading the document for this
         //transition to complete properly. (Kindle Fire HD)
@@ -341,7 +360,6 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         this.paginationInfo.pageOffset = (this.paginationInfo.columnWidth + this.paginationInfo.columnGap) * this.paginationInfo.visibleColumnCount * this.paginationInfo.currentSpreadIndex;
         this.redraw();
-        this.trigger("ViewPaginationChanged");
     },
 
     openPagePrev:  function () {
