@@ -72,7 +72,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         return this;
     },
 
-    onPageTurnComplete: function() {
+    onPageTurnComplete: function(completeEvent) {
         //hide the old iframe
         var oldIframe = this.$iframe.eq((this.currentIframe == 0)?1:0);
         oldIframe.css("display", "none");
@@ -234,6 +234,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         var deferredData = this.deferredPageRequest;
         this.deferredPageRequest = undefined;
+        deferredData.deferred = true;
         this.openPage(deferredData);
 
     },
@@ -273,7 +274,11 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         if(pageIndex !== undefined && pageIndex >= 0 && pageIndex < this.paginationInfo.columnCount) {
 
-            this.paginationInfo.currentSpreadIndex = Math.floor(pageIndex / this.paginationInfo.visibleColumnCount) ;
+            var newSpreadIndex = Math.floor(pageIndex / this.paginationInfo.visibleColumnCount);
+            if(this.paginationInfo.currentSpreadIndex == newSpreadIndex && !pageRequest.deferred) {
+                this.onPageTurnComplete();
+            }
+            this.paginationInfo.currentSpreadIndex = newSpreadIndex;
             this.onPaginationChanged();
         }
     },
@@ -359,9 +364,6 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     onPaginationChanged: function() {
 
         var newPageOffset = (this.paginationInfo.columnWidth + this.paginationInfo.columnGap) * this.paginationInfo.visibleColumnCount * this.paginationInfo.currentSpreadIndex;
-        if(this.paginationInfo.pageOffset == newPageOffset) {
-            this.onPageTurnComplete();
-        }
         this.paginationInfo.pageOffset = newPageOffset;
         this.redraw();
     },
