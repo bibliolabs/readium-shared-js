@@ -229,13 +229,27 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
 
         var wrappedCfi = "epubcfi(" + cfiParts.cfi + ")";
         var $element = EPUBcfi.Interpreter.getTargetElementWithPartialCFI(wrappedCfi, contentDoc);
+        var $removeElement;
+        if($element[0].nodeType === Node.TEXT_NODE) { 
+          var $injectElement = $("<span/>", {});
+          var CFIAST = EPUBcfi.Parser.parse(decodeURI("epubcfi("+cfi+")"));
+          EPUBcfi.Interpreter.interpretTextTerminusNode(CFIAST.cfiString.localPath.termStep, $element, $injectElement);
+          $removeElement = $injectElement;
+          $element = $injectElement;
+        }
 
         if(!$element || $element.length == 0) {
             console.log("Can't find element for CFI: " + cfi);
             return undefined;
         }
 
-        return this.getPageForElement($element, cfiParts.x, cfiParts.y);
+        var page = this.getPageForElement($element, cfiParts.x, cfiParts.y);
+        
+        if($removeElement) {
+            $removeElement.remove();
+        }
+
+        return page;
     };
 
     this.getPageForElement = function($element, x, y) {
