@@ -231,11 +231,27 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
         var $element = EPUBcfi.Interpreter.getTargetElementWithPartialCFI(wrappedCfi, contentDoc);
         var $removeElement;
         if($element[0].nodeType === Node.TEXT_NODE) { 
-          var $injectElement = $("<span/>", {});
-          var CFIAST = EPUBcfi.Parser.parse(decodeURI("epubcfi("+cfi+")"));
-          EPUBcfi.Interpreter.interpretTextTerminusNode(CFIAST.cfiString.localPath.termStep, $element, $injectElement);
-          $removeElement = $injectElement;
-          $element = $injectElement;
+            var $injectElement = $("<span/>", {});
+            EPUBcfi.CFIInstructions.textTermination($element, cfiParts.chr, $injectElement);
+            var $parentElement = $element.parent();
+            var parentOffset = $parentElement.offset();
+
+            //Avoid a browser bug where text at the very left or right of the parent element
+            //produces an incorrect offset.
+            if($injectElement.offset().left == parentOffset.left) {
+                $injectElement.remove();
+                $element = EPUBcfi.Interpreter.getTargetElementWithPartialCFI(wrappedCfi, contentDoc);
+                cfiParts.chr++;
+                EPUBcfi.CFIInstructions.textTermination($element, cfiParts.chr, $injectElement);
+            }
+            else if($injectElement.offset().left == parentOffset.left + $parentElement.width()) {
+                $injectElement.remove();
+                $element = EPUBcfi.Interpreter.getTargetElementWithPartialCFI(wrappedCfi, contentDoc);
+                cfiParts.chr--;
+                EPUBcfi.CFIInstructions.textTermination($element, cfiParts.chr, $injectElement);
+            }
+            $removeElement = $injectElement;
+            $element = $injectElement;
         }
 
         if(!$element || $element.length == 0) {
@@ -278,11 +294,13 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
 
         var ret = {
             cfi: "",
+            chr: 0,
             x: 0,
             y: 0
         };
 
         var ix = cfi.indexOf("@");
+        var chrOffsetIx = cfi.indexOf(":");
 
         if(ix != -1) {
             var terminus = cfi.substring(ix + 1);
@@ -297,6 +315,12 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
             }
 
             ret.cfi = cfi.substring(0, ix);
+        }
+        else if (chrOffsetIx != -1) {
+            var terminus = cfi.substring(chrOffsetIx + 1);
+            ret.chr = parseInt(terminus);
+
+            ret.cfi = cfi.substring(0, chrOffsetIx);
         }
         else {
 
