@@ -262,6 +262,17 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
             }
         }
         return null;
-    }
+    },
+     
+  /**
+   * Checks if the passed in element cfi is visible
+   *
+   * @method isElementCfiVisible
+   *
+   * @param {string} unwrapped element cfi
+   **/
+  isElementCfiVisible: function(elementCfi) {
+      return true;
+  }
 
 });

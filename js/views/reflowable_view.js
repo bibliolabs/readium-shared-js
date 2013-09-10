@@ -283,9 +283,16 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         }
     },
 
-    isCfiVisible: function(cfi) {
+   /**
+    * Checks if the passed in element cfi is visible
+    *
+    * @method isElementCfiVisible
+    *
+    * @param {string} unwrapped element cfi
+    **/
+    isElementCfiVisible: function(elementCfi) {
         var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
-        var pageIndex = navigation.getPageForElementCfi(cfi);
+        var pageIndex = navigation.getPageForElementCfi(elementCfi);
 
         if(this.paginationInfo.currentSpreadIndex == Math.floor(pageIndex / this.paginationInfo.visibleColumnCount)) {
             return true;

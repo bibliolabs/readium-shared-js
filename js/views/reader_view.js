@@ -459,5 +459,20 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
     resizeText: function(newSize) {
         this.viewerSettings.fontSize = newSize;
         this.currentView.setFontSize(newSize);
+    },
+    
+    /**
+     * Checks if the passed in element cfi is visible
+     * 
+     * @method isElementCfiVisible
+     *
+     * @param {string} unwrapped element cfi
+     **/
+    isElementCfiVisible: function(elementCfi) {
+       if (this.currentView.isElementCfiVisible(elementCfi)) {
+            return "true";
+       } else {
+            return "false";
+       }        
     }
 });
