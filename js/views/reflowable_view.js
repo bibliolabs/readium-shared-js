@@ -31,6 +31,9 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     spine: undefined,
     fontSize:100,
     currentIframe: 1,
+    $viewport: undefined,
+    $contentFrame: undefined,
+    userStyles: undefined,
 
     lastViewPortSize : {
         width: undefined,
@@ -50,16 +53,21 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
     initialize: function() {
 
+        this.$viewport = this.options.$viewport;
         this.spine = this.options.spine;
-        this.template = _.template($("#template-reflowable-view").html());
+        this.userStyles = this.options.userStyles;
     },
 
     render: function(){
 
-        this.$el.html(this.template({}));
+        this.template = ReadiumSDK.Helpers.loadTemplate("reflowable_book_frame", {});
 
-        this.$viewport = $("#viewport_reflowable", this.$el);
-        this.$iframe = $(".epubContentIframe", this.$el);
+        this.setElement(this.template);
+        this.$viewport.append(this.$el);
+
+        this.$contentFrame = $("#reflowable-content-frame", this.$el);
+
+        this.$iframe = $("#epubContentIframe", this.$el);
 
         this.$iframe.css("left", "");
         this.$iframe.css("right", "");
@@ -77,6 +85,14 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         var oldIframe = this.$iframe.eq((this.currentIframe == 0)?1:0);
         oldIframe.css("display", "none");
         this.trigger("ViewPaginationChanged");
+    },
+
+    setFrameSizesToRectangle: function(rectangle) {
+        this.$contentFrame.css("left", rectangle.left);
+        this.$contentFrame.css("top", rectangle.top);
+        this.$contentFrame.css("right", rectangle.right);
+        this.$contentFrame.css("bottom", rectangle.bottom);
+
     },
 
     remove: function() {
@@ -219,11 +235,25 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 //                    $epubHtml.css("background-color", '#b0c4de');
 /////////
 
-        this.updateViewportSize();
-        this.updatePagination();
+        this.applyStyles();
 
         this.applySwitches(epubContentDocument);
         this.registerTriggers(epubContentDocument);
+    },
+
+
+    applyStyles: function() {
+
+        ReadiumSDK.Helpers.setStyles(this.userStyles.styles, this.$el.parent());
+
+        //because left, top, bottom, right setting ignores padding of parent container
+        //we have to take it to account manually
+        var elementMargins = ReadiumSDK.Helpers.Margins.fromElement(this.$el);
+        this.setFrameSizesToRectangle(elementMargins.padding);
+
+        this.updateViewportSize();
+        this.updatePagination();
+
     },
 
     openDeferredElement: function() {
@@ -254,7 +284,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         }
 
         var pageIndex = undefined;
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
 
         if(pageRequest.spineItemPageIndex !== undefined) {
             pageIndex = pageRequest.spineItemPageIndex;
@@ -291,7 +321,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     * @param {string} unwrapped element cfi
     **/
     isElementCfiVisible: function(elementCfi) {
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
         var pageIndex = navigation.getPageForElementCfi(elementCfi);
 
         if(this.paginationInfo.currentSpreadIndex == Math.floor(pageIndex / this.paginationInfo.visibleColumnCount)) {
@@ -310,8 +340,8 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
     updateViewportSize: function() {
 
-        var newWidth = this.$viewport.width();
-        var newHeight = this.$viewport.height();
+        var newWidth = this.$contentFrame.width();
+        var newHeight = this.$contentFrame.height();
 
         if(this.lastViewPortSize.width !== newWidth || this.lastViewPortSize.height !== newHeight){
 
@@ -488,15 +518,16 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     getFirstVisibleElementCfi: function(){
 
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
-        var topOffset = columnsLeftOfViewport * this.$viewport.height();
+        var topOffset = columnsLeftOfViewport * this.$contentFrame.height();
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
         return navigation.getFirstVisibleElementCfi(topOffset);
     },
 
     getPaginationInfo: function() {
 
-        var paginationInfo = new ReadiumSDK.Models.CurrentPagesInfo(this.spine.items.length, this.spine.package.isFixedLayout(), this.spine.direction);
+        var isFixedLayout = this.currentSpineItem ? this.currentSpineItem.isFixedLayout() : this.spine.package.isFixedLayout();
+        var paginationInfo = new ReadiumSDK.Models.CurrentPagesInfo(this.spine.items.length, isFixedLayout, this.spine.direction);
 
         if(!this.currentSpineItem) {
             return paginationInfo;
@@ -525,9 +556,9 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
     bookmarkCurrentPageWithContext: function() {
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
-        var topOffset = columnsLeftOfViewport * this.$viewport.height();
+        var topOffset = columnsLeftOfViewport * this.$contentFrame.height();
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
         cfiData = navigation.findFirstVisibleTextOffsetCfi(topOffset);
 
         var bookmark = new ReadiumSDK.Models.BookmarkData(this.currentSpineItem.idref, cfiData.cfi);
