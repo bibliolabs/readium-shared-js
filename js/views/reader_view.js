@@ -23,6 +23,7 @@
  * */
 ReadiumSDK.Views.ReaderView = Backbone.View.extend({
 
+    el: 'body',
     currentView: undefined,
     package: undefined,
     spine: undefined,
@@ -454,7 +455,6 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
     },
 
     /**
-<<<<<<< HEAD
      * Returns the bookmark with textual context.
      *
      * @method bookmarkCurrentPageWithContext
@@ -465,7 +465,8 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
         var bookmark = this.currentView.bookmarkCurrentPageWithContext();
         return JSON.stringify(bookmark);
      },
-=======
+
+    /**
      * Resets all the custom styles set by setStyle callers at runtime
      *
      * @method resetStyles
@@ -490,8 +491,7 @@ ReadiumSDK.Views.ReaderView = Backbone.View.extend({
         this.applyStyles();
 
         this.userStyles.clear();
-    }
->>>>>>> 255bc4ded001537ef0a1e8598085a7842c7dbf15
+    },
 
     /**
      * Resizes the viewer's content based on a scale value.

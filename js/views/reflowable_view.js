@@ -67,7 +67,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         this.$contentFrame = $("#reflowable-content-frame", this.$el);
 
-        this.$iframe = $("#epubContentIframe", this.$el);
+        this.$iframe = $(".epubContentIframe", this.$el);
 
         this.$iframe.css("left", "");
         this.$iframe.css("right", "");
@@ -340,8 +340,8 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
     updateViewportSize: function() {
 
-        var newWidth = this.$contentFrame.width();
-        var newHeight = this.$contentFrame.height();
+        var newWidth = this.$viewport.width();
+        var newHeight = this.$viewport.height();
 
         if(this.lastViewPortSize.width !== newWidth || this.lastViewPortSize.height !== newHeight){
 

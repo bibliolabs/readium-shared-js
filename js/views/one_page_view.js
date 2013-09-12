@@ -92,7 +92,6 @@ console.log('got viewport width as '+frameWidth);
             var epubContentDocument = newIframe[0].contentDocument;
             this.$epubHtml = $("html", epubContentDocument);
             this.$epubHtml.css("overflow", "hidden");
-<<<<<<< HEAD
             this.$epubHtml.css("position", "absolute");
             this.fitToScreen();
 
@@ -110,10 +109,8 @@ console.log('got viewport width as '+frameWidth);
                 oldIframe.css(adjustProperty, (goingForward)?"-"+(frameWidth)+"px":(frameWidth+viewOffset)+"px");
                 newIframe.css(adjustProperty, newIframe.parents().offset().left+"px");
             }, 100);
-=======
             this.updateMetaSize();
 //            this.fitToScreen();
->>>>>>> 255bc4ded001537ef0a1e8598085a7842c7dbf15
         }
 
         this.trigger("PageLoaded");

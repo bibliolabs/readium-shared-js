@@ -176,7 +176,7 @@ ReadiumSDK.Helpers.loadTemplate = function(name, params) {
             templText = '<div class="fixed-page-frame"><iframe scrolling="no" class="iframe-fixed"></iframe></div>';
         }
         else if (name == "reflowable_book_frame") {
-            templText = '<div id="reflowable-book-frame" class="clearfix book-frame reflowable-book-frame"><div id="reflowable-content-frame" class="reflowable-content-frame"><iframe scrolling="no" id="epubContentIframe"></iframe></div></div>';
+            templText = '<div id="reflowable-book-frame" class="clearfix book-frame reflowable-book-frame"><div id="reflowable-content-frame" class="reflowable-content-frame"><iframe scrolling="no" class="epubContentIframe"></iframe><iframe scrolling="no" class="epubContentIframe"></iframe></div></div>';
         }
         else {
             console.error(name + " is not a recognized template name!");
