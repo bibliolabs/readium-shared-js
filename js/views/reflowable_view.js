@@ -560,10 +560,13 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
         cfiData = navigation.findFirstVisibleTextOffsetCfi(topOffset);
+        if (!cfiData) {
+            cfiData = { cfi: "" };
+        }
 
         var bookmark = new ReadiumSDK.Models.BookmarkData(this.currentSpineItem.idref, cfiData.cfi);
 
-        if(cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
+        if (cfiData.elementData && cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
         cfiData.elementData.$element.get(0).nodeName.toLowerCase() === "img") {
             var altAttr = cfiData.elementData.$element.attr("alt");
             if(altAttr) {
@@ -571,7 +574,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
             } else {
                 bookmark.context = "[image]";
             }
-        } else {
+        } else if (cfiData.elementData) {
             bookmark.context = cfiData.elementData.$element.text().substring(cfiData.elementData.textOffset, cfiData.elementData.textOffset+64);
         }
 

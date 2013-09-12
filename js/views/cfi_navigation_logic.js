@@ -101,6 +101,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
         var $elements;
         var $firstVisibleTextNode = null;
         var percentOfElementHeight = 0;
+        var characterOffset = 0;
         var self = this;
 
         $elements = $("body", this.getRootElement()).find(":not(iframe)").contents().filter(function () {
