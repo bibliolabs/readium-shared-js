@@ -284,7 +284,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         }
 
         var pageIndex = undefined;
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
 
         if(pageRequest.spineItemPageIndex !== undefined) {
             pageIndex = pageRequest.spineItemPageIndex;
@@ -321,7 +321,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     * @param {string} unwrapped element cfi
     **/
     isElementCfiVisible: function(elementCfi) {
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
         var pageIndex = navigation.getPageForElementCfi(elementCfi);
 
         if(this.paginationInfo.currentSpreadIndex == Math.floor(pageIndex / this.paginationInfo.visibleColumnCount)) {
@@ -520,7 +520,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
         var topOffset = columnsLeftOfViewport * this.$viewport.height();
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
         return navigation.getFirstVisibleElementCfi(topOffset);
     },
 
@@ -528,7 +528,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
         var topOffset = columnsLeftOfViewport * this.$viewport.height();
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
         return navigation.getFirstVisibleTextOffsetCfi(topOffset);
     },
 
@@ -536,7 +536,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap)) + 1;
         var bottomOffset = columnsLeftOfViewport * this.$viewport.height();
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
         return navigation.getLastVisibleTextOffsetCfi(bottomOffset);
     },
 
@@ -574,7 +574,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
         var topOffset = columnsLeftOfViewport * this.$viewport.height();
 
-        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$viewport, this.$iframe.eq(this.currentIframe));
         cfiData = navigation.getFirstVisibleTextOffsetCfi(topOffset);
         if (!cfiData) {
             cfiData = { cfi: "" };
