@@ -256,7 +256,12 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
             return undefined;
         }
 
-        var cfi = EPUBcfi.Generator.generateCharacterOffsetCFIComponent(resultData.$node[0], resultData.textOffset);
+        var cfi;
+        if (resultData.$node[0].nodeType === Node.TEXT_NODE) {
+            cfi = EPUBcfi.Generator.generateCharacterOffsetCFIComponent(resultData.$node[0], resultData.textOffset);
+        } else {
+            cfi = EPUBcfi.Generator.generateElementCFIComponent(resultData.$node[0]);
+        }
 
         if(cfi[0] == "!") {
             cfi = cfi.substring(1);
@@ -273,7 +278,12 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
             return undefined;
         }
 
-        var cfi = EPUBcfi.Generator.generateCharacterOffsetCFIComponent(resultData.$node[0], resultData.textOffset);
+        var cfi;
+        if (resultData.$node[0].nodeType === Node.TEXT_NODE) {
+            cfi = EPUBcfi.Generator.generateCharacterOffsetCFIComponent(resultData.$node[0], resultData.textOffset);
+        } else {
+            cfi = EPUBcfi.Generator.generateElementCFIComponent(resultData.$node[0]);
+        }
 
         if(cfi[0] == "!") {
             cfi = cfi.substring(1);

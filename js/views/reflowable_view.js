@@ -572,7 +572,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
     bookmarkCurrentPageWithContext: function() {
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
-        var topOffset = columnsLeftOfViewport * this.$contentFrame.height();
+        var topOffset = columnsLeftOfViewport * this.$viewport.height();
 
         var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
         cfiData = navigation.getFirstVisibleTextOffsetCfi(topOffset);
