@@ -405,16 +405,16 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
                 cfiData = navigation.getFirstVisibleTextOffsetCfi(0);
                 var bookmark = new ReadiumSDK.Models.BookmarkData(viewsToCheck[i].currentSpineItem.idref, cfiData.cfi);
 
-                if(cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
-                cfiData.elementData.$element.get(0).nodeName.toLowerCase() === "img") {
-                    var altAttr = cfiData.elementData.$element.attr("alt");
+                if(cfiData.elementData.$node.get(0).nodeType === Node.ELEMENT_NODE &&
+                cfiData.elementData.$node.get(0).nodeName.toLowerCase() === "img") {
+                    var altAttr = cfiData.elementData.$node.attr("alt");
                     if(altAttr) {
                         bookmark.context = "[image] "+altAttr.substring(0, 64);
                     } else {
                         bookmark.context = "[image]";
                     }
                 } else {
-                    bookmark.context = cfiData.elementData.$element.text().substring(0, 0+64);
+                    bookmark.context = cfiData.elementData.$node.text().substring(0, 0+64);
                 }
                 return bookmark;
             }

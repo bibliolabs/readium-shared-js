@@ -582,16 +582,16 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         var bookmark = new ReadiumSDK.Models.BookmarkData(this.currentSpineItem.idref, cfiData.cfi);
 
-        if (cfiData.elementData && cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
-        cfiData.elementData.$element.get(0).nodeName.toLowerCase() === "img") {
-            var altAttr = cfiData.elementData.$element.attr("alt");
+        if (cfiData.elementData && cfiData.elementData.$node.get(0).nodeType === Node.ELEMENT_NODE &&
+        cfiData.elementData.$node.get(0).nodeName.toLowerCase() === "img") {
+            var altAttr = cfiData.elementData.$node.attr("alt");
             if(altAttr) {
                 bookmark.context = "[image] "+altAttr.substring(0, 64);
             } else {
                 bookmark.context = "[image]";
             }
         } else if (cfiData.elementData) {
-            bookmark.context = cfiData.elementData.$element.text().substring(cfiData.elementData.textOffset, cfiData.elementData.textOffset+64);
+            bookmark.context = cfiData.elementData.$node.text().substring(cfiData.elementData.textOffset, cfiData.elementData.textOffset+64);
         }
 
         return bookmark;
