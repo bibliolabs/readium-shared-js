@@ -85,7 +85,8 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
             this.currentIframe = (this.currentIframe == 0)?1:0;
             var newIframe = this.$iframe.eq(this.currentIframe);
 
-            var frameWidth = $(viewport_fixed).width();
+            // var frameWidth = $(viewport_fixed).width();
+            var frameWidth = oldIframe.width();
 console.log('got viewport width as '+frameWidth);
             var adjustProperty = this.spine.isLeftToRight() ? "left" : "right";
 
@@ -93,7 +94,7 @@ console.log('got viewport width as '+frameWidth);
             this.$epubHtml = $("html", epubContentDocument);
             this.$epubHtml.css("overflow", "hidden");
             this.$epubHtml.css("position", "absolute");
-            this.fitToScreen();
+            // this.fitToScreen();
 
             //Slower browsers / devices need a little extra time loading the document for this
             //transition to complete properly. (Kindle Fire HD)
@@ -242,7 +243,8 @@ console.log('got viewport width as '+frameWidth);
 
             //update the viewport size to be sure we calculate positions on recent data
             this.updateMetaSize();
-            var frameWidth = $(viewport_fixed).width();
+            // var frameWidth = $(viewport_fixed).width();
+            var frameWidth = oldIframe.width();
 console.log('got viewport width as '+frameWidth);
             var adjustProperty = this.spine.isLeftToRight() ? "left" : "right";
             console.log('forwardDirection: '+((forwardDirection)?"true":"false"));
