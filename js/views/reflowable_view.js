@@ -518,10 +518,26 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
     getFirstVisibleElementCfi: function(){
 
         var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
-        var topOffset = columnsLeftOfViewport * this.$contentFrame.height();
+        var topOffset = columnsLeftOfViewport * this.$viewport.height();
 
         var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
         return navigation.getFirstVisibleElementCfi(topOffset);
+    },
+
+    getFirstVisibleTextOffsetCfi: function() {
+        var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap));
+        var topOffset = columnsLeftOfViewport * this.$viewport.height();
+
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        return navigation.getFirstVisibleTextOffsetCfi(topOffset);
+    },
+
+    getLastVisibleTextOffsetCfi: function() {
+        var columnsLeftOfViewport = Math.round(this.paginationInfo.pageOffset / (this.paginationInfo.columnWidth + this.paginationInfo.columnGap)) + 1;
+        var bottomOffset = columnsLeftOfViewport * this.$viewport.height();
+
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
+        return navigation.getLastVisibleTextOffsetCfi(bottomOffset);
     },
 
     getPaginationInfo: function() {
@@ -559,7 +575,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         var topOffset = columnsLeftOfViewport * this.$contentFrame.height();
 
         var navigation = new ReadiumSDK.Views.CfiNavigationLogic(this.$contentFrame, this.$iframe.eq(this.currentIframe));
-        cfiData = navigation.findFirstVisibleTextOffsetCfi(topOffset);
+        cfiData = navigation.getFirstVisibleTextOffsetCfi(topOffset);
         if (!cfiData) {
             cfiData = { cfi: "" };
         }

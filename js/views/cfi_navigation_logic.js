@@ -35,10 +35,6 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
 
     };
 
-    this.isCfiVisible = function(elementCfi, topOffset) {
-
-    }
-
     //we look for text and images
     this.findFirstVisibleElement = function (topOffset) {
 
@@ -94,9 +90,8 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
         return {$element: $firstVisibleTextNode, percentY: percentOfElementHeight};
     };
 
-
     //we look for text and images
-    this.findFirstVisibleElementWithTextOffset = function (topOffset) {
+    this.findFirstVisibleNodeWithTextOffset = function (topOffset) {
 
         var $elements;
         var $firstVisibleTextNode = null;
@@ -133,7 +128,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
 
             if (elementRect.bottom() > topOffset) {
 
-                $firstVisibleTextNode = $element;
+                $firstVisibleTextNode = $(this);
 
                 if(elementRect.top > topOffset) {
                     characterOffset = 0;
@@ -143,7 +138,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
                     characterOffset = 0;
                     if(this.nodeType === Node.TEXT_NODE) {
                         //find the character offset that is first visible
-                        characterOffset = self.findFirstVisibleTextOffset($element, $(this), topOffset);
+                        characterOffset = self.findFirstVisibleTextOffset($element, $firstVisibleTextNode, topOffset);
                     }
                     percentOfElementHeight = Math.ceil(((topOffset - elementRect.top) / elementRect.height) * 100);
                 }
@@ -155,7 +150,70 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
             return true; //next element
         });
 
-        return {$element: $firstVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
+        return {$node: $firstVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
+    };
+
+    this.findLastVisibleNodeWithTextOffset = function (bottomOffset) {
+
+        var $elements;
+        var $lastVisibleTextNode = null;
+        var percentOfElementHeight = 0;
+        var characterOffset = 0;
+        var self = this;
+
+        //this line is the same as findFirst... except we are reversing the order of the list of elements
+        $elements = $($("body", this.getRootElement()).find(":not(iframe)").contents().filter(function () {
+            return this.nodeType === Node.TEXT_NODE || this.nodeName.toLowerCase() === 'img';
+        }).get().reverse());
+
+        // Find the last visible text node
+        $.each($elements, function() {
+
+            var $element;
+
+            if(this.nodeType === Node.TEXT_NODE)  { //text node
+                // Heuristic to find a text node with actual text
+                var nodeText = this.nodeValue.replace(/\n/g, "");
+                nodeText = nodeText.replace(/ /g, "");
+
+                if(nodeText.length > 0) {
+                    $element = $(this).parent();
+                }
+                else {
+                    return true; //next element
+                }
+            }
+            else {
+                $element = $(this); //image
+            }
+
+            var elementRect = ReadiumSDK.Helpers.Rect.fromElement($element);
+
+            if (elementRect.top < bottomOffset) {
+
+                $lastVisibleTextNode = $(this);
+
+                if(elementRect.bottom() <= bottomOffset) {
+                    characterOffset = $lastVisibleTextNode[0].length;
+                    percentOfElementHeight = 100;
+                }
+                else {
+                    characterOffset = 0;
+                    if(this.nodeType === Node.TEXT_NODE) {
+                        //find the character offset that is first visible
+                        characterOffset = self.findLastVisibleTextOffset($element, $firstVisibleTextNode, bottomOffset);
+                    }
+                    percentOfElementHeight = Math.ceil(((elementRect.height - (elementRect.bottom() - bottomOffset) ) / elementRect.height) * 100);
+                }
+
+                // Break the loop
+                return false;
+            }
+
+            return true; //next element
+        });
+
+        return {$node: $lastVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
     };
 
     this.findFirstVisibleTextOffset = function($element, $textNode, topOffset) {
@@ -188,21 +246,40 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
         return textOffset;
     }
 
-    this.findFirstVisibleTextOffsetCfi = function(topOffset) {
-        var foundElement = this.findFirstVisibleElementWithTextOffset(topOffset);
+    this.findLastVisibleTextOffset = this.findFirstVisibleTextOffset;
 
-        if(!foundElement.$element) {
+    this.getFirstVisibleTextOffsetCfi = function(topOffset) {
+        var resultData = this.findFirstVisibleNodeWithTextOffset(topOffset);
+
+        if(!resultData.$node) {
             console.log("Could not generate CFI. The page has no visible elements.");
             return undefined;
         }
 
-        var cfi = EPUBcfi.Generator.generateElementCFIComponent(foundElement.$element[0]);
+        var cfi = EPUBcfi.Generator.generateCharacterOffsetCFIComponent(resultData.$node[0], resultData.textOffset);
 
         if(cfi[0] == "!") {
             cfi = cfi.substring(1);
         }
 
-        return { cfi: cfi + "@0:" + foundElement.percentY, elementData: foundElement };
+        return { cfi: cfi, elementData: resultData };
+    }
+
+    this.getLastVisibleTextOffsetCfi = function(bottomOffset) {
+        var resultData = this.findLastVisibleNodeWithTextOffset(bottomOffset);
+
+        if(!resultData.$node) {
+            console.log("Could not generate CFI. The page has no visible elements.");
+            return undefined;
+        }
+
+        var cfi = EPUBcfi.Generator.generateCharacterOffsetCFIComponent(resultData.$node[0], resultData.textOffset);
+
+        if(cfi[0] == "!") {
+            cfi = cfi.substring(1);
+        }
+
+        return { cfi: cfi, elementData: resultData };
     }
 
     this.getFirstVisibleElementCfi = function(topOffset) {

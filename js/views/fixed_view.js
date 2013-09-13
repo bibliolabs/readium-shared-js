@@ -402,7 +402,7 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
         for(var i = 0; i < viewsToCheck.length; i++) {
             if(viewsToCheck[i].isDisplaying()) {
                 var navigation = new ReadiumSDK.Views.CfiNavigationLogic(viewsToCheck[i].$el, viewsToCheck[i].$iframe);
-                cfiData = navigation.findFirstVisibleTextOffsetCfi(0);
+                cfiData = navigation.getFirstVisibleTextOffsetCfi(0);
                 var bookmark = new ReadiumSDK.Models.BookmarkData(viewsToCheck[i].currentSpineItem.idref, cfiData.cfi);
 
                 if(cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
@@ -422,6 +422,51 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
 
         return new ReadiumSDK.Models.BookmarkData("", "");
     },
+
+    getFirstVisibleTextOffsetCfi: function() {
+
+        var viewsToCheck = [];
+
+        if( this.spine.isLeftToRight() ) {
+            viewsToCheck = [this.leftPageView, this.centerPageView, this.rightPageView];
+        }
+        else {
+            viewsToCheck = [this.rightPageView, this.centerPageView, this.leftPageView];
+        }
+
+        for(var i = 0; i < viewsToCheck.length; i++) {
+            if(viewsToCheck[i].isDisplaying()) {
+                var navigation = new ReadiumSDK.Views.CfiNavigationLogic(viewsToCheck[i].$el, viewsToCheck[i].$iframe);
+                cfiData = navigation.getFirstVisibleTextOffsetCfi(0);
+                return cfiData.cfi;
+            }
+        }
+
+        return "";
+    },
+
+    getLastVisibleTextOffsetCfi: function() {
+
+        var viewsToCheck = [];
+
+        if( this.spine.isLeftToRight() ) {
+            viewsToCheck = [this.leftPageView, this.centerPageView, this.rightPageView];
+        }
+        else {
+            viewsToCheck = [this.rightPageView, this.centerPageView, this.leftPageView];
+        }
+
+        for(var i = 0; i < viewsToCheck.length; i++) {
+            if(viewsToCheck[i].isDisplaying()) {
+                var navigation = new ReadiumSDK.Views.CfiNavigationLogic(viewsToCheck[i].$el, viewsToCheck[i].$iframe);
+                cfiData = navigation.getLastVisibleTextOffsetCfi(viewsToCheck[i].$iframe.height());
+                return cfiData.cfi;
+            }
+        }
+
+        return "";
+    },
+
 
     getIframe: function() {
         var viewsToCheck = [];
@@ -450,5 +495,4 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
   isElementCfiVisible: function(elementCfi) {
       return true;
   }
-
 });
