@@ -201,7 +201,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
                     characterOffset = 0;
                     if(this.nodeType === Node.TEXT_NODE) {
                         //find the character offset that is first visible
-                        characterOffset = self.findLastVisibleTextOffset($element, $firstVisibleTextNode, bottomOffset);
+                        characterOffset = self.findLastVisibleTextOffset($element, $lastVisibleTextNode, bottomOffset);
                     }
                     percentOfElementHeight = Math.ceil(((elementRect.height - (elementRect.bottom() - bottomOffset) ) / elementRect.height) * 100);
                 }
