@@ -87,7 +87,7 @@ ReadiumSDK.Views.OnePageView = Backbone.View.extend({
 
             // var frameWidth = $(viewport_fixed).width();
             var frameWidth = oldIframe.width();
-console.log('got viewport width as '+frameWidth);
+            console.log('got viewport width as '+frameWidth);
             var adjustProperty = this.spine.isLeftToRight() ? "left" : "right";
 
             var epubContentDocument = newIframe[0].contentDocument;
@@ -112,6 +112,8 @@ console.log('got viewport width as '+frameWidth);
             }, 100);
             this.updateMetaSize();
 //            this.fitToScreen();
+
+            ReadiumSDK.Helpers.setInterceptNavClick($('body', epubContentDocument));
         }
 
         this.trigger("PageLoaded");

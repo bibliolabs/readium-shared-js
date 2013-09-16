@@ -206,3 +206,10 @@ ReadiumSDK.Helpers.setStyles = function(styles, $element) {
 
 };
 
+ReadiumSDK.Helpers.setInterceptNavClick = function($element) {
+    $element.on('click', 'a', function(e) {
+        e.preventDefault();
+        var $link = $(e.currentTarget);
+        ReadiumSDK.reader.openContentUrl($link.attr('href'));
+    });
+};

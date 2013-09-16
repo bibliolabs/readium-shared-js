@@ -239,6 +239,8 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         this.applySwitches(epubContentDocument);
         this.registerTriggers(epubContentDocument);
+
+        ReadiumSDK.Helpers.setInterceptNavClick($('body', epubContentDocument));
     },
 
 
