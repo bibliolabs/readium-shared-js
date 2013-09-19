@@ -54,6 +54,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
             if(this.nodeType === Node.TEXT_NODE)  { //text node
                 // Heuristic to find a text node with actual text
                 var nodeText = this.nodeValue.replace(/\n/g, "");
+                nodeText = nodeText.replace(/\t/g, "");
                 nodeText = nodeText.replace(/ /g, "");
 
                 if(nodeText.length > 0) {
@@ -111,6 +112,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
             if(this.nodeType === Node.TEXT_NODE)  { //text node
                 // Heuristic to find a text node with actual text
                 var nodeText = this.nodeValue.replace(/\n/g, "");
+                nodeText = nodeText.replace(/\t/g, "");
                 nodeText = nodeText.replace(/ /g, "");
 
                 if(nodeText.length > 0) {
@@ -174,6 +176,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
             if(this.nodeType === Node.TEXT_NODE)  { //text node
                 // Heuristic to find a text node with actual text
                 var nodeText = this.nodeValue.replace(/\n/g, "");
+                nodeText = nodeText.replace(/\t/g, "");
                 nodeText = nodeText.replace(/ /g, "");
 
                 if(nodeText.length > 0) {
