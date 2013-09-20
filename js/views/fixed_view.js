@@ -402,10 +402,11 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
         for(var i = 0; i < viewsToCheck.length; i++) {
             if(viewsToCheck[i].isDisplaying()) {
                 var navigation = new ReadiumSDK.Views.CfiNavigationLogic(viewsToCheck[i].$el, viewsToCheck[i].$iframe);
-                cfiData = navigation.getFirstVisibleTextOffsetCfi(0);
-                var bookmark = new ReadiumSDK.Models.BookmarkData(viewsToCheck[i].currentSpineItem.idref, cfiData.cfi);
+                var cfiData = navigation.getFirstVisibleTextOffsetCfi(0);
+                var cfi = (cfiData)?cfiData.cfi:null;
+                var bookmark = new ReadiumSDK.Models.BookmarkData(viewsToCheck[i].currentSpineItem.idref, cfi);
 
-                if(cfiData.elementData.$node.get(0).nodeType === Node.ELEMENT_NODE &&
+                if(cfiData && cfiData.elementData.$node.get(0).nodeType === Node.ELEMENT_NODE &&
                 cfiData.elementData.$node.get(0).nodeName.toLowerCase() === "img") {
                     var altAttr = cfiData.elementData.$node.attr("alt");
                     if(altAttr) {
@@ -413,9 +414,12 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
                     } else {
                         bookmark.context = "[image]";
                     }
-                } else {
+                } else if(cfiData) {
                     bookmark.context = cfiData.elementData.$node.text().substring(0, 0+64);
+                } else {
+                    bookmark.context = "";
                 }
+
                 return bookmark;
             }
         }
@@ -459,8 +463,12 @@ ReadiumSDK.Views.FixedView = Backbone.View.extend({
         for(var i = 0; i < viewsToCheck.length; i++) {
             if(viewsToCheck[i].isDisplaying()) {
                 var navigation = new ReadiumSDK.Views.CfiNavigationLogic(viewsToCheck[i].$el, viewsToCheck[i].$iframe);
-                cfiData = navigation.getLastVisibleTextOffsetCfi(viewsToCheck[i].$iframe.height());
-                return cfiData.cfi;
+                var cfiData = navigation.getLastVisibleTextOffsetCfi(viewsToCheck[i].$iframe.height());
+                if(cfiData) {
+                    return cfiData.cfi;
+                } else {
+                    return "";
+                }
             }
         }
 

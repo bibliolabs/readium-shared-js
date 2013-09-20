@@ -42,7 +42,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
         var $firstVisibleTextNode = null;
         var percentOfElementHeight = 0;
 
-        $elements = $("body", this.getRootElement()).find(":not(iframe)").contents().filter(function () {
+        $elements = $("body", this.getRootElement()).find(":not(iframe)").contents().andSelf().filter(function () {
             return this.nodeType === Node.TEXT_NODE || this.nodeName.toLowerCase() === 'img';
         });
 
@@ -100,7 +100,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
         var characterOffset = 0;
         var self = this;
 
-        $elements = $("body", this.getRootElement()).find(":not(iframe)").contents().filter(function () {
+        $elements = $("body", this.getRootElement()).find(":not(iframe)").contents().andSelf().filter(function () {
             return this.nodeType === Node.TEXT_NODE || this.nodeName.toLowerCase() === 'img';
         });
 
@@ -164,7 +164,7 @@ ReadiumSDK.Views.CfiNavigationLogic = function($viewport, $iframe){
         var self = this;
 
         //this line is the same as findFirst... except we are reversing the order of the list of elements
-        $elements = $($("body", this.getRootElement()).find(":not(iframe)").contents().filter(function () {
+        $elements = $($("body", this.getRootElement()).find(":not(iframe)").contents().andSelf().filter(function () {
             return this.nodeType === Node.TEXT_NODE || this.nodeName.toLowerCase() === 'img';
         }).get().reverse());
 
