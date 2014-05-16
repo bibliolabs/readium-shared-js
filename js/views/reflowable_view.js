@@ -199,6 +199,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
         oldIframe.off("transitionend webkitTransitionEnd oTransitionEnd MSTransitionEnd");
 
         var epubContentDocument = newIframe[0].contentDocument;
+        $('body', epubContentDocument).css('-webkit-line-box-contain', 'block glyphs replaced');
         this.$epubHtml = $("html", epubContentDocument);
 
         this.$epubHtml.css("height", "100%");
