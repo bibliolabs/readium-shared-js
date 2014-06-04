@@ -490,6 +490,7 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
             }
 
             self.openDeferredElement();
+            self.fixImages(self.lastViewPortSize, { width: self.paginationInfo.columnWidth, height: self.lastViewPortSize.height});
 
             //We do this to force re-rendering of the document in the iframe.
             //There is a bug in WebView control with right to left columns layout - after resizing the window html document
@@ -506,6 +507,38 @@ ReadiumSDK.Views.ReflowableView = Backbone.View.extend({
 
         }, 100);
 
+    },
+
+    fixImages: function(viewportSize, columnSize) {
+        var images = $('img', this.$epubHtml).add('svg', this.$epubHtml).toArray();
+        for (var i = 0; i < images.length; i++) {
+            var $image = $(images[i]);
+
+            var fullscreen = ($image.width() >= viewportSize.width || $image.height() >= viewportSize.height);
+            if (fullscreen) {
+                // We want to scale the image and also force page breaks
+                $image.css('max-height', (columnSize.height - 20)+'px');
+                $image.css('max-width', (columnSize.width - 20)+'px');
+
+                // For some reason, iOS 5 doesn't work with 'auto'
+                var iosVer = BiblioExt.Helpers.iOSVersion();
+                if (iosVer[0] < 6) {
+                    $image.css('height', '100%');
+                    $image.css('width', '100%');
+                } else {
+                    $image.css('height', 'auto');
+                    $image.css('width', 'auto');
+                }
+                // wrap image in div or get parent div, apply the below
+                $wrapDiv = $('<div>');
+                $wrapDiv.attr('class', 'blacklist');
+                $wrapDiv.css('-webkit-column-break-before', 'always');
+                $wrapDiv.css('-webkit-column-break-after', 'always');
+                $image.wrap($wrapDiv);
+            } else {
+            }
+
+        }
     },
 
     shiftBookOfScreen: function() {
