@@ -1,20 +1,29 @@
 //  Created by Boris Schneiderman.
-//  Copyright (c) 2012-2013 The Readium Foundation.
-//
-//  The Readium SDK is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
 
-/*
+/**
  *
  *
  *
@@ -22,7 +31,9 @@
  * @constructor
  */
 
-ReadiumSDK.Models.Spread = function(spine) {
+ReadiumSDK.Models.Spread = function(spine, isSyntheticSpread) {
+
+    var self = this;
 
     this.spine = spine;
 
@@ -30,16 +41,20 @@ ReadiumSDK.Models.Spread = function(spine) {
     this.rightItem = undefined;
     this.centerItem = undefined;
 
-    this.isSyntheticSpread = true;
+    var _isSyntheticSpread = isSyntheticSpread;
 
     this.setSyntheticSpread = function(isSyntheticSpread) {
-        this.isSyntheticSpread = isSyntheticSpread;
+        _isSyntheticSpread = isSyntheticSpread;
+    };
+
+    this.isSyntheticSpread = function() {
+        return _isSyntheticSpread;
     };
 
     this.openFirst = function() {
 
         if( this.spine.items.length == 0 ) {
-            this.resetItems();
+            resetItems();
         }
         else {
             this.openItem(this.spine.first());
@@ -49,7 +64,7 @@ ReadiumSDK.Models.Spread = function(spine) {
     this.openLast = function() {
 
         if( this.spine.items.length == 0 ) {
-            this.resetItems();
+            resetItems();
         }
         else {
             this.openItem(this.spine.last());
@@ -58,41 +73,67 @@ ReadiumSDK.Models.Spread = function(spine) {
 
     this.openItem = function(item) {
 
-        this.resetItems();
-        this.setItem(item);
+        resetItems();
 
-        var neighbourItem = this.getNeighbourItem(item);
+        var position = getItemPosition(item);
+        setItemToPosition(item, position);
 
-        if(neighbourItem) {
-            this.setItem(neighbourItem);
+        if(position != ReadiumSDK.Models.Spread.POSITION_CENTER && this.spine.isValidLinearItem(item.index)) { // && item.isRenditionSpreadAllowed() not necessary, see getItemPosition() below
+            var neighbour = getNeighbourItem(item);
+            if(neighbour) {
+                var neighbourPos = getItemPosition(neighbour);
+                if(neighbourPos != position
+                    && neighbourPos != ReadiumSDK.Models.Spread.POSITION_CENTER
+                    && !neighbour.isReflowable()
+                    && neighbour.isRenditionSpreadAllowed())  {
+                    setItemToPosition(neighbour, neighbourPos);
+                }
+            }
         }
     };
 
-    this.resetItems = function() {
+    function resetItems() {
 
-        this.leftItem = undefined;
-        this.rightItem = undefined;
-        this.centerItem = undefined;
+        self.leftItem = undefined;
+        self.rightItem = undefined;
+        self.centerItem = undefined;
+    }
 
-    };
+    function setItemToPosition(item, position) {
 
-    this.setItem = function(item) {
+        if(position == ReadiumSDK.Models.Spread.POSITION_LEFT) {
+            self.leftItem = item;
+        }
+        else if (position == ReadiumSDK.Models.Spread.POSITION_RIGHT) {
+            self.rightItem = item;
+        }
+        else {
 
-        if(!this.isSyntheticSpread) {
-            this.centerItem = item;
-            return;
+            if(position != ReadiumSDK.Models.Spread.POSITION_CENTER) {
+                console.error("Unrecognized position value");
+            }
+
+            self.centerItem = item;
+        }
+    }
+
+    function getItemPosition(item) {
+        
+        // includes !item.isRenditionSpreadAllowed() ("rendition:spread-none") ==> force center position
+        if(!_isSyntheticSpread) {
+            return ReadiumSDK.Models.Spread.POSITION_CENTER;
         }
 
         if(item.isLeftPage()) {
-            this.leftItem = item;
+            return ReadiumSDK.Models.Spread.POSITION_LEFT;
         }
-        else if (item.isRightPage()) {
-            this.rightItem = item;
+
+        if (item.isRightPage()) {
+            return ReadiumSDK.Models.Spread.POSITION_RIGHT;
         }
-        else {
-            this.centerItem = item;
-        }
-    };
+
+        return ReadiumSDK.Models.Spread.POSITION_CENTER;
+    }
 
     this.openNext = function() {
 
@@ -110,7 +151,7 @@ ReadiumSDK.Models.Spread = function(spine) {
                 this.openItem(nextItem);
             }
         }
-    }
+    };
 
     this.openPrev = function() {
 
@@ -143,31 +184,23 @@ ReadiumSDK.Models.Spread = function(spine) {
         });
 
         return arr;
-    }
-
-    this.getNeighbourItem = function(item) {
-
-        var neighbourItem = undefined;
-
-        if(!this.isSyntheticSpread) {
-            return neighbourItem;
-        }
-
-        if(item.isLeftPage()) {
-
-            neighbourItem = this.spine.isRightToLeft() ? this.spine.prevItem(item) : this.spine.nextItem(item);
-        }
-        else if(item.isRightPage()) {
-
-            neighbourItem = this.spine.isRightToLeft() ? this.spine.nextItem(item) : this.spine.prevItem(item);
-        }
-
-        if(neighbourItem && (neighbourItem.isCenterPage() || neighbourItem.page_spread === item.page_spread) ) {
-
-            neighbourItem = undefined;
-        }
-
-        return neighbourItem;
     };
 
+    function getNeighbourItem(item) {
+
+        if(item.isLeftPage()) {
+            return self.spine.isRightToLeft() ? self.spine.prevItem(item) : self.spine.nextItem(item);
+        }
+
+        if(item.isRightPage()) {
+            return self.spine.isRightToLeft() ? self.spine.nextItem(item) : self.spine.prevItem(item);
+        }
+
+        return undefined;
+    }
+
 };
+
+ReadiumSDK.Models.Spread.POSITION_LEFT = "left";
+ReadiumSDK.Models.Spread.POSITION_RIGHT = "right";
+ReadiumSDK.Models.Spread.POSITION_CENTER = "center";

@@ -1,3 +1,5 @@
+//  LauncherOSX
+//
 //  Created by Boris Schneiderman.
 //  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
 //  
@@ -24,62 +26,55 @@
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /**
- * Representation of opening page request
- * Provides the spine item to be opened and one of the following properties:
- *  spineItemPageIndex {Number},
- *  elementId {String},
- *  elementCfi {String},
- *  firstPage {bool},
- *  lastPage {bool}
- *
- * @param {ReadiumSDK.Models.SpineItem} spineItem
- * @param {object} [initiator]
  *
  * @constructor
  */
-ReadiumSDK.Models.PageOpenRequest = function(spineItem, initiator) {
+ReadiumSDK.Models.Switches = function() {
 
-    this.spineItem = spineItem;
-    this.spineItemPageIndex = undefined;
-    this.elementId = undefined;
-    this.elementCfi = undefined;
-    this.firstPage = false;
-    this.lastPage = false;
-    this.initiator = initiator;
+};
 
-    this.reset = function() {
-        this.spineItemPageIndex = undefined;
-        this.elementId = undefined;
-        this.elementCfi = undefined;
-        this.firstPage = false;
-        this.lastPage = false;
-    };
-
-    this.setFirstPage = function() {
-        this.reset();
-        this.firstPage = true;
-    };
-
-    this.setLastPage = function() {
-        this.reset();
-        this.lastPage = true;
-    };
-
-    this.setPageIndex = function(pageIndex) {
-        this.reset();
-        this.spineItemPageIndex = pageIndex;
-    };
-
-    this.setElementId = function(elementId) {
-        this.reset();
-        this.elementId = elementId;
-    };
-
-    this.setElementCfi = function(elementCfi) {
-
-        this.reset();
-        this.elementCfi = elementCfi;
-    };
+// Description: Parse the epub "switch" tags and hide
+// cases that are not supported
+ReadiumSDK.Models.Switches.apply = function(dom) {
 
 
+    // helper method, returns true if a given case node
+    // is supported, false otherwise
+    function isSupported(caseNode) {
+
+        var ns = caseNode.attributes["required-namespace"];
+        if(!ns) {
+            // the namespace was not specified, that should
+            // never happen, we don't support it then
+            console.log("Encountered a case statement with no required-namespace");
+            return false;
+        }
+        // all the xmlns that readium is known to support
+        // TODO this is going to require maintenance
+        var supportedNamespaces = ["http://www.w3.org/1998/Math/MathML"];
+        return _.include(supportedNamespaces, ns);
+    }
+
+    $('switch', dom).each( function() {
+
+        // keep track of whether or now we found one
+        var found = false;
+
+        $('case', this).each(function() {
+
+            if( !found && isSupported(this) ) {
+                found = true; // we found the node, don't remove it
+            }
+            else {
+                $(this).remove(); // remove the node from the dom
+//                    $(this).prop("hidden", true);
+            }
+        });
+
+        if(found) {
+            // if we found a supported case, remove the default
+            $('default', this).remove();
+//                $('default', this).prop("hidden", true);
+        }
+    })
 };
