@@ -756,7 +756,7 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
             return;
         }
 
-        var $elem;
+        /*var $elem;
         var height;
         var width;
 
@@ -778,7 +778,25 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
                 $elem.css('width', 'auto');
             }
 
+        });*/
+
+        // We require more than what Readium is doing above, but the below isn't quite right either, so no pull request yet - MWU
+        // TODO: Take into account the `font-size` percentage
+        var adjustment = 50;
+        var widthModifier = reader.viewerSettings().isSyntheticSpread ? 2 : 1;
+
+        var $targets = $();
+        $targets = $targets.add(_$epubHtml.find("img"));
+        // Preserve the aspect ratio for SVG items for max width/height constraints
+        // See: http://stackoverflow.com/questions/16438416/cross-browser-svg-preserveaspectratio
+        $targets = $targets.add(_$epubHtml.find("svg")
+            .attr("preserveAspectRatio", "xMidYMid meet"));
+
+        $targets.css({
+            maxHeight: (_$iframe.height() - adjustment + "px"),
+            maxWidth: (Math.floor(_$iframe.width() / widthModifier) - adjustment + "px")
         });
+
     }
 
     this.bookmarkCurrentPage = function() {
