@@ -900,6 +900,14 @@ ReadiumSDK.Views.OnePageView = function(options, classes, enableBookStyleOverrid
 
     };
 
+    this.getLastVisibleElementCfi = function(){
+
+        var navigation = new ReadiumSDK.Views.CfiNavigationLogic(_$el, _$iframe);
+        var offset = $('html', _$iframe[0].contentDocument).width();
+        return navigation.getLastVisibleElementCfi(offset);
+
+    };
+
     this.getNavigator = function() {
 
         return new ReadiumSDK.Views.CfiNavigationLogic(_$el, _$iframe);

@@ -27,7 +27,7 @@
 /**
  * @class ReadiumSDK.Models.BookmarkData
  */
-ReadiumSDK.Models.BookmarkData = function(idref, contentCFI) {
+ReadiumSDK.Models.BookmarkData = function(idref, contentCFI, endIdref, endCFI) {
 
     /**
      * spine item idref
@@ -42,6 +42,20 @@ ReadiumSDK.Models.BookmarkData = function(idref, contentCFI) {
      * @type {string}
      */
     this.contentCFI = contentCFI;
+
+    /**
+     * cfi of the last visible elemnt
+     * @property endCFI
+     * @type {string}
+     */
+    this.endIdref = endIdref;
+
+    /**
+     * cfi of the last visible elemnt
+     * @property endCFI
+     * @type {string}
+     */
+    this.endCFI = endCFI;
 
     this.toString = function () {
         return JSON.stringify(this);

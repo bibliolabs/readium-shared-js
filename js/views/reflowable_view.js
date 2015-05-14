@@ -604,6 +604,7 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
         
         _$iframe.css("width", _lastViewPortSize.width + "px");
         _$iframe.css("height", _lastViewPortSize.height + "px");
+        resizeImages();
 
         _$epubHtml.css("height", _lastViewPortSize.height + "px");
         
@@ -625,9 +626,11 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
         var useColumnCountNotWidth = _paginationInfo.visibleColumnCount > 1; // column-count == 1 does not work in Chrome, and is not needed anyway (HTML width is full viewport width, no Firefox video flickering)
         if (useColumnCountNotWidth) {
             _$epubHtml.css("width", _lastViewPortSize.width + "px");
+            _$epubHtml.css("column-width", '');
             _$epubHtml.css("column-count", _paginationInfo.visibleColumnCount);
         } else {
             _$epubHtml.css("width", (_htmlBodyIsVerticalWritingMode ? _lastViewPortSize.width : _paginationInfo.columnWidth) + "px");
+            _$epubHtml.css("column-count", '');
             _$epubHtml.css("column-width", _paginationInfo.columnWidth + "px");
         }
 
@@ -713,6 +716,12 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
 
         var contentOffsets = getVisibleContentOffsets();
         return _navigationLogic.getFirstVisibleElementCfi(contentOffsets);
+    };
+
+    this.getLastVisibleElementCfi = function() {
+
+        var contentOffsets = getVisibleContentOffsets();
+        return _navigationLogic.getLastVisibleElementCfi({ top: contentOffsets.bottom });
     };
 
     this.getPaginationInfo = function() {
@@ -803,10 +812,10 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
 
         if(!_currentSpineItem) {
 
-            return new ReadiumSDK.Models.BookmarkData("", "");
+            return new ReadiumSDK.Models.BookmarkData("", "", "", "");
         }
 
-        return new ReadiumSDK.Models.BookmarkData(_currentSpineItem.idref, self.getFirstVisibleElementCfi());
+        return new ReadiumSDK.Models.BookmarkData(_currentSpineItem.idref, self.getFirstVisibleElementCfi(), _currentSpineItem.idref, self.getLastVisibleElementCfi());
     };
 
     function getVisibleContentOffsets() {
