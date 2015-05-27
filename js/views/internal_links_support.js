@@ -186,8 +186,10 @@ ReadiumSDK.Views.InternalLinksSupport = function(reader) {
                 
                 href = clickEvent.currentTarget.attributes["xlink:href"].value;
             }
-            else {
+            else if (clickEvent.currentTarget.attributes["href"]) {
                 href = clickEvent.currentTarget.attributes["href"].value;
+            } else {
+                return;
             }
 
             var overrideClickEvent = false;

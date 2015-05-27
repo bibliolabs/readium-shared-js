@@ -382,6 +382,10 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
         }
         else if(pageRequest.elementId) {
             pageIndex = _navigationLogic.getPageForElementId(pageRequest.elementId);
+            if (pageIndex < 0) {
+                console.error('Could not find page for element id '+pageRequest.elementId);
+                pageIndex = 0;
+            }
         }
         else if(pageRequest.elementCfi) {
             try
@@ -621,7 +625,7 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
 
         _paginationInfo.rightToLeft = _spine.isRightToLeft();
 
-        _paginationInfo.columnWidth = Math.round(((_htmlBodyIsVerticalWritingMode ? _lastViewPortSize.height : _lastViewPortSize.width) - _paginationInfo.columnGap * (_paginationInfo.visibleColumnCount - 1)) / _paginationInfo.visibleColumnCount);
+        _paginationInfo.columnWidth = ((_htmlBodyIsVerticalWritingMode ? _lastViewPortSize.height : _lastViewPortSize.width) - _paginationInfo.columnGap * (_paginationInfo.visibleColumnCount - 1)) / _paginationInfo.visibleColumnCount;
 
         var useColumnCountNotWidth = _paginationInfo.visibleColumnCount > 1; // column-count == 1 does not work in Chrome, and is not needed anyway (HTML width is full viewport width, no Firefox video flickering)
         if (useColumnCountNotWidth) {
@@ -645,7 +649,6 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
 
         var totalGaps = (_paginationInfo.columnCount-1) * _paginationInfo.columnGap;
         var colWidthCheck = ((_htmlBodyIsVerticalWritingMode ? _$epubHtml[0].scrollHeight : _$epubHtml[0].scrollWidth) - totalGaps) / _paginationInfo.columnCount;
-        colWidthCheck = Math.round(colWidthCheck);
 
         if (colWidthCheck > _paginationInfo.columnWidth)
         {
@@ -697,19 +700,12 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
 
     function hideBook()
     {
-        if (_currentOpacity != -1) return; // already hidden
-        
-        _currentOpacity = _$epubHtml.css('opacity');
         _$epubHtml.css('opacity', "0");
     }
 
     function showBook()
     {
-        if (_currentOpacity != -1)
-        {
-            _$epubHtml.css('opacity', _currentOpacity);
-        }
-        _currentOpacity = -1;
+        _$epubHtml.css('opacity', "1");
     }
 
     this.getFirstVisibleElementCfi = function() {
