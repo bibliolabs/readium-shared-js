@@ -273,7 +273,7 @@ ReadiumSDK.Helpers.triggerLayout = function($iframe) {
             ss = style.sheet;
         }
     
-        if (ss)
+        if (ss && ss.cssRules)
             ss.insertRule('body:first-child::before {content:\'READIUM\';color: red;font-weight: bold;}', ss.cssRules.length);
     }
     catch (ex)
@@ -288,7 +288,7 @@ ReadiumSDK.Helpers.triggerLayout = function($iframe) {
         doc.body.appendChild(el);
         doc.body.removeChild(el);
 
-        if (ss)
+        if (ss && ss.cssRules)
             ss.deleteRule(ss.cssRules.length-1);
     }
     catch (ex)
