@@ -179,7 +179,7 @@ ReadiumSDK.Views.InternalLinksSupport = function(reader) {
 
         var epubContentDocument = $iframe[0].contentDocument;
 
-        $('a', epubContentDocument).click(function (clickEvent) {
+        $(epubContentDocument).on('click', 'a', function(clickEvent) {
             // Check for both href and xlink:href attribute and get value
             var href;
             if (clickEvent.currentTarget.attributes["xlink:href"]) {
