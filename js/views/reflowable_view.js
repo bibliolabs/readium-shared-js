@@ -455,12 +455,16 @@ ReadiumSDK.Views.ReflowableView = function(options, reader){
         return false;
     }
 
+    var triggerPaginationChanged = _.debounce(function(initiator, paginationRequest_spineItem, paginationRequest_elementId) {
+        self.trigger(ReadiumSDK.InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED, { paginationInfo: self.getPaginationInfo(), initiator: initiator, spineItem: paginationRequest_spineItem, elementId: paginationRequest_elementId } );
+    }, 500);
+
     function onPaginationChanged(initiator, paginationRequest_spineItem, paginationRequest_elementId) {
 
         _paginationInfo.pageOffset = (_paginationInfo.columnWidth + _paginationInfo.columnGap) * _paginationInfo.visibleColumnCount * _paginationInfo.currentSpreadIndex;
         
         redraw();
-        self.trigger(ReadiumSDK.InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED, { paginationInfo: self.getPaginationInfo(), initiator: initiator, spineItem: paginationRequest_spineItem, elementId: paginationRequest_elementId } );
+        triggerPaginationChanged(initiator, paginationRequest_spineItem, paginationRequest_elementId);
     }
 
     this.openPagePrev = function (initiator) {
