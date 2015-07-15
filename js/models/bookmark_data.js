@@ -23,11 +23,11 @@
 //  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
+define(function() {
 /**
- * @class ReadiumSDK.Models.BookmarkData
+ * @class Models.BookmarkData
  */
-ReadiumSDK.Models.BookmarkData = function(idref, contentCFI, endIdref, endCFI) {
+var BookmarkData = function(idref, contentCFI) {
 
     /**
      * spine item idref
@@ -43,21 +43,10 @@ ReadiumSDK.Models.BookmarkData = function(idref, contentCFI, endIdref, endCFI) {
      */
     this.contentCFI = contentCFI;
 
-    /**
-     * cfi of the last visible elemnt
-     * @property endCFI
-     * @type {string}
-     */
-    this.endIdref = endIdref;
-
-    /**
-     * cfi of the last visible elemnt
-     * @property endCFI
-     * @type {string}
-     */
-    this.endCFI = endCFI;
-
     this.toString = function () {
         return JSON.stringify(this);
     }
 };
+
+return BookmarkData;
+});
