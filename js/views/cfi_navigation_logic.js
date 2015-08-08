@@ -42,15 +42,8 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
     options = options || {};
 
     this.getRootElement = function(){
-
         return $iframe[0].contentDocument.documentElement;
     };
-    
-    // FIXED LAYOUT if (!options.rectangleBased) alert("!!!options.rectangleBased");
-    
-    var visibilityCheckerFunc = options.rectangleBased
-        ? checkVisibilityByRectangles
-        : checkVisibilityByVerticalOffsets;
 
     /**
      * @private
@@ -96,12 +89,10 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
      * @returns {number} Full width of a column in pixels
      */
     function getColumnFullWidth() {
-        
-        if (!options.paginationInfo || isVerticalWritingMode())
-        {
+        if (!options.paginationInfo || isVerticalWritingMode()) {
             return $iframe.width();
         }
-        
+
         return options.paginationInfo.columnWidth + options.paginationInfo.columnGap;
     }
 
@@ -113,32 +104,32 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
      *
      * @returns {Object}
      */
-    function getVisibleContentOffsets() {
-        if(isVerticalWritingMode()){
-            return {
-                top: (options.paginationInfo ? options.paginationInfo.pageOffset : 0)
-            };
-        }
-        return {
-            left: (options.paginationInfo ? options.paginationInfo.pageOffset : 0)
-                * (isPageProgressionRightToLeft() ? -1 : 1)
-        };
-    }
+    // function getVisibleContentOffsets() {
+    //     if(isVerticalWritingMode()){
+    //         return {
+    //             top: (options.paginationInfo ? options.paginationInfo.pageOffset : 0)
+    //         };
+    //     }
+    //     return {
+    //         left: (options.paginationInfo ? options.paginationInfo.pageOffset : 0) *
+    //           (isPageProgressionRightToLeft() ? -1 : 1)
+    //     };
+    // }
 
     // Old (offsetTop-based) algorithm, useful in top-to-bottom layouts
     function checkVisibilityByVerticalOffsets(
-            $element, visibleContentOffsets, shouldCalculateVisibilityOffset) {
+        $element, visibleContentOffsets, shouldCalculateVisibilityOffset) {
 
         var elementRect = Helpers.Rect.fromElement($element);
         if (_.isNaN(elementRect.left)) {
             // this is actually a point element, doesnt have a bounding rectangle
             elementRect = new Helpers.Rect(
-                    $element.position().top, $element.position().left, 0, 0);
+                $element.position().top, $element.position().left, 0, 0);
         }
         var topOffset = visibleContentOffsets.top || 0;
         var isBelowVisibleTop = elementRect.bottom() > topOffset;
-        var isAboveVisibleBottom = visibleContentOffsets.bottom !== undefined
-            ? elementRect.top < visibleContentOffsets.bottom
+        var isAboveVisibleBottom = visibleContentOffsets.bottom !== undefined ?
+          elementRect.top < visibleContentOffsets.bottom
             : true; //this check always passed, if corresponding offset isn't set
 
         var percentOfElementHeight = 0;
@@ -148,7 +139,7 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
             }
             else if (elementRect.top <= topOffset) {
                 percentOfElementHeight = Math.ceil(
-                    100 * (topOffset - elementRect.top) / elementRect.height
+                        100 * (topOffset - elementRect.top) / elementRect.height
                 );
 
                 // below goes another algorithm, which has been used in getVisibleElements pattern,
@@ -181,7 +172,7 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
      *      null for elements with display:none
      */
     function checkVisibilityByRectangles(
-            $element, _props, shouldCalculateVisibilityPercentage) {
+        $element, _props, shouldCalculateVisibilityPercentage) {
 
         var elementRectangles = getNormalizedRectangles($element);
         var clientRectangles = elementRectangles.clientRectangles;
@@ -201,7 +192,7 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
             // because of webkit inconsistency, that single rectangle should be adjusted
             // until it hits the end OR will be based on the FIRST column that is visible
             adjustRectangle(clientRectangles[0], frameDimensions, columnFullWidth,
-                    isRtl, isVwm, true);
+                isRtl, isVwm, true);
         }
 
         // for an element split between several CSS columns,
@@ -210,14 +201,16 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
         var visibilityPercentage = 0;
         for (var i = 0, l = clientRectangles.length; i < l; ++i) {
             if (isRectVisible(clientRectangles[i], frameDimensions, isVwm)) {
-                visibilityPercentage = shouldCalculateVisibilityPercentage
-                    ? measureVisibilityPercentageByRectangles(clientRectangles, i)
+                visibilityPercentage = shouldCalculateVisibilityPercentage ?
+                  measureVisibilityPercentageByRectangles(clientRectangles, frameDimensions, i)
                     : 100;
                 break;
             }
         }
         return visibilityPercentage;
     }
+
+    var visibilityCheckerFunc = options.rectangleBased ? checkVisibilityByRectangles : checkVisibilityByVerticalOffsets;
 
     /**
      * Finds a page index (0-based) for a specific element.
@@ -227,55 +220,55 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
      * @param {number} spatialVerticalOffset
      * @returns {number|null}
      */
-    function findPageByRectangles($element, spatialVerticalOffset) {
-        var visibleContentOffsets = getVisibleContentOffsets();
-        var elementRectangles = getNormalizedRectangles($element, visibleContentOffsets);
-        var clientRectangles  = elementRectangles.clientRectangles;
-        if (clientRectangles.length === 0) { // elements with display:none, etc.
-            return null;
-        }
-
-        var isRtl = isPageProgressionRightToLeft();
-        var isVwm = isVerticalWritingMode();
-        var columnFullWidth = getColumnFullWidth();
-
-        var frameHeight = $iframe.height();
-        var frameWidth  = $iframe.width();
-
-        if (spatialVerticalOffset) {
-            trimRectanglesByVertOffset(clientRectangles, spatialVerticalOffset,
-                frameHeight, columnFullWidth, isRtl, isVwm);
-        }
-
-        var firstRectangle = _.first(clientRectangles);
-        if (clientRectangles.length === 1) {
-            adjustRectangle(firstRectangle, {
-                height: frameHeight, width: frameWidth
-            }, columnFullWidth, isRtl, isVwm);
-        }
-
-        var pageIndex;
-
-        if (isVwm) {
-            var topOffset = firstRectangle.top;
-            pageIndex = Math.floor(topOffset / frameHeight);
-        } else {
-            var leftOffset = firstRectangle.left;
-            if (isRtl) {
-                leftOffset = (columnFullWidth * (options.paginationInfo ? options.paginationInfo.visibleColumnCount : 1)) - leftOffset;
-            }
-            pageIndex = Math.floor(leftOffset / columnFullWidth);
-        }
-
-        if (pageIndex < 0) {
-            pageIndex = 0;
-        }
-        else if (pageIndex >= (options.paginationInfo ? options.paginationInfo.columnCount : 1)) {
-            pageIndex = (options.paginationInfo ? (options.paginationInfo.columnCount - 1) : 0);
-        }
-
-        return pageIndex;
-    }
+    // function findPageByRectangles($element, spatialVerticalOffset) {
+    //     var visibleContentOffsets = getVisibleContentOffsets();
+    //     var elementRectangles = getNormalizedRectangles($element, visibleContentOffsets);
+    //     var clientRectangles  = elementRectangles.clientRectangles;
+    //     if (clientRectangles.length === 0) { // elements with display:none, etc.
+    //         return null;
+    //     }
+    //
+    //     var isRtl = isPageProgressionRightToLeft();
+    //     var isVwm = isVerticalWritingMode();
+    //     var columnFullWidth = getColumnFullWidth();
+    //
+    //     var frameHeight = $iframe.height();
+    //     var frameWidth  = $iframe.width();
+    //
+    //     if (spatialVerticalOffset) {
+    //         trimRectanglesByVertOffset(clientRectangles, spatialVerticalOffset,
+    //             frameHeight, columnFullWidth, isRtl, isVwm);
+    //     }
+    //
+    //     var firstRectangle = _.first(clientRectangles);
+    //     if (clientRectangles.length === 1) {
+    //         adjustRectangle(firstRectangle, {
+    //             height: frameHeight, width: frameWidth
+    //         }, columnFullWidth, isRtl, isVwm);
+    //     }
+    //
+    //     var pageIndex;
+    //
+    //     if (isVwm) {
+    //         var topOffset = firstRectangle.top;
+    //         pageIndex = Math.floor(topOffset / frameHeight);
+    //     } else {
+    //         var leftOffset = firstRectangle.left;
+    //         if (isRtl) {
+    //             leftOffset = (columnFullWidth * (options.paginationInfo ? options.paginationInfo.visibleColumnCount : 1)) - leftOffset;
+    //         }
+    //         pageIndex = Math.floor(leftOffset / columnFullWidth);
+    //     }
+    //
+    //     if (pageIndex < 0) {
+    //         pageIndex = 0;
+    //     }
+    //     else if (pageIndex >= (options.paginationInfo ? options.paginationInfo.columnCount : 1)) {
+    //         pageIndex = (options.paginationInfo ? (options.paginationInfo.columnCount - 1) : 0);
+    //     }
+    //
+    //     return pageIndex;
+    // }
 
     /**
      * @private
@@ -286,7 +279,7 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
      * @returns {number} - visibility percentage (0 < n <= 100)
      */
     function measureVisibilityPercentageByRectangles(
-            clientRectangles, firstVisibleRectIndex) {
+        clientRectangles, frameDimensions, firstVisibleRectIndex) {
 
         var heightTotal = 0;
         var heightVisible = 0;
@@ -305,10 +298,13 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
             // should already be normalized and adjusted
             heightTotal   = clientRectangles[0].height;
             heightVisible = clientRectangles[0].height - Math.max(
-                    0, -clientRectangles[0].top);
+                0, -clientRectangles[0].top);
+            if (clientRectangles[0].bottom > frameDimensions.height) {
+                heightVisible = clientRectangles[0].height - (clientRectangles[0].bottom - frameDimensions.height);
+            }
         }
-        return heightVisible === heightTotal
-            ? 100 // trivial case: element is 100% visible
+        return heightVisible === heightTotal ?
+          100 // trivial case: element is 100% visible
             : Math.floor(100 * heightVisible / heightTotal);
     }
 
@@ -328,7 +324,7 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
 
         // union of all rectangles wrapping the element
         var wrapperRectangle = normalizeRectangle(
-                $el[0].getBoundingClientRect(), leftOffset, topOffset);
+            $el[0].getBoundingClientRect(), leftOffset, topOffset);
 
         // all the separate rectangles (for detecting position of the element
         // split between several columns)
@@ -423,7 +419,7 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
 
      */
     function adjustRectangle(rect, frameDimensions, columnFullWidth, isRtl, isVwm,
-            shouldLookForFirstVisibleColumn) {
+                             shouldLookForFirstVisibleColumn) {
 
         // Rectangle adjustment is not needed in VWM since it does not deal with columns
         if (isVwm) {
@@ -464,45 +460,173 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
      * @param {boolean} isRtl
      * @param {boolean} isVwm               isVerticalWritingMode
      */
-    function trimRectanglesByVertOffset(
-            rects, verticalOffset, frameHeight, columnFullWidth, isRtl, isVwm) {
+    // function trimRectanglesByVertOffset(
+    //     rects, verticalOffset, frameHeight, columnFullWidth, isRtl, isVwm) {
+    //
+    //     //TODO: Support vertical writing mode
+    //     if (isVwm) {
+    //         return;
+    //     }
+    //
+    //     var totalHeight = _.reduce(rects, function(prev, cur) {
+    //         return prev + cur.height;
+    //     }, 0);
+    //
+    //     var heightToHide = totalHeight * verticalOffset / 100;
+    //     if (rects.length > 1) {
+    //         var heightAccum = 0;
+    //         do {
+    //             heightAccum += rects[0].height;
+    //             if (heightAccum > heightToHide) {
+    //                 break;
+    //             }
+    //             rects.shift();
+    //         } while (rects.length > 1);
+    //     }
+    //     else {
+    //         // rebase to the last possible column
+    //         // (so that adding to top will be properly processed later)
+    //         if (isRtl) {
+    //             columnFullWidth *= -1;
+    //         }
+    //         while (rects[0].bottom >= frameHeight) {
+    //             offsetRectangle(rects[0], columnFullWidth, -frameHeight);
+    //         }
+    //
+    //         rects[0].top += heightToHide;
+    //         rects[0].height -= heightToHide;
+    //     }
+    // }
 
-        //TODO: Support vertical writing mode
-        if (isVwm) {
-            return;
-        }
-        
-        var totalHeight = _.reduce(rects, function(prev, cur) {
-            return prev + cur.height;
-        }, 0);
-
-        var heightToHide = totalHeight * verticalOffset / 100;
-        if (rects.length > 1) {
-            var heightAccum = 0;
-            do {
-                heightAccum += rects[0].height;
-                if (heightAccum > heightToHide) {
-                    break;
-                }
-                rects.shift();
-            } while (rects.length > 1);
-        }
-        else {
-            // rebase to the last possible column
-            // (so that adding to top will be properly processed later)
-            if (isRtl) {
-                columnFullWidth *= -1;
-            }
-            while (rects[0].bottom >= frameHeight) {
-                offsetRectangle(rects[0], columnFullWidth, -frameHeight);
-            }
-
-            rects[0].top += heightToHide;
-            rects[0].height -= heightToHide;
-        }
+    function isValidTextNode(node) {
+      return node.nodeType === Node.TEXT_NODE &&
+              node.nodeValue.trim().length > 0;
     }
 
-    //we look for text and images
+    this.getElementById = function(id) {
+
+        var contentDoc = $iframe[0].contentDocument;
+
+        var $element = $(contentDoc.getElementById(id));
+        //$("#" + Helpers.escapeJQuerySelector(id), contentDoc);
+
+        if($element.length === 0) {
+            return undefined;
+        }
+
+        return $element;
+    };
+
+    /**
+     * TODO:(MDA) This is a combination of the find(First|Last) functions. Combining
+     * should improve performance and ease maintenance.
+     **/
+    this.findVisibleElementBounds = function(props) {
+        //TODO:(MDA) Remove this legacy check and fix legacy code.
+        if (typeof props !== 'object') {
+            // compatibility with legacy code, `props` is `topOffset` actually
+            props = { top: props };
+        }
+
+        var $elements;
+        var $firstVisibleTextNode = null;
+        var percentOfElementHeight = 0;
+        var characterOffset = 0;
+        var self = this;
+
+        var firstNodeData = null;
+        var lastNodeData = null;
+        var $previousElement = null;
+
+        // find all the elements that are text nodes or imgs. Should others be here also?
+        $elements = $("body", this.getRootElement()).find("*").contents().andSelf().filter(function () {
+            return isValidTextNode(this) || this.nodeName.toLowerCase() === 'img';
+        });
+
+        // Find the visible node bounds
+        $.each($elements, function() {
+
+            var $element;
+
+            if(this.nodeType === Node.TEXT_NODE) {
+                $element = $(this).parent();
+            } else {
+                $element = $(this);
+            }
+
+            var visibilityResult = visibilityCheckerFunc($element, props, true);
+            if (visibilityResult && !firstNodeData) {
+                characterOffset = 0;
+                $firstVisibleTextNode = $element;
+                if (this.nodeType === Node.TEXT_NODE) {
+                    /* find the character offset that is first visible */
+                    $firstVisibleTextNode = $(this);
+                    if (visibilityResult === 100) {
+                        characterOffset = $firstVisibleTextNode[0].length;
+                    }
+                    characterOffset = self.findFirstVisibleTextOffset($element, $firstVisibleTextNode, props);
+                    if (characterOffset === this.nodeValue.length) {
+                        // none of the content of this text node was visible
+                        $previousElement = $element;
+                        return true;
+                    }
+                }
+
+                percentOfElementHeight = 100 - visibilityResult;
+                firstNodeData = {$element: $firstVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
+
+                $previousElement = $element;
+                return true;
+            } else if (visibilityResult < 100 && firstNodeData) {
+                // We have the first node and just left the visible nodes
+                if (visibilityResult === 0) {
+                    // if the element went from 100 -> 0 then go back an element
+                    $element = $previousElement;
+                }
+                lastNodeData = this.checkLastVisibleTextOffset($element, visibilityResult, props);
+                if (lastNodeData) {
+                    return false;
+                }
+                $previousElement = $element;
+                return true;
+            }
+
+            $previousElement = $element;
+            return true;
+        });
+
+        // only 1 node on the screen - common with covers or full page figures/images
+        if (!lastNodeData && $previousElement) {
+            lastNodeData = this.checkLastVisibleTextOffset($previousElement, 100, props);
+        }
+
+        return {firstNode: firstNodeData, lastNode: lastNodeData};
+    };
+
+    this.checkLastVisibleTextOffset = function($element, visibilityResult, props) {
+        var characterOffset = 0;
+        var $lastVisibleTextNode = $element;
+        var percentOfElementHeight;
+        if (this.nodeType === Node.TEXT_NODE) {
+            /* find the character offset that is first visible */
+            $lastVisibleTextNode = $(this);
+            if (visibilityResult === 100) {
+                characterOffset = 0;
+            } else {
+                characterOffset = self.findLastVisibleTextOffset($element, $lastVisibleTextNode, props);
+            }
+
+            if (characterOffset === this.nodeValue.length) {
+                // none of the content of this text node was visible
+                return null;
+            }
+        }
+
+        percentOfElementHeight = 100 - visibilityResult;
+        return {$element: $lastVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
+    };
+
+    /* we look for text and images */
     this.findFirstVisibleElement = function (props) {
 
         if (typeof props !== 'object') {
@@ -513,10 +637,141 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
         var $elements;
         var $firstVisibleTextNode = null;
         var percentOfElementHeight = 0;
+        var characterOffset = 0;
+        var self = this;
 
-        $elements = $("body", this.getRootElement()).find(":not(iframe)").contents().filter(function () {
+        $elements = $("body", this.getRootElement()).find("*").contents().andSelf().filter(function () {
             return isValidTextNode(this) || this.nodeName.toLowerCase() === 'img';
         });
+
+        // Find the first visible text node
+        $.each($elements, function() {
+
+            var $element;
+
+            $element = $(this);
+            if(this.nodeType === Node.TEXT_NODE) {
+                $element = $(this).parent();
+            } else {
+                $element = $(this);
+            }
+
+            var visibilityResult = visibilityCheckerFunc($element, props, true);
+            if (visibilityResult) {
+                characterOffset = 0;
+                $firstVisibleTextNode = $element;
+                if (this.nodeType === Node.TEXT_NODE) {
+                    /* find the character offset that is first visible */
+                    $firstVisibleTextNode = $(this);
+                    if (visibilityResult == 100) {
+                        characterOffset = $firstVisibleTextNode[0].length;
+                    }
+                    characterOffset = self.findFirstVisibleTextOffset($element, $firstVisibleTextNode, props);
+                    if (characterOffset == this.nodeValue.length) {
+                        // none of the content of this text node was visible
+                        return true;
+                    }
+                }
+
+                percentOfElementHeight = 100 - visibilityResult;
+                return false;
+            }
+            return true;
+        });
+
+        return {$element: $firstVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
+    };
+
+    this.hasCaretRangeFromPoint = function() {
+        var doc = $iframe[0].contentDocument;
+        return doc.caretPositionFromPoint || doc.caretRangeFromPoint;
+    };
+
+    this.compatibleCaretRangeFromPoint = function(doc, x, y) {
+        if (!doc) {
+            return null;
+        }
+
+        var caretPosition;
+
+        // standard
+        if (doc.caretPositionFromPoint) {
+            caretPosition = doc.caretPositionFromPoint(x, y);
+        } else if (doc.caretRangeFromPoint) {
+            // WebKit
+            caretPosition = doc.caretRangeFromPoint(x, y);
+            if (caretPosition) {
+                caretPosition.offsetNode = caretPosition.startContainer;
+                caretPosition.offset = caretPosition.startOffset;
+            }
+        }
+
+        return caretPosition;
+    };
+
+    this.findVisibleNodeWithTextOffset = function(doc, fromStart, leftOffset) {
+        //TODO:(MDA)this needs to be moved up the call
+        if (!this.hasCaretRangeFromPoint()) {
+          if (fromStart) {
+            return this.findFirstVisibleElement(leftOffset);
+          } else {
+            return this.findLastVisibleElement(leftOffset);
+          }
+        }
+
+        // Now we can get a proper range value
+        var i = 1;
+        var caretPosition, frameWidth, frameHeight;
+        if (!fromStart) {
+            frameWidth = $("html", doc).width();
+            frameHeight = $("html", doc).height();
+        }
+        do {
+            var posX, posY;
+            if (fromStart) {
+                posX = i;
+                posY = i;
+            } else {
+                posX = frameWidth - i;
+                posY = frameHeight - i;
+            }
+
+            caretPosition = this.compatibleCaretRangeFromPoint(doc, posX, posY);
+            i++;
+            // (MDA) See below - why check html and body here, but look for non-empty text nodes and imgs below?
+        } while (caretPosition && ($(caretPosition.offsetNode).is('html') || $(caretPosition.offsetNode).is('body')));
+
+        console.log("Caret position found: ", caretPosition, fromStart);
+
+        var node = (caretPosition) ? caretPosition.offsetNode : null;
+        var offset = (caretPosition) ? caretPosition.offset : 0;
+        var elementRect = (node) ? Helpers.Rect.fromElement($(node.parentNode)) : null;
+        var percentOfElementHeight = (elementRect) ? Math.ceil((-elementRect.top / elementRect.height) * 100) : 0;
+
+        return {$element: $(node), percentY: percentOfElementHeight, textOffset: offset };
+    };
+
+    this.findFirstVisibleNodeWithTextOffset = function (leftOffset) {
+        var iframeDoc = $iframe[0].contentDocument;
+        return this.findVisibleNodeWithTextOffset(iframeDoc, true, leftOffset);
+    };
+
+    this.findLastVisibleElement = function (props) {
+
+        if (typeof props !== 'object') {
+            // compatibility with legacy code, `props` is `topOffset` actually
+            props = { top: props };
+        }
+
+        var $elements;
+        var $lastVisibleTextNode = null;
+        var percentOfElementHeight = 0;
+        var characterOffset = 0;
+        var self = this;
+
+        $elements = $("body", this.getRootElement()).find("*").contents().andSelf().filter(function () {
+            return isValidTextNode(this) || this.nodeName.toLowerCase() === 'img';
+        }).get().reverse();
 
         // Find the first visible text node
         $.each($elements, function() {
@@ -532,46 +787,238 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
 
             var visibilityResult = visibilityCheckerFunc($element, props, true);
             if (visibilityResult) {
-                $firstVisibleTextNode = $element;
+                characterOffset = 0;
+                $lastVisibleTextNode = $element;
+                if (this.nodeType === Node.TEXT_NODE) {
+                    /* find the character offset that is first visible */
+                    $lastVisibleTextNode = $(this);
+                    if (visibilityResult == 100) {
+                        characterOffset = 0;
+                    }
+                    characterOffset = self.findLastVisibleTextOffset($element, $lastVisibleTextNode, props);
+                    if (characterOffset == this.nodeValue.length) {
+                        // none of the content of this text node was visible
+                        return true;
+                    }
+                }
+
                 percentOfElementHeight = 100 - visibilityResult;
                 return false;
             }
             return true;
         });
 
-        return {$element: $firstVisibleTextNode, percentY: percentOfElementHeight};
+        return {$element: $lastVisibleTextNode, percentY: percentOfElementHeight, textOffset: characterOffset};
     };
 
-    this.getFirstVisibleElementCfi = function(topOffset) {
+    this.findLastVisibleNodeWithTextOffset = function (leftOffset) {
+        var iframeDoc = $iframe[0].contentDocument;
+        return this.findVisibleNodeWithTextOffset(iframeDoc, false, leftOffset);
+    };
 
-        var foundElement = this.findFirstVisibleElement(topOffset);
+    //TODO:(MDA) This is mostly a copy of findLastVisibleTextOffset. Refactor to remove duplicate
+    // code and eventually move to the bounds call.
+    this.findFirstVisibleTextOffset = function ($element, $textNode, props) {
+        /* WTF are the 2 lines below and the final relaceWith() doing below?? */
+        var $workingCopy = $element.clone();
+        /* use our working copy */
+        $element.replaceWith($workingCopy);
 
-        if(!foundElement.$element) {
-            console.log("Could not generate CFI no visible element on page");
+        var text = $textNode[0].nodeValue;
+
+        /* remove anything after $textNode in our working copy */
+        var textNodeIndex = $element.contents().index($textNode);
+
+        /* add text back one word at a time until $element is once again passing leftOffset */
+        var words = text.split(' ');
+        var size = words.length;
+        var i = 0;
+        var textOffset = 0;
+        var $currentTextNode = $workingCopy.contents().eq(textNodeIndex);
+        if ($workingCopy.contents().length > textNodeIndex + 1) {
+            $workingCopy.contents().slice(textNodeIndex + 1).remove();
+        }
+        var $tempTextNode;
+        for (; i < size; i++) {
+            var newText = words.slice(0, i + 1).join(' ');
+            $tempTextNode = $(document.createTextNode(newText));
+            $currentTextNode.replaceWith($tempTextNode);
+            $currentTextNode = $tempTextNode;
+
+            var visibilityResult = visibilityCheckerFunc($workingCopy, props, true);
+            if (visibilityResult) {
+                break;
+            }
+            textOffset = newText.length;
+        }
+        while (text.charAt(textOffset) == ' ') textOffset++;
+
+        /* replace our original text */
+        $workingCopy.replaceWith($element);
+
+        return textOffset;
+    };
+
+    this.findLastVisibleTextOffset = function ($element, $textNode, props) {
+        var $workingCopy = $element.clone();
+        /* use our working copy */
+        $element.replaceWith($workingCopy);
+
+        var text = $textNode[0].nodeValue;
+
+        /* remove anything after $textNode in our working copy */
+        var textNodeIndex = $element.contents().index($textNode);
+
+        /* remove text one word at a time until $element is 100% visible */
+        var words = text.split(' ');
+        var size = words.length;
+        var i = size;
+        var textOffset = text.length;
+        var $currentTextNode = $workingCopy.contents().eq(textNodeIndex);
+        if ($workingCopy.contents().length > textNodeIndex + 1) {
+            $workingCopy.contents().slice(textNodeIndex + 1).remove();
+        }
+        var $tempTextNode;
+        for (; i >= 0; i--) {
+            var newText = words.slice(0, i + 1).join(' ');
+            $tempTextNode = $(document.createTextNode(newText));
+            $currentTextNode.replaceWith($tempTextNode);
+            $currentTextNode = $tempTextNode;
+
+            var visibilityResult = visibilityCheckerFunc($workingCopy, props, true);
+            textOffset = newText.length;
+            if (visibilityResult == 100) {
+                break;
+            }
+        }
+        while (text.charAt(textOffset) == ' ') textOffset++;
+
+        /* replace our original text */
+        $workingCopy.replaceWith($element);
+
+        return textOffset;
+    };
+
+    this.getFirstVisibleTextOffsetCfi = function (props) {
+        var node = this.findFirstVisibleNodeWithTextOffset(props);
+        return this.getCfiForNode(node);
+    };
+
+    this.getLastVisibleTextOffsetCfi = function (props) {
+        var node = this.findLastVisibleNodeWithTextOffset(props);
+        return this.getCfiForNode(node);
+    };
+
+    this.getCfiForNode = function(node) {
+        if (!node.$element || node.$element.size() === 0) {
+            console.log("Could not generate CFI. The page has no visible elements.");
             return undefined;
         }
 
-        //noinspection JSUnresolvedVariable
-        var cfi = EPUBcfi.Generator.generateElementCFIComponent(foundElement.$element[0]);
+        var cfi;
+        if (node.$element[0].nodeType === Node.TEXT_NODE) {
+            cfi = EPUBcfi.generateCharacterOffsetCFIComponent(node.$element[0], node.textOffset, ["blacklist"]);
+        } else {
+            cfi = EPUBcfi.generateElementCFIComponent(node.$element[0], ["blacklist"]);
+        }
 
-        if(cfi[0] == "!") {
+        if (cfi[0] === "!") {
             cfi = cfi.substring(1);
         }
 
-        return cfi + "@0:" + foundElement.percentY;
+        return cfi;
     };
 
-    this.getPageForElementCfi = function(cfi, classBlacklist, elementBlacklist, idBlacklist) {
+    this.getFirstVisibleElementCfi = function (leftOffset) {
+        return this.getFirstVisibleTextOffsetCfi(leftOffset);
+    };
 
-        var cfiParts = splitCfi(cfi);
+    this.getLastVisibleElementCfi = function (leftOffset) {
+        return this.getLastVisibleTextOffsetCfi(leftOffset);
+    };
 
-        var $element = getElementByPartialCfi(cfiParts.cfi, classBlacklist, elementBlacklist, idBlacklist);
+    this.isElementCfiVisible = function (elementCfi, currentPage) {
+        var pageIndex = ReadiumSDK.Views.CfiNavigationLogic.getPageForElementCfi(elementCfi);
 
-        if(!$element) {
-            return -1;
+        if (currentPage == pageIndex) {
+            return true;
+        }
+        return false;
+    };
+
+    this.getBookmark = function (ltr) {
+        // respect RTL
+        var root = $iframe[0].contentDocument.body || $iframe[0].contentDocument.documentElement;
+
+        // Relative offset to the viewport for the bookmark for: columnGap or screenWidth - columnGap
+        var offset = (ltr) ? options.paginationInfo.columnGap : $(root).width() - options.paginationInfo.columnGap;
+        return ReadiumSDK.Views.CfiNavigationLogic.getBookmarkForOffset(offset);
+    };
+
+    this.getBookmarkForOffset = function (offset) {
+        var bookmark = {};
+        var cfiData = ReadiumSDK.Views.CfiNavigationLogic.getFirstVisibleTextOffsetCfi(offset);
+        if (!cfiData) {
+            //Couldn't find anything to create a CFI to, so make it a virtual first element
+            return JSON.stringify({ contentCFI: "/0", context: "" });
+        }
+        bookmark.contentCFI = cfiData.cfi;
+
+        if (cfiData.elementData && cfiData.elementData.$element.get(0).nodeType === Node.ELEMENT_NODE &&
+            cfiData.elementData.$element.get(0).nodeName.toLowerCase() === "img") {
+            var altAttr = cfiData.elementData.$element.attr("alt");
+            if (altAttr) {
+                bookmark.context = "[image] " + altAttr.substring(0, 64);
+            } else {
+                bookmark.context = "[image]";
+            }
+        } else if (cfiData.elementData) {
+            var textData = cfiData.elementData.$element.text();
+            var element = cfiData.elementData.$element[0].nextSibling;
+            while (element) {
+                if (element.nodeType === 3) {
+                    textData += element.nodeValue;
+                } else {
+                    textData += $(element).text();
+                }
+                element = element.nextSibling;
+            }
+            bookmark.context = textData.substring(cfiData.elementData.textOffset, cfiData.elementData.textOffset + 64);
         }
 
-        return this.getPageForPointOnElement($element, cfiParts.x, cfiParts.y);
+        return JSON.stringify(bookmark);
+    };
+
+    this.getPageForElementCfi = function (cfi) {
+
+        var contentDoc = $iframe[0].contentDocument;
+        var cfiParts = this.splitCfi(cfi);
+
+        var wrappedCfi = "epubcfi(" + cfiParts.cfi + ")";
+        $('body', $iframe[0].contentDocument).get(0).normalize();
+        var $element = EPUBcfi.getTargetElementWithPartialCFI(wrappedCfi, contentDoc, ["blacklist"]);
+        var $removeElement;
+        if ($element[0].nodeType === Node.TEXT_NODE) {
+            var $injectElement = $("<span>-</span>");
+            EPUBcfi.injectElementAtOffset($element, cfiParts.chr, $injectElement);
+            $removeElement = $injectElement;
+            $element = $injectElement;
+        }
+
+        if (!$element || $element.length === 0) {
+            console.log("Can't find element for CFI: " + cfi);
+            return undefined;
+        }
+
+        var page = this.getPageForElement($element, 1, 1);
+        //console.log('page for cfi '+cfi+' (new way) is '+findPageByRectangles($element, 1));
+        //console.log('page for cfi '+cfi+' (old way) is '+this.getPageForElement($element, 1, 1));
+
+        if ($removeElement) {
+            $removeElement.remove();
+        }
+
+        return page;
     };
 
     function getElementByPartialCfi(cfi, classBlacklist, elementBlacklist, idBlacklist) {
@@ -582,91 +1029,80 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
         //noinspection JSUnresolvedVariable
         var $element = EPUBcfi.getTargetElementWithPartialCFI(wrappedCfi, contentDoc, classBlacklist, elementBlacklist, idBlacklist);
 
-        if(!$element || $element.length == 0) {
+        if(!$element || $element.length === 0) {
             console.log("Can't find element for CFI: " + cfi);
             return undefined;
         }
 
         return $element;
-    }
+    };
 
     this.getElementByCfi = function(cfi, classBlacklist, elementBlacklist, idBlacklist) {
 
-        var cfiParts = splitCfi(cfi);
+        var cfiParts = this.splitCfi(cfi);
         return getElementByPartialCfi(cfiParts.cfi, classBlacklist, elementBlacklist, idBlacklist);
     };
 
-    this.getPageForElement = function($element) {
-
-        return this.getPageForPointOnElement($element, 0, 0);
-    };
-
-    this.getPageForPointOnElement = function($element, x, y) {
-
-        var pageIndex;
-        if (options.rectangleBased) {
-            pageIndex = findPageByRectangles($element, y);
-            if (pageIndex === null) {
-                console.warn('Impossible to locate a hidden element: ', $element);
-                return 0;
-            }
-            return pageIndex;
-        }
-
-        var posInElement = this.getVerticalOffsetForPointOnElement($element, x, y);
-        return Math.floor(posInElement / $viewport.height());
-    };
-
-    this.getVerticalOffsetForElement = function($element) {
-
-        return this.getVerticalOffsetForPointOnElement($element, 0, 0);
-    };
-
-    this.getVerticalOffsetForPointOnElement = function($element, x, y) {
+    // (MDA) After removing unused vars below x,y is no longer used - clean up
+    this.getPageForElement = function ($element, x, y) {
 
         var elementRect = Helpers.Rect.fromElement($element);
-        return Math.ceil(elementRect.top + y * elementRect.height / 100);
-    };
+        // For some reason Readium can get confused here. jQuery reports the right values
+        // (MDA) What is wrong with readium? Why make the call here at all then if it's broken??
+        var offset = $element.offset();
+        elementRect.left = offset.left;
+        elementRect.top = offset.top;
 
-    this.getElementById = function(id) {
-
-        var contentDoc = $iframe[0].contentDocument;
-
-        var $element = $(contentDoc.getElementById(id));
-        //$("#" + Helpers.escapeJQuerySelector(id), contentDoc);
-        
-        if($element.length == 0) {
-            return undefined;
+        var $columnDiv = $('html', $iframe[0].contentDocument);
+        //var columnWidth = $columnDiv.width() + options.paginationInfo.columnGap;
+        var columnHeight = $columnDiv.height();
+        var columnWidth = options.paginationInfo.columnWidth;
+        var rectHeight = elementRect.top / columnHeight;
+        var rectWidth = elementRect.left / columnWidth;
+        var column = rectHeight;
+        if (elementRect.left > columnWidth) {
+            column = rectWidth;
+        }
+        // Always judge if we are near the next page based on height
+        // TODO: This should probably be different for vertical writing mode, though
+        var extra = rectHeight % 1;
+        column = Math.floor(column);
+        //console.log('column: '+column+', extra: '+extra+', elementRect: '+JSON.stringify(elementRect)+
+        //', columnWidth: '+(columnWidth + gap)+', columnHeight: '+columnHeight);
+        if (extra > 0.9) {
+            column++;
         }
 
-        return $element;
+        return options.paginationInfo.currentSpreadIndex * options.paginationInfo.visibleColumnCount + column;
     };
 
-    this.getPageForElementId = function(id) {
+    this.getPageForElementId = function (id) {
 
-        var $element = this.getElementById(id);
-        if(!$element) {
+        var $element = $("#" + id);
+        if ($element.length === 0) {
             return -1;
         }
 
-        return this.getPageForElement($element);
+        return this.getPageForElement($element, 0, 0);
     };
 
-    function splitCfi(cfi) {
+    this.splitCfi = function (cfi) {
 
         var ret = {
             cfi: "",
+            chr: 0,
             x: 0,
             y: 0
         };
 
         var ix = cfi.indexOf("@");
-
-        if(ix != -1) {
-            var terminus = cfi.substring(ix + 1);
+        var chrOffsetIx = cfi.indexOf(":");
+        var terminus;
+        if (ix != -1) {
+            terminus = cfi.substring(ix + 1);
 
             var colIx = terminus.indexOf(":");
-            if(colIx != -1) {
+            if (colIx != -1) {
                 ret.x = parseInt(terminus.substr(0, colIx));
                 ret.y = parseInt(terminus.substr(colIx + 1));
             }
@@ -676,102 +1112,18 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
 
             ret.cfi = cfi.substring(0, ix);
         }
+        else if (chrOffsetIx != -1) {
+            terminus = cfi.substring(chrOffsetIx + 1);
+            ret.chr = parseInt(terminus);
+
+            ret.cfi = cfi.substring(0, chrOffsetIx);
+        }
         else {
 
             ret.cfi = cfi;
         }
 
         return ret;
-    }
-
-    // returns raw DOM element (not $ jQuery-wrapped)
-    this.getFirstVisibleMediaOverlayElement = function(visibleContentOffsets)
-    {
-        var docElement = this.getRootElement();
-        if (!docElement) return undefined;
-
-        var $root = $("body", docElement);
-        if (!$root || !$root.length || !$root[0]) return undefined;
-
-        var that = this;
-
-        var firstPartial = undefined;
-
-        function traverseArray(arr)
-        {
-            if (!arr || !arr.length) return undefined;
-
-            for (var i = 0, count = arr.length; i < count; i++)
-            {
-                var item = arr[i];
-                if (!item) continue;
-
-                var $item = $(item);
-
-                if($item.data("mediaOverlayData"))
-                {
-                    var visible = that.getElementVisibility($item, visibleContentOffsets);
-                    if (visible)
-                    {
-                        if (!firstPartial) firstPartial = item;
-
-                        if (visible == 100) return item;
-                    }
-                }
-                else
-                {
-                    var elem = traverseArray(item.children);
-                    if (elem) return elem;
-                }
-            }
-
-            return undefined;
-        }
-
-        var el = traverseArray([$root[0]]);
-        if (!el) el = firstPartial;
-        return el;
-
-        // var $elements = this.getMediaOverlayElements($root);
-        // return this.getVisibleElements($elements, visibleContentOffsets);
-    };
-
-    this.getElementVisibility = function($element, visibleContentOffsets) {
-        return visibilityCheckerFunc($element, visibleContentOffsets, true);
-    };
-
-
-
-    this.isElementVisible = visibilityCheckerFunc;
-
-
-
-
-
-    function isValidTextNode(node) {
-
-        if(node.nodeType === Node.TEXT_NODE) {
-
-            // Heuristic to find a text node with actual text
-            var nodeText = node.nodeValue.replace(/\n/g, "");
-            nodeText = nodeText.replace(/ /g, "");
-
-             return nodeText.length > 0;
-        }
-
-        return false;
-
-    }
-
-    this.getElement = function(selector) {
-
-        var $element = $(selector, this.getRootElement());
-
-        if($element.length > 0) {
-            return $element;
-        }
-
-        return undefined;
     };
 
 };

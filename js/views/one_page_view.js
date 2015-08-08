@@ -860,6 +860,12 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
 
     };
 
+    this.getLastVisibleElementCfi = function() {
+        var navigation = new CfiNavigationLogic(_$el, _$iframe);
+        var offset = $('html', _$iframe[0].contentDocument).width();
+        return navigation.getLastVisibleElementCfi(offset);
+    };
+
     this.getNavigator = function () {
 
         return new CfiNavigationLogic(_$el, _$iframe);

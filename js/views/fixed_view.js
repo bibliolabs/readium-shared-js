@@ -569,14 +569,22 @@ var FixedView = function(options, reader){
             var idref = views[0].currentSpineItem().idref;
             var cfi = views[0].getFirstVisibleElementCfi();
 
+            var endIdref;
+            var endCfi;
+
+            if (views.length > 1) {
+                endIdref = views[views.length - 1].currentSpineItem().idref;
+                endCfi = views[views.length - 1].getLastVisibleElementCfi();
+            }
+
             if(cfi == undefined) {
                 cfi = "";
             }
 
-            return new BookmarkData(idref, cfi);
+            return new BookmarkData(idref, cfi, endIdref, endCfi);
         }
 
-        return new BookmarkData("", "");
+        return new BookmarkData("", "", "", "");
     };
 
     function getDisplayingViews() {

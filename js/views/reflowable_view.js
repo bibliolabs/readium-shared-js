@@ -610,6 +610,7 @@ var ReflowableView = function(options, reader){
         
         _$iframe.css("width", _lastViewPortSize.width + "px");
         _$iframe.css("height", _lastViewPortSize.height + "px");
+        resizeImages();
 
         _$epubHtml.css("height", _lastViewPortSize.height + "px");
         
@@ -631,10 +632,12 @@ var ReflowableView = function(options, reader){
         var useColumnCountNotWidth = _paginationInfo.visibleColumnCount > 1; // column-count == 1 does not work in Chrome, and is not needed anyway (HTML width is full viewport width, no Firefox video flickering)
         if (useColumnCountNotWidth) {
             _$epubHtml.css("width", _lastViewPortSize.width + "px");
+            _$epubHtml.css("column-width", '');
             _$epubHtml.css("column-count", _paginationInfo.visibleColumnCount);
         } else {
             _$epubHtml.css("width", (_htmlBodyIsVerticalWritingMode ? _lastViewPortSize.width : _paginationInfo.columnWidth) + "px");
             _$epubHtml.css("column-width", _paginationInfo.columnWidth + "px");
+            _$epubHtml.css("column-count", '');
         }
 
         _$epubHtml.css("column-fill", "auto");
@@ -721,6 +724,11 @@ var ReflowableView = function(options, reader){
         return _navigationLogic.getFirstVisibleElementCfi(contentOffsets);
     };
 
+    this.getLastVisibleElementCfi = function() {
+        var contentOffsets = getVisibleContentOffsets();
+        return _navigationLogic.getLastVisibleElementCfi({ top: contentOffsets.bottom });
+    };
+
     this.getPaginationInfo = function() {
 
         var paginationInfo = new CurrentPagesInfo(_spine, false);
@@ -758,32 +766,48 @@ var ReflowableView = function(options, reader){
     //we need this styles for css columnizer not to chop big images
     function resizeImages() {
 
-        if(!_$epubHtml) {
-            return;
-        }
+        // if(!_$epubHtml) {
+        //     return;
+        // }
 
-        var $elem;
-        var height;
-        var width;
+        // $('img, svg', _$epubHtml).each(function(){
 
-        $('img, svg', _$epubHtml).each(function(){
+        //     var $elem = $(this);
 
-            $elem = $(this);
+        //     // if we set max-width/max-height to 100% columnizing engine chops images embedded in the text
+        //     // (but not if we set it to 99-98%) go figure.
+        //     // TODO: CSS min-w/h is content-box, not border-box (does not take into account padding + border)? => images may still overrun?
+        //     $elem.css('max-width', '98%');
+        //     $elem.css('max-height', '98%');
 
-            // if we set max-width/max-height to 100% columnizing engine chops images embedded in the text
-            // (but not if we set it to 99-98%) go figure.
-            // TODO: CSS min-w/h is content-box, not border-box (does not take into account padding + border)? => images may still overrun?
-            $elem.css('max-width', '98%');
-            $elem.css('max-height', '98%');
+        //     if(!$elem.css('height')) {
+        //         $elem.css('height', 'auto');
+        //     }
 
-            if(!$elem.css('height')) {
-                $elem.css('height', 'auto');
-            }
+        //     if(!$elem.css('width')) {
+        //         $elem.css('width', 'auto');
+        //     }
 
-            if(!$elem.css('width')) {
-                $elem.css('width', 'auto');
-            }
+        // });
+        var widthModifier = reader.viewerSettings.isSyntheticSpread ? 2 : 1;
 
+        var $targets = $();
+        $targets = $targets.add(_$epubHtml.find("img"));
+
+        // See: http://stackoverflow.com/questions/16438416/cross-browser-svg-preserveaspectratio
+        $targets = $targets.add(_$epubHtml.find("svg")
+            .attr("preserveAspectRatio", "xMidYMid meet")
+            .attr("width", "100%"));
+
+        // See: http://www.w3.org/TR/css3-multicol/#column-breaks
+        $targets.css({
+            maxHeight: (_$iframe.height() + "px"),
+            maxWidth: ((_$iframe.width() / widthModifier) + "px"),
+            "-webkit-column-break-inside": "avoid",
+            "-moz-column-break-inside": "avoid",
+            "-moz-page-break-inside": "avoid",
+            "page-break-inside": "avoid",
+            "break-inside": "avoid-column"
         });
     }
 
@@ -791,10 +815,11 @@ var ReflowableView = function(options, reader){
 
         if(!_currentSpineItem) {
 
-            return new BookmarkData("", "");
+            return new BookmarkData("", "", "", "");
         }
 
-        return new BookmarkData(_currentSpineItem.idref, self.getFirstVisibleElementCfi());
+        return new BookmarkData(_currentSpineItem.idref, self.getFirstVisibleElementCfi(),
+            _currentSpineItem.idref, self.getLastVisibleElementCfi());
     };
 
     function getVisibleContentOffsets() {

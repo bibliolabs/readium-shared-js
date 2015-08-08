@@ -27,8 +27,10 @@ define(function() {
 /**
  * @class Models.BookmarkData
  */
-var BookmarkData = function(idref, contentCFI) {
-
+var BookmarkData = function(idref, contentCFI, endIdref, endCFI) {
+    // (MDA) Adding back the end for a page to the bookmark object. I think
+    // this needs to be refactored into something not called a bookmark, but
+    // under a time crunch.
     /**
      * spine item idref
      * @property idref
@@ -43,9 +45,12 @@ var BookmarkData = function(idref, contentCFI) {
      */
     this.contentCFI = contentCFI;
 
+    this.endIdref = endIdref;
+    this.endCFI = endCFI;
+
     this.toString = function () {
         return JSON.stringify(this);
-    }
+    };
 };
 
 return BookmarkData;
