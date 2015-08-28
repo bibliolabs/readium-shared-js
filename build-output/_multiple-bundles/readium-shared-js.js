@@ -1,3 +1,193 @@
+<<<<<<< HEAD
+=======
+//
+//  Created by Juan Corona
+//  Based on original proposal by Mickaël Menu
+//  Portions adapted from Rangy's Module system: Copyright (c) 2014 Tim Down
+//
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_js_plugins',["jquery", "underscore", "eventEmitter"], function ($, _, EventEmitter) {
+
+    var _registeredPlugins = {};
+
+    /**
+     * A  plugins controller used to easily add plugins from the host app, eg.
+     * ReadiumSDK.Plugins.register("footnotes", function(api){ ... });
+     *
+     * @constructor
+     */
+    var PluginsController = function () {
+        var self = this;
+
+
+        this.initialize = function (reader) {
+            var apiFactory = new PluginApiFactory(reader);
+
+            if (!reader.plugins) {
+                //attach an object to the reader that will be
+                // used for plugin namespaces and their extensions
+                reader.plugins = {};
+            } else {
+                throw new Error("Already initialized on reader!");
+            }
+            _.each(_registeredPlugins, function (plugin) {
+                plugin.init(apiFactory);
+            });
+        };
+
+        this.getLoadedPlugins = function() {
+            return _registeredPlugins;
+        };
+
+        // Creates a new instance of the given plugin constructor.
+        this.register = function (name, optDependencies, initFunc) {
+
+            if (_registeredPlugins[name]) {
+                throw new Error("Duplicate registration for plugin with name: " + name);
+            }
+
+            var dependencies;
+            if (typeof optDependencies === 'function') {
+                initFunc = optDependencies;
+            } else {
+                dependencies = optDependencies;
+            }
+
+            _registeredPlugins[name] = new Plugin(name, dependencies, function(plugin, api) {
+                if (!plugin.initialized || !api.host.plugins[plugin.name]) {
+                    plugin.initialized = true;
+                    try {
+                        var pluginContext = {};
+                        _.extend(pluginContext, new EventEmitter());
+
+                        initFunc.call(pluginContext, api.instance);
+                        plugin.supported = true;
+
+                        api.host.plugins[plugin.name] = pluginContext;
+                    } catch (ex) {
+                        plugin.fail(ex);
+                    }
+                }
+            });
+        };
+    };
+
+    function PluginApi(reader, plugin) {
+        this.reader = reader;
+        this.plugin = plugin;
+    }
+
+    function PluginApiFactory(reader) {
+        this.create = function (plugin) {
+            return {
+                host: reader,
+                instance: new PluginApi(reader, plugin)
+            };
+        };
+    }
+
+//
+//  The following is adapted from Rangy's Module class:
+//
+//  Copyright (c) 2014 Tim Down
+//
+//  The MIT License (MIT)
+//  Permission is hereby granted, free of charge, to any person obtaining a copy
+//  of this software and associated documentation files (the "Software"), to deal
+//  in the Software without restriction, including without limitation the rights
+//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the Software is
+//  furnished to do so, subject to the following conditions:
+//
+//  The above copyright notice and this permission notice shall be included in all
+//  copies or substantial portions of the Software.
+//
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//  SOFTWARE.
+
+    function Plugin(name, dependencies, initializer) {
+        this.name = name;
+        this.dependencies = dependencies;
+        this.initialized = false;
+        this.supported = false;
+        this.initializer = initializer;
+    }
+
+    Plugin.prototype = {
+        init: function (apiFactory) {
+            var requiredPluginNames = this.dependencies || [];
+            for (var i = 0, len = requiredPluginNames.length, requiredPlugin, PluginName; i < len; ++i) {
+                PluginName = requiredPluginNames[i];
+
+                requiredPlugin = _registeredPlugins[PluginName];
+                if (!requiredPlugin || !(requiredPlugin instanceof Plugin)) {
+                    throw new Error("required Plugin '" + PluginName + "' not found");
+                }
+
+                requiredPlugin.init(apiFactory);
+
+                if (!requiredPlugin.supported) {
+                    throw new Error("required Plugin '" + PluginName + "' not supported");
+                }
+            }
+
+            // Now run initializer
+            this.initializer(this, apiFactory.create(this));
+        },
+
+        fail: function (reason) {
+            this.initialized = true;
+            this.supported = false;
+            throw new Error("Plugin '" + this.name + "' failed to load: " + reason);
+        },
+
+        warn: function (msg) {
+            console.warn("Plugin " + this.name + ": " + msg);
+        },
+
+        deprecationNotice: function (deprecated, replacement) {
+            console.warn("DEPRECATED: " + deprecated + " in Plugin " + this.name + "is deprecated. Please use "
+            + replacement + " instead");
+        },
+
+        createError: function (msg) {
+            return new Error("Error in " + this.name + " Plugin: " + msg);
+        }
+    };
+
+    var instance = new PluginsController();
+    return instance;
+});
+
+>>>>>>> upstream/develop
 //  LauncherOSX
 //
 //  Created by Boris Schneiderman.
@@ -5542,7 +5732,7 @@ define('readium_shared_js/views/audio_player',['jquery'],function($) {
         }
     
     
-        var _volume = 100.0;
+        var _volume = 1.0;
         this.setVolume = function(volume)
         {
             _volume = volume;
@@ -6631,27 +6821,27 @@ var MediaOverlayElementHighlighter = function(reader) {
 //  Created by Boris Schneiderman.
 // Modified by Daniel Weck
 //  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
-//  
-//  Redistribution and use in source and binary forms, with or without modification, 
+//
+//  Redistribution and use in source and binary forms, with or without modification,
 //  are permitted provided that the following conditions are met:
-//  1. Redistributions of source code must retain the above copyright notice, this 
+//  1. Redistributions of source code must retain the above copyright notice, this
 //  list of conditions and the following disclaimer.
-//  2. Redistributions in binary form must reproduce the above copyright notice, 
-//  this list of conditions and the following disclaimer in the documentation and/or 
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
 //  other materials provided with the distribution.
-//  3. Neither the name of the organization nor the names of its contributors may be 
-//  used to endorse or promote products derived from this software without specific 
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
 //  prior written permission.
-//  
-//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
-//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
-//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
-//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
-//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
-//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
-//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
-//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
-//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 define('readium_shared_js/views/scroll_view',["jquery", "underscore", "eventEmitter", "../models/bookmark_data", "../models/current_pages_info", "../helpers",
         "./one_page_view", "../models/page_open_request", "../globals", "../models/viewer_settings"],
@@ -6714,8 +6904,8 @@ var ScrollView = function (options, isContinuousScroll, reader) {
         _$contentFrame.css("position", "relative");
 
         var settings = reader.viewerSettings();
-if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined")
-{
+        if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined")
+        {
             //defaults
             settings = new ViewerSettings({});
         }
@@ -6825,10 +7015,10 @@ if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefin
         }
 
         var scrollPosBefore = undefined;
-if (_DEBUG)
-{
-    if (pageView)
-{
+        if (_DEBUG)
+        {
+            if (pageView)
+            {
                 var offset = pageView.offset();
                 if (offset) scrollPosBefore = offset.top;
             }
@@ -6836,10 +7026,10 @@ if (_DEBUG)
 
         // This function double-checks whether the browser has shifted the scroll position because of unforeseen rendering issues.
         // (this should never happen because we handle scroll adjustments during iframe height resizes explicitely in this code)
-var assertScrollPosition = function(msg)
-{
-    if (_DEBUG)
-    {
+        var assertScrollPosition = function(msg)
+        {
+            if (_DEBUG)
+            {
                 if (!scrollPosBefore) return;
                 var scrollPosAfter = undefined;
 
@@ -6849,8 +7039,8 @@ var assertScrollPosition = function(msg)
                 if (!scrollPosAfter) return;
 
                 var diff = scrollPosAfter - scrollPosBefore;
-        if (Math.abs(diff) > 1)
-        {
+                if (Math.abs(diff) > 1)
+                {
                     console.debug("@@@@@@@@@@@@@@@ SCROLL ADJUST (" + msg + ") " + diff + " -- " + pageView.currentSpineItem().href);
                     //_$contentFrame[0].scrollTop = _$contentFrame[0].scrollTop + diff;
                 }
@@ -6869,25 +7059,25 @@ var assertScrollPosition = function(msg)
 
     var _mediaOverlaysWasPlayingLastTimeScrollStarted = false;
 
-function onScrollDirect(e)
-{
-        var settings = reader.viewerSettings();
-if (!settings.mediaOverlaysPreservePlaybackWhenScroll)
-{
-    if (!_mediaOverlaysWasPlayingLastTimeScrollStarted && reader.isMediaOverlayAvailable())
+    function onScrollDirect(e)
     {
-                _mediaOverlaysWasPlayingLastTimeScrollStarted = reader.isPlayingMediaOverlay();
-        if (_mediaOverlaysWasPlayingLastTimeScrollStarted)
+        var settings = reader.viewerSettings();
+        if (!settings.mediaOverlaysPreservePlaybackWhenScroll)
         {
+            if (!_mediaOverlaysWasPlayingLastTimeScrollStarted && reader.isMediaOverlayAvailable())
+            {
+                _mediaOverlaysWasPlayingLastTimeScrollStarted = reader.isPlayingMediaOverlay();
+                if (_mediaOverlaysWasPlayingLastTimeScrollStarted)
+                {
                     reader.pauseMediaOverlay();
                 }
             }
         }
     }
 
-function onScroll(e)
-{
-        if (!_isPerformingLayoutModifications
+    function onScroll(e)
+    {
+        if (   !_isPerformingLayoutModifications
             && !_isSettingScrollPosition
             && !_isLoadingNewSpineItemOnPageRequest) {
 
@@ -6895,12 +7085,12 @@ function onScroll(e)
             onPaginationChanged(self);
 
             var settings = reader.viewerSettings();
-    if (!settings.mediaOverlaysPreservePlaybackWhenScroll)
-    {
-        if (_mediaOverlaysWasPlayingLastTimeScrollStarted)
-        {
-            setTimeout(function()
+            if (!settings.mediaOverlaysPreservePlaybackWhenScroll)
             {
+                if (_mediaOverlaysWasPlayingLastTimeScrollStarted)
+                {
+                    setTimeout(function()
+                    {
                         reader.playMediaOverlay();
                         _mediaOverlaysWasPlayingLastTimeScrollStarted = false;
                     }, 100);
@@ -6918,8 +7108,8 @@ function onScroll(e)
         }
     }
 
-function updatePageViewSizeAndAdjustScroll(pageView)
-{
+    function updatePageViewSizeAndAdjustScroll(pageView)
+    {
         var scrollPos = scrollTop();
         var rangeBeforeResize = getPageViewRange(pageView);
 
@@ -6932,22 +7122,22 @@ function updatePageViewSizeAndAdjustScroll(pageView)
 
         var delta = heightAfter - heightBefore;
 
-if (Math.abs(delta) > 0)
-{
-    if (_DEBUG)
-    {
+        if (Math.abs(delta) > 0)
+        {
+            if (_DEBUG)
+            {
                 console.debug("IMMEDIATE SCROLL ADJUST: " + pageView.currentSpineItem().href + " == " + delta);
             }
             scrollTo(scrollPos + delta);
         }
     }
 
-function reachStableContentHeight(updateScroll, pageView, iframe, href, fixedLayout, metaWidth, msg, callback)
-{
-if (!Helpers.isIframeAlive(iframe))
-{
-    if (_DEBUG)
+    function reachStableContentHeight(updateScroll, pageView, iframe, href, fixedLayout, metaWidth, msg, callback)
     {
+        if (!Helpers.isIframeAlive(iframe))
+        {
+            if (_DEBUG)
+            {
                 console.log("reachStableContentHeight ! win && doc (iFrame disposed?)");
             }
 
@@ -6965,27 +7155,27 @@ if (!Helpers.isIframeAlive(iframe))
 
         var initialContentHeight = previousPolledContentHeight;
 
-if (updateScroll === 0)
-{
+        if (updateScroll === 0)
+        {
             updatePageViewSizeAndAdjustScroll(pageView);
         }
-else
-{
+        else
+        {
             updatePageViewSize(pageView);
         }
 
-var tryAgainFunc = function(tryAgain)
-{
-    if (_DEBUG && tryAgain !== MAX_ATTEMPTS)
-    {
-                console.log("tryAgainFunc - " + tryAgain + ": " + href + "  <" + initialContentHeight + " -- " + previousPolledContentHeight + ">");
+        var tryAgainFunc = function(tryAgain)
+        {
+            if (_DEBUG && tryAgain !== MAX_ATTEMPTS)
+            {
+                console.log("tryAgainFunc - " + tryAgain + ": " + href + "  <" + initialContentHeight +" -- "+ previousPolledContentHeight + ">");
             }
 
             tryAgain--;
-    if (tryAgain < 0)
-    {
-        if (_DEBUG)
-        {
+            if (tryAgain < 0)
+            {
+                if (_DEBUG)
+                {
                     console.error("tryAgainFunc abort: " + href);
                 }
 
@@ -6993,12 +7183,12 @@ var tryAgainFunc = function(tryAgain)
                 return;
             }
 
-    setTimeout(function()
-    {
-        try
-        {
-            if (Helpers.isIframeAlive(iframe))
+            setTimeout(function()
             {
+                try
+                {
+                    if (Helpers.isIframeAlive(iframe))
+                    {
                         var win = iframe.contentWindow;
                         var doc = iframe.contentDocument;
 
@@ -7006,8 +7196,8 @@ var tryAgainFunc = function(tryAgain)
 
                         var docHeight = parseInt(Math.round(parseFloat(win.getComputedStyle(doc.documentElement).height))); //body can be shorter!
 
-                if (previousPolledContentHeight !== docHeight)
-                {
+                        if (previousPolledContentHeight !== docHeight)
+                        {
                             previousPolledContentHeight = docHeight;
 
                             tryAgainFunc(tryAgain);
@@ -7017,25 +7207,25 @@ var tryAgainFunc = function(tryAgain)
                         // CONTENT HEIGHT IS NOW STABILISED
 
                         var diff = iframeHeight - docHeight;
-                if (Math.abs(diff) > 4)
-                {
-                    if (_DEBUG)
-                    {
+                        if (Math.abs(diff) > 4)
+                        {
+                            if (_DEBUG)
+                            {
                                 console.log("$$$ IFRAME HEIGHT ADJUST: " + href + "  [" + diff + "]<" + initialContentHeight + " -- " + previousPolledContentHeight + ">");
                                 console.log(msg);
                             }
 
-                    if (updateScroll === 0)
-                    {
+                            if (updateScroll === 0)
+                            {
                                 updatePageViewSizeAndAdjustScroll(pageView);
                             }
-                    else
-                    {
+                            else
+                            {
                                 updatePageViewSize(pageView);
                             }
 
-                    if (Helpers.isIframeAlive(iframe))
-                    {
+                            if (Helpers.isIframeAlive(iframe))
+                            {
                                 var win = iframe.contentWindow;
                                 var doc = iframe.contentDocument;
 
@@ -7043,30 +7233,30 @@ var tryAgainFunc = function(tryAgain)
                                 var iframeHeightAfter = parseInt(Math.round(parseFloat(window.getComputedStyle(iframe).height)));
 
                                 var newdiff = iframeHeightAfter - docHeightAfter;
-                        if (Math.abs(newdiff) > 4)
-                        {
-                            if (_DEBUG)
-                            {
-                                        console.error("## IFRAME HEIGHT ADJUST: " + href + "  [" + newdiff + "]<" + initialContentHeight + " -- " + previousPolledContentHeight + ">");
+                                if (Math.abs(newdiff) > 4)
+                                {
+                                    if (_DEBUG)
+                                    {
+                                        console.error("## IFRAME HEIGHT ADJUST: " + href + "  [" + newdiff + "]<" + initialContentHeight + " -- "+ previousPolledContentHeight + ">");
                                         console.log(msg);
                                     }
 
                                     tryAgainFunc(tryAgain);
                                     return;
                                 }
-                        else
-                        {
-                            if (_DEBUG)
-                            {
-                                        console.log(">> IFRAME HEIGHT ADJUSTED OKAY: " + href + "  [" + diff + "]<" + initialContentHeight + " -- " + previousPolledContentHeight + ">");
+                                else
+                                {
+                                    if (_DEBUG)
+                                    {
+                                        console.log(">> IFRAME HEIGHT ADJUSTED OKAY: " + href + "  ["+diff+"]<" + initialContentHeight + " -- " + previousPolledContentHeight + ">");
                                         // console.log(msg);
                                     }
                                 }
                             }
-                    else
-                    {
-                        if (_DEBUG)
-                        {
+                            else
+                            {
+                                if (_DEBUG)
+                                {
                                     console.log("tryAgainFunc ! win && doc (iFrame disposed?)");
                                 }
 
@@ -7074,17 +7264,17 @@ var tryAgainFunc = function(tryAgain)
                                 return;
                             }
                         }
-                else
-                {
+                        else
+                        {
                             //if (_DEBUG)
                             // console.debug("IFRAME HEIGHT NO NEED ADJUST: " + href);
                             // console.log(msg);
                         }
                     }
-            else
-            {
-                if (_DEBUG)
-                {
+                    else
+                    {
+                        if (_DEBUG)
+                        {
                             console.log("tryAgainFunc ! win && doc (iFrame disposed?)");
                         }
 
@@ -7092,8 +7282,8 @@ var tryAgainFunc = function(tryAgain)
                         return;
                     }
                 }
-        catch(ex)
-        {
+                catch(ex)
+                {
                     console.error(ex);
 
                     if (callback) callback(false);
@@ -7152,14 +7342,14 @@ var tryAgainFunc = function(tryAgain)
                 newView.loadSpineItem(prevSpineItem, function (success, $iframe, spineItem, isNewlyLoaded, context) {
                     if (success) {
 
-                var continueCallback = function(successFlag)
-                {
+                        var continueCallback = function (successFlag)
+                        {
                             onPageViewLoaded(newView, success, $iframe, spineItem, isNewlyLoaded, context);
 
                             callback(successFlag);
                         };
 
-                reachStableContentHeight(0, newView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? newView.meta_width() : 0, "addToTopOf", continueCallback); // //onIFrameLoad called before this callback, so okay.
+                        reachStableContentHeight(0, newView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? newView.meta_width() : 0, "addToTopOf", continueCallback); // //onIFrameLoad called before this callback, so okay.
                     }
                     else {
                         console.error("Unable to open 2 " + prevSpineItem.href);
@@ -7204,14 +7394,14 @@ var tryAgainFunc = function(tryAgain)
         newView.loadSpineItem(nexSpineItem, function (success, $iframe, spineItem, isNewlyLoaded, context) {
             if (success) {
 
-        var continueCallback = function(successFlag)
-        {
+                var continueCallback = function (successFlag)
+                {
                     onPageViewLoaded(newView, success, $iframe, spineItem, isNewlyLoaded, context);
 
                     callback(successFlag);
                 };
 
-        reachStableContentHeight(2, newView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? newView.meta_width() : 0, "addToBottomOf", continueCallback); // //onIFrameLoad called before this callback, so okay.
+                reachStableContentHeight(2, newView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? newView.meta_width() : 0, "addToBottomOf", continueCallback); // //onIFrameLoad called before this callback, so okay.
             }
             else {
                 console.error("Unable to load " + nexSpineItem.href);
@@ -7292,6 +7482,11 @@ var tryAgainFunc = function(tryAgain)
             true, //enableBookStyleOverrides
             reader);
 
+        pageView.on(OnePageView.SPINE_ITEM_OPEN_START, function($iframe, spineItem) {
+
+            self.emit(Globals.Events.CONTENT_DOCUMENT_LOAD_START, $iframe, spineItem);
+        });
+
         pageView.render();
         if (_viewSettings) pageView.setViewSettings(_viewSettings);
 
@@ -7300,8 +7495,8 @@ var tryAgainFunc = function(tryAgain)
         }
 
 
-if (isContinuousScroll)
-{
+        if (isContinuousScroll)
+        {
             pageView.decorateIframe();
         }
 
@@ -7332,11 +7527,11 @@ if (isContinuousScroll)
         var pageNodes = _$contentFrame.children();
 
         var count = pageNodes.length;
-var iter = reverse ? function(ix) { return ix - 1}
-                   : function(ix) { return ix + 1};
+        var iter = reverse ? function(ix) { return ix - 1}
+                           : function(ix) { return ix + 1};
 
-var compare = reverse ? function(ix) { return ix >= 0}
-                      : function(ix) { return ix < count };
+        var compare = reverse ? function(ix) { return ix >= 0}
+                              : function(ix) { return ix < count };
 
         var start = reverse ? count - 1 : 0;
 
@@ -7403,8 +7598,8 @@ var compare = reverse ? function(ix) { return ix >= 0}
 
             if (success) {
 
-        var continueCallback = function(successFlag)
-        {
+                var continueCallback = function(successFlag)
+                {
                     onPageViewLoaded(loadedView, success, $iframe, spineItem, isNewlyLoaded, context);
 
                     callback(loadedView);
@@ -7412,7 +7607,7 @@ var compare = reverse ? function(ix) { return ix >= 0}
                     //successFlag should always be true as loadedView iFrame cannot be dead at this stage.
                 };
 
-        reachStableContentHeight(1, loadedView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? loadedView.meta_width() : 0, "openPage", continueCallback); // //onIFrameLoad called before this callback, so okay.
+                reachStableContentHeight(1, loadedView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? loadedView.meta_width() : 0, "openPage", continueCallback); // //onIFrameLoad called before this callback, so okay.
             }
             else {
                 console.error("Unable to load " + spineItem.href);
@@ -8009,6 +8204,7 @@ var compare = reverse ? function(ix) { return ix >= 0}
 };
 return ScrollView;
 });
+
 //  LauncherOSX
 //
 //  Created by Boris Schneiderman.
