@@ -1077,9 +1077,8 @@ var CfiNavigationLogic = function($viewport, $iframe, options){
     };
 
     this.getPageForElementId = function (id) {
-
-        var $element = $("#" + id);
-        if ($element.length === 0) {
+        var $element = this.getElementById(id);
+        if (!$element === 0) {
             return -1;
         }
 
