@@ -461,7 +461,7 @@ Helpers.loadTemplate = function (name, params) {
 Helpers.loadTemplate.cache = {
     "fixed_book_frame": '<div id="fixed-book-frame" class="clearfix book-frame fixed-book-frame"></div>',
 
-    "single_page_frame": '<div><div id="scaler"><iframe scrolling="no" class="iframe-fixed"></iframe></div></div>',
+    "single_page_frame": '<div><div id="scaler"><iframe scrolling="no" class="iframe-fixed" id="epubContentIframe"></iframe></div></div>',
     //"single_page_frame" : '<div><iframe scrolling="no" class="iframe-fixed" id="scaler"></iframe></div>',
 
     "scrolled_book_frame": '<div id="reflowable-book-frame" class="clearfix book-frame reflowable-book-frame"><div id="scrolled-content-frame"></div></div>',
