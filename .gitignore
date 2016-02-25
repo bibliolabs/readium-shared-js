@@ -1,3 +1,4 @@
+.DS_Store
 node_modules
 build.txt
 plugins-override.cson
@@ -8,3 +9,5 @@ http.log
 
 ### Added for BiblioLabs fork ###
 build-output/**/*
+
+api-docs

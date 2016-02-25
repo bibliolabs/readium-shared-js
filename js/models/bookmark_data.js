@@ -27,10 +27,10 @@ define(function() {
 /**
  * @class Models.BookmarkData
  */
-var BookmarkData = function(idref, contentCFI, endIdref, endCFI) {
-    // (MDA) Adding back the end for a page to the bookmark object. I think
-    // this needs to be refactored into something not called a bookmark, but
-    // under a time crunch.
+var BookmarkData = function(idref, contentCFI) {
+
+    var self = this;
+
     /**
      * spine item idref
      * @property idref
@@ -45,13 +45,24 @@ var BookmarkData = function(idref, contentCFI, endIdref, endCFI) {
      */
     this.contentCFI = contentCFI;
 
-    this.endIdref = endIdref;
-    this.endCFI = endCFI;
+    /**
+     * serialize to string
+     * @return JSON string representation
+     */
+    this.toString = function(){
+        return JSON.stringify(self);
+    }
 
-    this.toString = function () {
-        return JSON.stringify(this);
-    };
 };
 
+/**
+ * Deserialize from string
+ * @param str
+ * @returns {ReadiumSDK.Models.BookmarkData}
+ */
+BookmarkData.fromString = function(str) {
+    var obj = JSON.parse(str);
+    return new BookmarkData(obj.idref,obj.contentCFI);
+};
 return BookmarkData;
 });
