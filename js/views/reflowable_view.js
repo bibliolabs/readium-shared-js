@@ -758,14 +758,11 @@ var ReflowableView = function(options, reader){
     }
 
     this.getFirstVisibleElementCfi = function() {
-
-        var contentOffsets = getVisibleContentOffsets();
-        return _navigationLogic.getFirstVisibleCfi(contentOffsets);
+        return _navigationLogic.getFirstVisibleCfi();
     };
 
     this.getLastVisibleElementCfi = function() {
-        var contentOffsets = getVisibleContentOffsets();
-        return _navigationLogic.getLastVisibleCfi({ top: contentOffsets.bottom });
+        return _navigationLogic.getLastVisibleCfi();
     };
 
     this.getPaginationInfo = function() {
