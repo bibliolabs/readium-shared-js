@@ -62,7 +62,7 @@ var IFrameLoader = function() {
             if (typeof location !== 'undefined') {
                 iframe.baseURI = location.href + "";
             }
-            console.error("!iframe.baseURI => " + iframe.baseURI);
+            console.log("!iframe.baseURI => " + iframe.baseURI);
         }
     
         console.log("EPUB doc iframe src:");
