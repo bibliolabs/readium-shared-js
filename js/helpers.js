@@ -25,6 +25,51 @@
 //  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 //  OF THE POSSIBILITY OF SUCH DAMAGE.
 define(["./globals", 'underscore', "jquery", "jquerySizes", "./models/spine_item"], function(Globals, _, $, JQuerySizes, SpineItem) {
+    
+(function()
+{
+/* jshint strict: true */
+/* jshint -W034 */
+    "use strict";
+    
+    if(window.performance)
+    {
+        if (window.performance.now)
+        {
+            return;
+        }
+        
+        var vendors = ['webkitNow', 'mozNow', 'msNow', 'oNow'];
+        
+        for (var i = 0; i < vendors.length; i++)
+        {
+            if (vendors[i] in window.performance)
+            {
+                window.performance.now = window.performance[vendors[i]];
+                return;
+            }
+        }
+    }
+    else
+    {
+        window.performance = {};
+        
+    }
+    
+    if(Date.now)
+    {
+        window.performance.now = function()
+        {
+            return Date.now();
+        };
+        return;
+    }
+    
+    window.performance.now = function()
+    {
+        return +(new Date());
+    };
+})();
 
 var Helpers = {};
 
@@ -66,6 +111,61 @@ Helpers.getURLQueryParams = function() {
     }
 
     return params;
+};
+
+
+/**
+ * @param urlpath: string corresponding a URL without query parameters (i.e. the part before the '?' question mark in index.html?param=value). If undefined/null, the default window.location is used.
+ * @param overrides: object that maps query parameter names with values (to be included in the resulting URL, while any other query params in the current window.location are preserved as-is) 
+ * @returns a string corresponding to a URL obtained by concatenating the given URL with the given query parameters (and those already in window.location)
+ */
+Helpers.buildUrlQueryParameters = function(urlpath, overrides) {
+    
+    if (!urlpath) {
+        urlpath =
+        window.location ? (
+            window.location.protocol
+            + "//"
+            + window.location.hostname
+            + (window.location.port ? (':' + window.location.port) : '')
+            + window.location.pathname
+        ) : 'index.html';
+    }
+
+    var paramsString = "";
+    
+    for (var key in overrides) {
+        if (!overrides.hasOwnProperty(key)) continue;
+        
+        if (!overrides[key]) continue;
+        
+        var val = overrides[key].trim();
+        if (!val) continue;
+        
+        console.debug("URL QUERY PARAM OVERRIDE: " + key + " = " + val);
+
+        paramsString += (key + "=" + encodeURIComponent(val));
+        paramsString += "&";
+    }
+    
+    var urlParams = Helpers.getURLQueryParams();
+    for (var key in urlParams) {
+        if (!urlParams.hasOwnProperty(key)) continue;
+        
+        if (!urlParams[key]) continue;
+        
+        if (overrides[key]) continue;
+
+        var val = urlParams[key].trim();
+        if (!val) continue;
+        
+        console.debug("URL QUERY PARAM PRESERVED: " + key + " = " + val);
+
+        paramsString += (key + "=" + encodeURIComponent(val));
+        paramsString += "&";
+    }
+    
+    return urlpath + "?" + paramsString;
 };
 
 
@@ -141,6 +241,11 @@ Helpers.Rect.fromElement = function ($element) {
 
 Helpers.UpdateHtmlFontSize = function ($epubHtml, fontSize) {
 
+    var perf = false;
+
+    // TODO: very slow on Firefox!
+    // See https://github.com/readium/readium-shared-js/issues/274
+    if (perf) var time1 = window.performance.now();
 
     var factor = fontSize / 100;
     var win = $epubHtml[0].ownerDocument.defaultView;
@@ -190,6 +295,23 @@ Helpers.UpdateHtmlFontSize = function ($epubHtml, fontSize) {
 
     }
     $epubHtml.css("font-size", fontSize + "%");
+    
+    if (perf) {
+        var time2 = window.performance.now();
+    
+        // Firefox: 80+
+        // Chrome: 4-10
+        // Edge: 15-34
+        // IE: 10-15
+        // https://readium.firebase.com/?epub=..%2Fepub_content%2Faccessible_epub_3&goto=%7B%22idref%22%3A%22id-id2635343%22%2C%22elementCfi%22%3A%22%2F4%2F2%5Bbuilding_a_better_epub%5D%2F10%2F44%2F6%2C%2F1%3A334%2C%2F1%3A335%22%7D
+        
+        var diff = time2-time1;
+        console.log(diff);
+        
+        // setTimeout(function(){
+        //     alert(diff);
+        // }, 2000);
+    }
 };
 
 
@@ -673,6 +795,7 @@ Helpers.polyfillCaretRangeFromPoint = function(document) {
             document.caretRangeFromPoint = function caretRangeFromPoint(x, y) {
                 var r = document.createRange();
                 var p = document.caretPositionFromPoint(x, y);
+                if (!p) return null;
                 if (p.offsetNode) {
                     r.setStart(p.offsetNode, p.offset);
                     r.setEnd(p.offsetNode, p.offset);

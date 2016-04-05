@@ -1908,7 +1908,7 @@ define("readium_cfi_js/cfi_parser", (function (global) {
 }(this)));
 
 /*!
- * jQuery JavaScript Library v2.2.0
+ * jQuery JavaScript Library v2.2.2
  * http://jquery.com/
  *
  * Includes Sizzle.js
@@ -1918,7 +1918,7 @@ define("readium_cfi_js/cfi_parser", (function (global) {
  * Released under the MIT license
  * http://jquery.org/license
  *
- * Date: 2016-01-08T20:02Z
+ * Date: 2016-03-17T17:51Z
  */
 
 (function( global, factory ) {
@@ -1974,7 +1974,7 @@ var support = {};
 
 
 var
-	version = "2.2.0",
+	version = "2.2.2",
 
 	// Define a local copy of jQuery
 	jQuery = function( selector, context ) {
@@ -2185,6 +2185,7 @@ jQuery.extend( {
 	},
 
 	isPlainObject: function( obj ) {
+		var key;
 
 		// Not plain objects:
 		// - Any object or value whose internal [[Class]] property is not "[object Object]"
@@ -2194,14 +2195,18 @@ jQuery.extend( {
 			return false;
 		}
 
+		// Not own constructor property must be Object
 		if ( obj.constructor &&
-				!hasOwn.call( obj.constructor.prototype, "isPrototypeOf" ) ) {
+				!hasOwn.call( obj, "constructor" ) &&
+				!hasOwn.call( obj.constructor.prototype || {}, "isPrototypeOf" ) ) {
 			return false;
 		}
 
-		// If the function hasn't returned already, we're confident that
-		// |obj| is a plain object, created by {} or constructed with new Object
-		return true;
+		// Own properties are enumerated firstly, so to speed up,
+		// if last one is own, then all properties are own
+		for ( key in obj ) {}
+
+		return key === undefined || hasOwn.call( obj, key );
 	},
 
 	isEmptyObject: function( obj ) {
@@ -6388,7 +6393,7 @@ function on( elem, types, selector, data, fn, one ) {
 	if ( fn === false ) {
 		fn = returnFalse;
 	} else if ( !fn ) {
-		return this;
+		return elem;
 	}
 
 	if ( one === 1 ) {
@@ -7037,14 +7042,14 @@ var
 	rscriptTypeMasked = /^true\/(.*)/,
 	rcleanScript = /^\s*<!(?:\[CDATA\[|--)|(?:\]\]|--)>\s*$/g;
 
+// Manipulating tables requires a tbody
 function manipulationTarget( elem, content ) {
-	if ( jQuery.nodeName( elem, "table" ) &&
-		jQuery.nodeName( content.nodeType !== 11 ? content : content.firstChild, "tr" ) ) {
+	return jQuery.nodeName( elem, "table" ) &&
+		jQuery.nodeName( content.nodeType !== 11 ? content : content.firstChild, "tr" ) ?
 
-		return elem.getElementsByTagName( "tbody" )[ 0 ] || elem;
-	}
-
-	return elem;
+		elem.getElementsByTagName( "tbody" )[ 0 ] ||
+			elem.appendChild( elem.ownerDocument.createElement( "tbody" ) ) :
+		elem;
 }
 
 // Replace/restore the type attribute of script elements for safe DOM manipulation
@@ -7551,7 +7556,7 @@ var getStyles = function( elem ) {
 		// FF meanwhile throws on frame elements through "defaultView.getComputedStyle"
 		var view = elem.ownerDocument.defaultView;
 
-		if ( !view.opener ) {
+		if ( !view || !view.opener ) {
 			view = window;
 		}
 
@@ -7700,15 +7705,18 @@ function curCSS( elem, name, computed ) {
 		style = elem.style;
 
 	computed = computed || getStyles( elem );
+	ret = computed ? computed.getPropertyValue( name ) || computed[ name ] : undefined;
+
+	// Support: Opera 12.1x only
+	// Fall back to style even without computed
+	// computed is undefined for elems on document fragments
+	if ( ( ret === "" || ret === undefined ) && !jQuery.contains( elem.ownerDocument, elem ) ) {
+		ret = jQuery.style( elem, name );
+	}
 
 	// Support: IE9
 	// getPropertyValue is only needed for .css('filter') (#12537)
 	if ( computed ) {
-		ret = computed.getPropertyValue( name ) || computed[ name ];
-
-		if ( ret === "" && !jQuery.contains( elem.ownerDocument, elem ) ) {
-			ret = jQuery.style( elem, name );
-		}
 
 		// A tribute to the "awesome hack by Dean Edwards"
 		// Android Browser returns percentage for some values,
@@ -9231,6 +9239,12 @@ jQuery.extend( {
 	}
 } );
 
+// Support: IE <=11 only
+// Accessing the selectedIndex property
+// forces the browser to respect setting selected
+// on the option
+// The getter ensures a default option is selected
+// when in an optgroup
 if ( !support.optSelected ) {
 	jQuery.propHooks.selected = {
 		get: function( elem ) {
@@ -9239,6 +9253,16 @@ if ( !support.optSelected ) {
 				parent.parentNode.selectedIndex;
 			}
 			return null;
+		},
+		set: function( elem ) {
+			var parent = elem.parentNode;
+			if ( parent ) {
+				parent.selectedIndex;
+
+				if ( parent.parentNode ) {
+					parent.parentNode.selectedIndex;
+				}
+			}
 		}
 	};
 }
@@ -9433,7 +9457,8 @@ jQuery.fn.extend( {
 
 
 
-var rreturn = /\r/g;
+var rreturn = /\r/g,
+	rspaces = /[\x20\t\r\n\f]+/g;
 
 jQuery.fn.extend( {
 	val: function( value ) {
@@ -9509,9 +9534,15 @@ jQuery.extend( {
 		option: {
 			get: function( elem ) {
 
-				// Support: IE<11
-				// option.value not trimmed (#14858)
-				return jQuery.trim( elem.value );
+				var val = jQuery.find.attr( elem, "value" );
+				return val != null ?
+					val :
+
+					// Support: IE10-11+
+					// option.text throws exceptions (#14686, #14858)
+					// Strip and collapse whitespace
+					// https://html.spec.whatwg.org/#strip-and-collapse-whitespace
+					jQuery.trim( jQuery.text( elem ) ).replace( rspaces, " " );
 			}
 		},
 		select: {
@@ -9564,7 +9595,7 @@ jQuery.extend( {
 				while ( i-- ) {
 					option = options[ i ];
 					if ( option.selected =
-							jQuery.inArray( jQuery.valHooks.option.get( option ), values ) > -1
+						jQuery.inArray( jQuery.valHooks.option.get( option ), values ) > -1
 					) {
 						optionSet = true;
 					}
@@ -9758,7 +9789,7 @@ jQuery.extend( jQuery.event, {
 				// But now, this "simulate" function is used only for events
 				// for which stopPropagation() is noop, so there is no need for that anymore.
 				//
-				// For the compat branch though, guard for "click" and "submit"
+				// For the 1.x branch though, guard for "click" and "submit"
 				// events is still used, but was moved to jQuery.event.stopPropagation function
 				// because `originalEvent` should point to the original event for the constancy
 				// with other events and for more focused logic
@@ -11259,18 +11290,6 @@ jQuery.ajaxPrefilter( "json jsonp", function( s, originalSettings, jqXHR ) {
 
 
 
-// Support: Safari 8+
-// In Safari 8 documents created via document.implementation.createHTMLDocument
-// collapse sibling forms: the second one becomes a child of the first one.
-// Because of that, this security measure has to be disabled in Safari 8.
-// https://bugs.webkit.org/show_bug.cgi?id=137337
-support.createHTMLDocument = ( function() {
-	var body = document.implementation.createHTMLDocument( "" ).body;
-	body.innerHTML = "<form></form><form></form>";
-	return body.childNodes.length === 2;
-} )();
-
-
 // Argument "data" should be string of html
 // context (optional): If specified, the fragment will be created in this context,
 // defaults to document
@@ -11283,12 +11302,7 @@ jQuery.parseHTML = function( data, context, keepScripts ) {
 		keepScripts = context;
 		context = false;
 	}
-
-	// Stop scripts or inline event handlers from being executed immediately
-	// by using document.implementation
-	context = context || ( support.createHTMLDocument ?
-		document.implementation.createHTMLDocument( "" ) :
-		document );
+	context = context || document;
 
 	var parsed = rsingleTag.exec( data ),
 		scripts = !keepScripts && [];
@@ -11528,11 +11542,8 @@ jQuery.fn.extend( {
 			}
 
 			// Add offsetParent borders
-			// Subtract offsetParent scroll positions
-			parentOffset.top += jQuery.css( offsetParent[ 0 ], "borderTopWidth", true ) -
-				offsetParent.scrollTop();
-			parentOffset.left += jQuery.css( offsetParent[ 0 ], "borderLeftWidth", true ) -
-				offsetParent.scrollLeft();
+			parentOffset.top += jQuery.css( offsetParent[ 0 ], "borderTopWidth", true );
+			parentOffset.left += jQuery.css( offsetParent[ 0 ], "borderLeftWidth", true );
 		}
 
 		// Subtract parent offsets and element margins
@@ -47656,6 +47667,7 @@ console.trace(JSON.stringify(settingsData));
         _mediaOverlayPlayer.escape();
     };
 
+<<<<<<< HEAD
     /**
      * End media overlay TTS
      * @todo Clarify what this does with Daniel.
@@ -47664,12 +47676,40 @@ console.trace(JSON.stringify(settingsData));
 
         _mediaOverlayPlayer.onTTSEnd();
     };
+=======
+var has = Object.prototype.hasOwnProperty;
+
+//
+// We store our EE objects in a plain object whose properties are event names.
+// If `Object.create(null)` is not supported we prefix the event names with a
+// `~` to make sure that the built-in object properties are not overridden or
+// used as an attack vector.
+// We also assume that `Object.create(null)` is available when the event name
+// is an ES6 Symbol.
+//
+var prefix = typeof Object.create !== 'function' ? '~' : false;
+
+/**
+ * Representation of a single EventEmitter function.
+ *
+ * @param {Function} fn Event handler to be called.
+ * @param {Mixed} context Context for function execution.
+ * @param {Boolean} [once=false] Only emit once
+ * @api private
+ */
+function EE(fn, context, once) {
+  this.fn = fn;
+  this.context = context;
+  this.once = once || false;
+}
+>>>>>>> upstream/develop
 
     /**
      * Pause currently playing media overlays.
      */
     this.pauseMediaOverlay = function () {
 
+<<<<<<< HEAD
         _mediaOverlayPlayer.pause();
     };
 
@@ -47677,6 +47717,52 @@ console.trace(JSON.stringify(settingsData));
      * Start/Resume playback of media overlays.
      */
     this.playMediaOverlay = function () {
+=======
+/**
+ * Hold the assigned EventEmitters by name.
+ *
+ * @type {Object}
+ * @private
+ */
+EventEmitter.prototype._events = undefined;
+
+/**
+ * Return an array listing the events for which the emitter has registered
+ * listeners.
+ *
+ * @returns {Array}
+ * @api public
+ */
+EventEmitter.prototype.eventNames = function eventNames() {
+  var events = this._events
+    , names = []
+    , name;
+
+  if (!events) return names;
+
+  for (name in events) {
+    if (has.call(events, name)) names.push(prefix ? name.slice(1) : name);
+  }
+
+  if (Object.getOwnPropertySymbols) {
+    return names.concat(Object.getOwnPropertySymbols(events));
+  }
+
+  return names;
+};
+
+/**
+ * Return a list of assigned event listeners.
+ *
+ * @param {String} event The events that should be listed.
+ * @param {Boolean} exists We only need to know if there are listeners.
+ * @returns {Array|Boolean}
+ * @api public
+ */
+EventEmitter.prototype.listeners = function listeners(event, exists) {
+  var evt = prefix ? prefix + event : event
+    , available = this._events && this._events[evt];
+>>>>>>> upstream/develop
 
         _mediaOverlayPlayer.play();
     };
@@ -47754,9 +47840,23 @@ console.trace(JSON.stringify(settingsData));
         }
     }
 
+<<<<<<< HEAD
     function handleViewportResizeEnd() {
         //same as doing one final tick for now
         handleViewportResizeTick();
+=======
+/**
+ * Register a new EventListener for the given event.
+ *
+ * @param {String} event Name of the event.
+ * @param {Function} fn Callback function.
+ * @param {Mixed} [context=this] The context of the function.
+ * @api public
+ */
+EventEmitter.prototype.on = function on(event, fn, context) {
+  var listener = new EE(fn, context || this)
+    , evt = prefix ? prefix + event : event;
+>>>>>>> upstream/develop
 
         if (_resizeMOWasPlaying) self.playMediaOverlay();
     }
@@ -47764,7 +47864,21 @@ console.trace(JSON.stringify(settingsData));
     this.handleViewportResize = function (bookmarkToRestore) {
         if (!_currentView) return;
 
+<<<<<<< HEAD
         var bookMark = bookmarkToRestore || _currentView.bookmarkCurrentPage(); // not self! (JSON string)
+=======
+/**
+ * Add an EventListener that's only called once.
+ *
+ * @param {String} event Name of the event.
+ * @param {Function} fn Callback function.
+ * @param {Mixed} [context=this] The context of the function.
+ * @api public
+ */
+EventEmitter.prototype.once = function once(event, fn, context) {
+  var listener = new EE(fn, context || this, true)
+    , evt = prefix ? prefix + event : event;
+>>>>>>> upstream/develop
 
         if (_currentView.isReflowable && _currentView.isReflowable() && bookMark && bookMark.idref) {
             var spineItem = _spine.getItemById(bookMark.idref);
@@ -47845,12 +47959,20 @@ console.trace(JSON.stringify(settingsData));
 
                         if (attr.indexOf("ibooks:soundtrack") < 0 && attr.indexOf("media:soundtrack") < 0 && attr.indexOf("media:background") < 0) return true; // continue
 
+<<<<<<< HEAD
                         if (doPlay && this.play) {
                             this.play();
                         }
                         else if (this.pause) {
                             this.pause();
                         }
+=======
+(function (exports) {'use strict';
+  //shared pointer
+  var i;
+  //shortcuts
+  var defineProperty = Object.defineProperty, is = function(a,b) { return (a === b) || (a !== a && b !== b) };
+>>>>>>> upstream/develop
 
                         return true; // continue (more than one track?)
                     });
@@ -48054,9 +48176,3291 @@ console.trace(JSON.stringify(settingsData));
     this.isVisibleSpineItemElementCfi = function(spineIdRef, partialCfi){
         var spineItem = getSpineItem(spineIdRef);
 
+<<<<<<< HEAD
         if (!spineItem) {
             return false;
         }
+=======
+/*! https://mths.be/punycode v1.4.0 by @mathias */
+;(function(root) {
+
+	/** Detect free variables */
+	var freeExports = typeof exports == 'object' && exports &&
+		!exports.nodeType && exports;
+	var freeModule = typeof module == 'object' && module &&
+		!module.nodeType && module;
+	var freeGlobal = typeof global == 'object' && global;
+	if (
+		freeGlobal.global === freeGlobal ||
+		freeGlobal.window === freeGlobal ||
+		freeGlobal.self === freeGlobal
+	) {
+		root = freeGlobal;
+	}
+
+	/**
+	 * The `punycode` object.
+	 * @name punycode
+	 * @type Object
+	 */
+	var punycode,
+
+	/** Highest positive signed 32-bit float value */
+	maxInt = 2147483647, // aka. 0x7FFFFFFF or 2^31-1
+
+	/** Bootstring parameters */
+	base = 36,
+	tMin = 1,
+	tMax = 26,
+	skew = 38,
+	damp = 700,
+	initialBias = 72,
+	initialN = 128, // 0x80
+	delimiter = '-', // '\x2D'
+
+	/** Regular expressions */
+	regexPunycode = /^xn--/,
+	regexNonASCII = /[^\x20-\x7E]/, // unprintable ASCII chars + non-ASCII chars
+	regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g, // RFC 3490 separators
+
+	/** Error messages */
+	errors = {
+		'overflow': 'Overflow: input needs wider integers to process',
+		'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+		'invalid-input': 'Invalid input'
+	},
+
+	/** Convenience shortcuts */
+	baseMinusTMin = base - tMin,
+	floor = Math.floor,
+	stringFromCharCode = String.fromCharCode,
+
+	/** Temporary variable */
+	key;
+
+	/*--------------------------------------------------------------------------*/
+
+	/**
+	 * A generic error utility function.
+	 * @private
+	 * @param {String} type The error type.
+	 * @returns {Error} Throws a `RangeError` with the applicable error message.
+	 */
+	function error(type) {
+		throw new RangeError(errors[type]);
+	}
+
+	/**
+	 * A generic `Array#map` utility function.
+	 * @private
+	 * @param {Array} array The array to iterate over.
+	 * @param {Function} callback The function that gets called for every array
+	 * item.
+	 * @returns {Array} A new array of values returned by the callback function.
+	 */
+	function map(array, fn) {
+		var length = array.length;
+		var result = [];
+		while (length--) {
+			result[length] = fn(array[length]);
+		}
+		return result;
+	}
+
+	/**
+	 * A simple `Array#map`-like wrapper to work with domain name strings or email
+	 * addresses.
+	 * @private
+	 * @param {String} domain The domain name or email address.
+	 * @param {Function} callback The function that gets called for every
+	 * character.
+	 * @returns {Array} A new string of characters returned by the callback
+	 * function.
+	 */
+	function mapDomain(string, fn) {
+		var parts = string.split('@');
+		var result = '';
+		if (parts.length > 1) {
+			// In email addresses, only the domain name should be punycoded. Leave
+			// the local part (i.e. everything up to `@`) intact.
+			result = parts[0] + '@';
+			string = parts[1];
+		}
+		// Avoid `split(regex)` for IE8 compatibility. See #17.
+		string = string.replace(regexSeparators, '\x2E');
+		var labels = string.split('.');
+		var encoded = map(labels, fn).join('.');
+		return result + encoded;
+	}
+
+	/**
+	 * Creates an array containing the numeric code points of each Unicode
+	 * character in the string. While JavaScript uses UCS-2 internally,
+	 * this function will convert a pair of surrogate halves (each of which
+	 * UCS-2 exposes as separate characters) into a single code point,
+	 * matching UTF-16.
+	 * @see `punycode.ucs2.encode`
+	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	 * @memberOf punycode.ucs2
+	 * @name decode
+	 * @param {String} string The Unicode input string (UCS-2).
+	 * @returns {Array} The new array of code points.
+	 */
+	function ucs2decode(string) {
+		var output = [],
+		    counter = 0,
+		    length = string.length,
+		    value,
+		    extra;
+		while (counter < length) {
+			value = string.charCodeAt(counter++);
+			if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+				// high surrogate, and there is a next character
+				extra = string.charCodeAt(counter++);
+				if ((extra & 0xFC00) == 0xDC00) { // low surrogate
+					output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+				} else {
+					// unmatched surrogate; only append this code unit, in case the next
+					// code unit is the high surrogate of a surrogate pair
+					output.push(value);
+					counter--;
+				}
+			} else {
+				output.push(value);
+			}
+		}
+		return output;
+	}
+
+	/**
+	 * Creates a string based on an array of numeric code points.
+	 * @see `punycode.ucs2.decode`
+	 * @memberOf punycode.ucs2
+	 * @name encode
+	 * @param {Array} codePoints The array of numeric code points.
+	 * @returns {String} The new Unicode string (UCS-2).
+	 */
+	function ucs2encode(array) {
+		return map(array, function(value) {
+			var output = '';
+			if (value > 0xFFFF) {
+				value -= 0x10000;
+				output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
+				value = 0xDC00 | value & 0x3FF;
+			}
+			output += stringFromCharCode(value);
+			return output;
+		}).join('');
+	}
+
+	/**
+	 * Converts a basic code point into a digit/integer.
+	 * @see `digitToBasic()`
+	 * @private
+	 * @param {Number} codePoint The basic numeric code point value.
+	 * @returns {Number} The numeric value of a basic code point (for use in
+	 * representing integers) in the range `0` to `base - 1`, or `base` if
+	 * the code point does not represent a value.
+	 */
+	function basicToDigit(codePoint) {
+		if (codePoint - 48 < 10) {
+			return codePoint - 22;
+		}
+		if (codePoint - 65 < 26) {
+			return codePoint - 65;
+		}
+		if (codePoint - 97 < 26) {
+			return codePoint - 97;
+		}
+		return base;
+	}
+
+	/**
+	 * Converts a digit/integer into a basic code point.
+	 * @see `basicToDigit()`
+	 * @private
+	 * @param {Number} digit The numeric value of a basic code point.
+	 * @returns {Number} The basic code point whose value (when used for
+	 * representing integers) is `digit`, which needs to be in the range
+	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
+	 * used; else, the lowercase form is used. The behavior is undefined
+	 * if `flag` is non-zero and `digit` has no uppercase form.
+	 */
+	function digitToBasic(digit, flag) {
+		//  0..25 map to ASCII a..z or A..Z
+		// 26..35 map to ASCII 0..9
+		return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
+	}
+
+	/**
+	 * Bias adaptation function as per section 3.4 of RFC 3492.
+	 * https://tools.ietf.org/html/rfc3492#section-3.4
+	 * @private
+	 */
+	function adapt(delta, numPoints, firstTime) {
+		var k = 0;
+		delta = firstTime ? floor(delta / damp) : delta >> 1;
+		delta += floor(delta / numPoints);
+		for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
+			delta = floor(delta / baseMinusTMin);
+		}
+		return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+	}
+
+	/**
+	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
+	 * symbols.
+	 * @memberOf punycode
+	 * @param {String} input The Punycode string of ASCII-only symbols.
+	 * @returns {String} The resulting string of Unicode symbols.
+	 */
+	function decode(input) {
+		// Don't use UCS-2
+		var output = [],
+		    inputLength = input.length,
+		    out,
+		    i = 0,
+		    n = initialN,
+		    bias = initialBias,
+		    basic,
+		    j,
+		    index,
+		    oldi,
+		    w,
+		    k,
+		    digit,
+		    t,
+		    /** Cached calculation results */
+		    baseMinusT;
+
+		// Handle the basic code points: let `basic` be the number of input code
+		// points before the last delimiter, or `0` if there is none, then copy
+		// the first basic code points to the output.
+
+		basic = input.lastIndexOf(delimiter);
+		if (basic < 0) {
+			basic = 0;
+		}
+
+		for (j = 0; j < basic; ++j) {
+			// if it's not a basic code point
+			if (input.charCodeAt(j) >= 0x80) {
+				error('not-basic');
+			}
+			output.push(input.charCodeAt(j));
+		}
+
+		// Main decoding loop: start just after the last delimiter if any basic code
+		// points were copied; start at the beginning otherwise.
+
+		for (index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
+
+			// `index` is the index of the next character to be consumed.
+			// Decode a generalized variable-length integer into `delta`,
+			// which gets added to `i`. The overflow checking is easier
+			// if we increase `i` as we go, then subtract off its starting
+			// value at the end to obtain `delta`.
+			for (oldi = i, w = 1, k = base; /* no condition */; k += base) {
+
+				if (index >= inputLength) {
+					error('invalid-input');
+				}
+
+				digit = basicToDigit(input.charCodeAt(index++));
+
+				if (digit >= base || digit > floor((maxInt - i) / w)) {
+					error('overflow');
+				}
+
+				i += digit * w;
+				t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+
+				if (digit < t) {
+					break;
+				}
+
+				baseMinusT = base - t;
+				if (w > floor(maxInt / baseMinusT)) {
+					error('overflow');
+				}
+
+				w *= baseMinusT;
+
+			}
+
+			out = output.length + 1;
+			bias = adapt(i - oldi, out, oldi == 0);
+
+			// `i` was supposed to wrap around from `out` to `0`,
+			// incrementing `n` each time, so we'll fix that now:
+			if (floor(i / out) > maxInt - n) {
+				error('overflow');
+			}
+
+			n += floor(i / out);
+			i %= out;
+
+			// Insert `n` at position `i` of the output
+			output.splice(i++, 0, n);
+
+		}
+
+		return ucs2encode(output);
+	}
+
+	/**
+	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
+	 * Punycode string of ASCII-only symbols.
+	 * @memberOf punycode
+	 * @param {String} input The string of Unicode symbols.
+	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
+	 */
+	function encode(input) {
+		var n,
+		    delta,
+		    handledCPCount,
+		    basicLength,
+		    bias,
+		    j,
+		    m,
+		    q,
+		    k,
+		    t,
+		    currentValue,
+		    output = [],
+		    /** `inputLength` will hold the number of code points in `input`. */
+		    inputLength,
+		    /** Cached calculation results */
+		    handledCPCountPlusOne,
+		    baseMinusT,
+		    qMinusT;
+
+		// Convert the input in UCS-2 to Unicode
+		input = ucs2decode(input);
+
+		// Cache the length
+		inputLength = input.length;
+
+		// Initialize the state
+		n = initialN;
+		delta = 0;
+		bias = initialBias;
+
+		// Handle the basic code points
+		for (j = 0; j < inputLength; ++j) {
+			currentValue = input[j];
+			if (currentValue < 0x80) {
+				output.push(stringFromCharCode(currentValue));
+			}
+		}
+
+		handledCPCount = basicLength = output.length;
+
+		// `handledCPCount` is the number of code points that have been handled;
+		// `basicLength` is the number of basic code points.
+
+		// Finish the basic string - if it is not empty - with a delimiter
+		if (basicLength) {
+			output.push(delimiter);
+		}
+
+		// Main encoding loop:
+		while (handledCPCount < inputLength) {
+
+			// All non-basic code points < n have been handled already. Find the next
+			// larger one:
+			for (m = maxInt, j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+				if (currentValue >= n && currentValue < m) {
+					m = currentValue;
+				}
+			}
+
+			// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+			// but guard against overflow
+			handledCPCountPlusOne = handledCPCount + 1;
+			if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+				error('overflow');
+			}
+
+			delta += (m - n) * handledCPCountPlusOne;
+			n = m;
+
+			for (j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+
+				if (currentValue < n && ++delta > maxInt) {
+					error('overflow');
+				}
+
+				if (currentValue == n) {
+					// Represent delta as a generalized variable-length integer
+					for (q = delta, k = base; /* no condition */; k += base) {
+						t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+						if (q < t) {
+							break;
+						}
+						qMinusT = q - t;
+						baseMinusT = base - t;
+						output.push(
+							stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+						);
+						q = floor(qMinusT / baseMinusT);
+					}
+
+					output.push(stringFromCharCode(digitToBasic(q, 0)));
+					bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+					delta = 0;
+					++handledCPCount;
+				}
+			}
+
+			++delta;
+			++n;
+
+		}
+		return output.join('');
+	}
+
+	/**
+	 * Converts a Punycode string representing a domain name or an email address
+	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
+	 * it doesn't matter if you call it on a string that has already been
+	 * converted to Unicode.
+	 * @memberOf punycode
+	 * @param {String} input The Punycoded domain name or email address to
+	 * convert to Unicode.
+	 * @returns {String} The Unicode representation of the given Punycode
+	 * string.
+	 */
+	function toUnicode(input) {
+		return mapDomain(input, function(string) {
+			return regexPunycode.test(string)
+				? decode(string.slice(4).toLowerCase())
+				: string;
+		});
+	}
+
+	/**
+	 * Converts a Unicode string representing a domain name or an email address to
+	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
+	 * i.e. it doesn't matter if you call it with a domain that's already in
+	 * ASCII.
+	 * @memberOf punycode
+	 * @param {String} input The domain name or email address to convert, as a
+	 * Unicode string.
+	 * @returns {String} The Punycode representation of the given domain name or
+	 * email address.
+	 */
+	function toASCII(input) {
+		return mapDomain(input, function(string) {
+			return regexNonASCII.test(string)
+				? 'xn--' + encode(string)
+				: string;
+		});
+	}
+
+	/*--------------------------------------------------------------------------*/
+
+	/** Define the public API */
+	punycode = {
+		/**
+		 * A string representing the current Punycode.js version number.
+		 * @memberOf punycode
+		 * @type String
+		 */
+		'version': '1.3.2',
+		/**
+		 * An object of methods to convert from JavaScript's internal character
+		 * representation (UCS-2) to Unicode code points, and back.
+		 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+		 * @memberOf punycode
+		 * @type Object
+		 */
+		'ucs2': {
+			'decode': ucs2decode,
+			'encode': ucs2encode
+		},
+		'decode': decode,
+		'encode': encode,
+		'toASCII': toASCII,
+		'toUnicode': toUnicode
+	};
+
+	/** Expose `punycode` */
+	// Some AMD build optimizers, like r.js, check for specific condition patterns
+	// like the following:
+	if (
+		typeof define == 'function' &&
+		typeof define.amd == 'object' &&
+		define.amd
+	) {
+		define('punycode', [],function() {
+			return punycode;
+		});
+	} else if (freeExports && freeModule) {
+		if (module.exports == freeExports) {
+			// in Node.js, io.js, or RingoJS v0.8.0+
+			freeModule.exports = punycode;
+		} else {
+			// in Narwhal or RingoJS v0.7.0-
+			for (key in punycode) {
+				punycode.hasOwnProperty(key) && (freeExports[key] = punycode[key]);
+			}
+		}
+	} else {
+		// in Rhino or a web browser
+		root.punycode = punycode;
+	}
+
+}(this));
+
+/*!
+ * URI.js - Mutating URLs
+ * IPv6 Support
+ *
+ * Version: 1.17.1
+ *
+ * Author: Rodney Rehm
+ * Web: http://medialize.github.io/URI.js/
+ *
+ * Licensed under
+ *   MIT License http://www.opensource.org/licenses/mit-license
+ *
+ */
+
+(function (root, factory) {
+  'use strict';
+  // https://github.com/umdjs/umd/blob/master/returnExports.js
+  if (typeof exports === 'object') {
+    // Node
+    module.exports = factory();
+  } else if (typeof define === 'function' && define.amd) {
+    // AMD. Register as an anonymous module.
+    define('IPv6',factory);
+  } else {
+    // Browser globals (root is window)
+    root.IPv6 = factory(root);
+  }
+}(this, function (root) {
+  'use strict';
+
+  /*
+  var _in = "fe80:0000:0000:0000:0204:61ff:fe9d:f156";
+  var _out = IPv6.best(_in);
+  var _expected = "fe80::204:61ff:fe9d:f156";
+
+  console.log(_in, _out, _expected, _out === _expected);
+  */
+
+  // save current IPv6 variable, if any
+  var _IPv6 = root && root.IPv6;
+
+  function bestPresentation(address) {
+    // based on:
+    // Javascript to test an IPv6 address for proper format, and to
+    // present the "best text representation" according to IETF Draft RFC at
+    // http://tools.ietf.org/html/draft-ietf-6man-text-addr-representation-04
+    // 8 Feb 2010 Rich Brown, Dartware, LLC
+    // Please feel free to use this code as long as you provide a link to
+    // http://www.intermapper.com
+    // http://intermapper.com/support/tools/IPV6-Validator.aspx
+    // http://download.dartware.com/thirdparty/ipv6validator.js
+
+    var _address = address.toLowerCase();
+    var segments = _address.split(':');
+    var length = segments.length;
+    var total = 8;
+
+    // trim colons (:: or ::a:b:c… or …a:b:c::)
+    if (segments[0] === '' && segments[1] === '' && segments[2] === '') {
+      // must have been ::
+      // remove first two items
+      segments.shift();
+      segments.shift();
+    } else if (segments[0] === '' && segments[1] === '') {
+      // must have been ::xxxx
+      // remove the first item
+      segments.shift();
+    } else if (segments[length - 1] === '' && segments[length - 2] === '') {
+      // must have been xxxx::
+      segments.pop();
+    }
+
+    length = segments.length;
+
+    // adjust total segments for IPv4 trailer
+    if (segments[length - 1].indexOf('.') !== -1) {
+      // found a "." which means IPv4
+      total = 7;
+    }
+
+    // fill empty segments them with "0000"
+    var pos;
+    for (pos = 0; pos < length; pos++) {
+      if (segments[pos] === '') {
+        break;
+      }
+    }
+
+    if (pos < total) {
+      segments.splice(pos, 1, '0000');
+      while (segments.length < total) {
+        segments.splice(pos, 0, '0000');
+      }
+    }
+
+    // strip leading zeros
+    var _segments;
+    for (var i = 0; i < total; i++) {
+      _segments = segments[i].split('');
+      for (var j = 0; j < 3 ; j++) {
+        if (_segments[0] === '0' && _segments.length > 1) {
+          _segments.splice(0,1);
+        } else {
+          break;
+        }
+      }
+
+      segments[i] = _segments.join('');
+    }
+
+    // find longest sequence of zeroes and coalesce them into one segment
+    var best = -1;
+    var _best = 0;
+    var _current = 0;
+    var current = -1;
+    var inzeroes = false;
+    // i; already declared
+
+    for (i = 0; i < total; i++) {
+      if (inzeroes) {
+        if (segments[i] === '0') {
+          _current += 1;
+        } else {
+          inzeroes = false;
+          if (_current > _best) {
+            best = current;
+            _best = _current;
+          }
+        }
+      } else {
+        if (segments[i] === '0') {
+          inzeroes = true;
+          current = i;
+          _current = 1;
+        }
+      }
+    }
+
+    if (_current > _best) {
+      best = current;
+      _best = _current;
+    }
+
+    if (_best > 1) {
+      segments.splice(best, _best, '');
+    }
+
+    length = segments.length;
+
+    // assemble remaining segments
+    var result = '';
+    if (segments[0] === '')  {
+      result = ':';
+    }
+
+    for (i = 0; i < length; i++) {
+      result += segments[i];
+      if (i === length - 1) {
+        break;
+      }
+
+      result += ':';
+    }
+
+    if (segments[length - 1] === '') {
+      result += ':';
+    }
+
+    return result;
+  }
+
+  function noConflict() {
+    /*jshint validthis: true */
+    if (root.IPv6 === this) {
+      root.IPv6 = _IPv6;
+    }
+  
+    return this;
+  }
+
+  return {
+    best: bestPresentation,
+    noConflict: noConflict
+  };
+}));
+
+/*!
+ * URI.js - Mutating URLs
+ * Second Level Domain (SLD) Support
+ *
+ * Version: 1.17.1
+ *
+ * Author: Rodney Rehm
+ * Web: http://medialize.github.io/URI.js/
+ *
+ * Licensed under
+ *   MIT License http://www.opensource.org/licenses/mit-license
+ *
+ */
+
+(function (root, factory) {
+  'use strict';
+  // https://github.com/umdjs/umd/blob/master/returnExports.js
+  if (typeof exports === 'object') {
+    // Node
+    module.exports = factory();
+  } else if (typeof define === 'function' && define.amd) {
+    // AMD. Register as an anonymous module.
+    define('SecondLevelDomains',factory);
+  } else {
+    // Browser globals (root is window)
+    root.SecondLevelDomains = factory(root);
+  }
+}(this, function (root) {
+  'use strict';
+
+  // save current SecondLevelDomains variable, if any
+  var _SecondLevelDomains = root && root.SecondLevelDomains;
+
+  var SLD = {
+    // list of known Second Level Domains
+    // converted list of SLDs from https://github.com/gavingmiller/second-level-domains
+    // ----
+    // publicsuffix.org is more current and actually used by a couple of browsers internally.
+    // downside is it also contains domains like "dyndns.org" - which is fine for the security
+    // issues browser have to deal with (SOP for cookies, etc) - but is way overboard for URI.js
+    // ----
+    list: {
+      'ac':' com gov mil net org ',
+      'ae':' ac co gov mil name net org pro sch ',
+      'af':' com edu gov net org ',
+      'al':' com edu gov mil net org ',
+      'ao':' co ed gv it og pb ',
+      'ar':' com edu gob gov int mil net org tur ',
+      'at':' ac co gv or ',
+      'au':' asn com csiro edu gov id net org ',
+      'ba':' co com edu gov mil net org rs unbi unmo unsa untz unze ',
+      'bb':' biz co com edu gov info net org store tv ',
+      'bh':' biz cc com edu gov info net org ',
+      'bn':' com edu gov net org ',
+      'bo':' com edu gob gov int mil net org tv ',
+      'br':' adm adv agr am arq art ato b bio blog bmd cim cng cnt com coop ecn edu eng esp etc eti far flog fm fnd fot fst g12 ggf gov imb ind inf jor jus lel mat med mil mus net nom not ntr odo org ppg pro psc psi qsl rec slg srv tmp trd tur tv vet vlog wiki zlg ',
+      'bs':' com edu gov net org ',
+      'bz':' du et om ov rg ',
+      'ca':' ab bc mb nb nf nl ns nt nu on pe qc sk yk ',
+      'ck':' biz co edu gen gov info net org ',
+      'cn':' ac ah bj com cq edu fj gd gov gs gx gz ha hb he hi hl hn jl js jx ln mil net nm nx org qh sc sd sh sn sx tj tw xj xz yn zj ',
+      'co':' com edu gov mil net nom org ',
+      'cr':' ac c co ed fi go or sa ',
+      'cy':' ac biz com ekloges gov ltd name net org parliament press pro tm ',
+      'do':' art com edu gob gov mil net org sld web ',
+      'dz':' art asso com edu gov net org pol ',
+      'ec':' com edu fin gov info med mil net org pro ',
+      'eg':' com edu eun gov mil name net org sci ',
+      'er':' com edu gov ind mil net org rochest w ',
+      'es':' com edu gob nom org ',
+      'et':' biz com edu gov info name net org ',
+      'fj':' ac biz com info mil name net org pro ',
+      'fk':' ac co gov net nom org ',
+      'fr':' asso com f gouv nom prd presse tm ',
+      'gg':' co net org ',
+      'gh':' com edu gov mil org ',
+      'gn':' ac com gov net org ',
+      'gr':' com edu gov mil net org ',
+      'gt':' com edu gob ind mil net org ',
+      'gu':' com edu gov net org ',
+      'hk':' com edu gov idv net org ',
+      'hu':' 2000 agrar bolt casino city co erotica erotika film forum games hotel info ingatlan jogasz konyvelo lakas media news org priv reklam sex shop sport suli szex tm tozsde utazas video ',
+      'id':' ac co go mil net or sch web ',
+      'il':' ac co gov idf k12 muni net org ',
+      'in':' ac co edu ernet firm gen gov i ind mil net nic org res ',
+      'iq':' com edu gov i mil net org ',
+      'ir':' ac co dnssec gov i id net org sch ',
+      'it':' edu gov ',
+      'je':' co net org ',
+      'jo':' com edu gov mil name net org sch ',
+      'jp':' ac ad co ed go gr lg ne or ',
+      'ke':' ac co go info me mobi ne or sc ',
+      'kh':' com edu gov mil net org per ',
+      'ki':' biz com de edu gov info mob net org tel ',
+      'km':' asso com coop edu gouv k medecin mil nom notaires pharmaciens presse tm veterinaire ',
+      'kn':' edu gov net org ',
+      'kr':' ac busan chungbuk chungnam co daegu daejeon es gangwon go gwangju gyeongbuk gyeonggi gyeongnam hs incheon jeju jeonbuk jeonnam k kg mil ms ne or pe re sc seoul ulsan ',
+      'kw':' com edu gov net org ',
+      'ky':' com edu gov net org ',
+      'kz':' com edu gov mil net org ',
+      'lb':' com edu gov net org ',
+      'lk':' assn com edu gov grp hotel int ltd net ngo org sch soc web ',
+      'lr':' com edu gov net org ',
+      'lv':' asn com conf edu gov id mil net org ',
+      'ly':' com edu gov id med net org plc sch ',
+      'ma':' ac co gov m net org press ',
+      'mc':' asso tm ',
+      'me':' ac co edu gov its net org priv ',
+      'mg':' com edu gov mil nom org prd tm ',
+      'mk':' com edu gov inf name net org pro ',
+      'ml':' com edu gov net org presse ',
+      'mn':' edu gov org ',
+      'mo':' com edu gov net org ',
+      'mt':' com edu gov net org ',
+      'mv':' aero biz com coop edu gov info int mil museum name net org pro ',
+      'mw':' ac co com coop edu gov int museum net org ',
+      'mx':' com edu gob net org ',
+      'my':' com edu gov mil name net org sch ',
+      'nf':' arts com firm info net other per rec store web ',
+      'ng':' biz com edu gov mil mobi name net org sch ',
+      'ni':' ac co com edu gob mil net nom org ',
+      'np':' com edu gov mil net org ',
+      'nr':' biz com edu gov info net org ',
+      'om':' ac biz co com edu gov med mil museum net org pro sch ',
+      'pe':' com edu gob mil net nom org sld ',
+      'ph':' com edu gov i mil net ngo org ',
+      'pk':' biz com edu fam gob gok gon gop gos gov net org web ',
+      'pl':' art bialystok biz com edu gda gdansk gorzow gov info katowice krakow lodz lublin mil net ngo olsztyn org poznan pwr radom slupsk szczecin torun warszawa waw wroc wroclaw zgora ',
+      'pr':' ac biz com edu est gov info isla name net org pro prof ',
+      'ps':' com edu gov net org plo sec ',
+      'pw':' belau co ed go ne or ',
+      'ro':' arts com firm info nom nt org rec store tm www ',
+      'rs':' ac co edu gov in org ',
+      'sb':' com edu gov net org ',
+      'sc':' com edu gov net org ',
+      'sh':' co com edu gov net nom org ',
+      'sl':' com edu gov net org ',
+      'st':' co com consulado edu embaixada gov mil net org principe saotome store ',
+      'sv':' com edu gob org red ',
+      'sz':' ac co org ',
+      'tr':' av bbs bel biz com dr edu gen gov info k12 name net org pol tel tsk tv web ',
+      'tt':' aero biz cat co com coop edu gov info int jobs mil mobi museum name net org pro tel travel ',
+      'tw':' club com ebiz edu game gov idv mil net org ',
+      'mu':' ac co com gov net or org ',
+      'mz':' ac co edu gov org ',
+      'na':' co com ',
+      'nz':' ac co cri geek gen govt health iwi maori mil net org parliament school ',
+      'pa':' abo ac com edu gob ing med net nom org sld ',
+      'pt':' com edu gov int net nome org publ ',
+      'py':' com edu gov mil net org ',
+      'qa':' com edu gov mil net org ',
+      're':' asso com nom ',
+      'ru':' ac adygeya altai amur arkhangelsk astrakhan bashkiria belgorod bir bryansk buryatia cbg chel chelyabinsk chita chukotka chuvashia com dagestan e-burg edu gov grozny int irkutsk ivanovo izhevsk jar joshkar-ola kalmykia kaluga kamchatka karelia kazan kchr kemerovo khabarovsk khakassia khv kirov koenig komi kostroma kranoyarsk kuban kurgan kursk lipetsk magadan mari mari-el marine mil mordovia mosreg msk murmansk nalchik net nnov nov novosibirsk nsk omsk orenburg org oryol penza perm pp pskov ptz rnd ryazan sakhalin samara saratov simbirsk smolensk spb stavropol stv surgut tambov tatarstan tom tomsk tsaritsyn tsk tula tuva tver tyumen udm udmurtia ulan-ude vladikavkaz vladimir vladivostok volgograd vologda voronezh vrn vyatka yakutia yamal yekaterinburg yuzhno-sakhalinsk ',
+      'rw':' ac co com edu gouv gov int mil net ',
+      'sa':' com edu gov med net org pub sch ',
+      'sd':' com edu gov info med net org tv ',
+      'se':' a ac b bd c d e f g h i k l m n o org p parti pp press r s t tm u w x y z ',
+      'sg':' com edu gov idn net org per ',
+      'sn':' art com edu gouv org perso univ ',
+      'sy':' com edu gov mil net news org ',
+      'th':' ac co go in mi net or ',
+      'tj':' ac biz co com edu go gov info int mil name net nic org test web ',
+      'tn':' agrinet com defense edunet ens fin gov ind info intl mincom nat net org perso rnrt rns rnu tourism ',
+      'tz':' ac co go ne or ',
+      'ua':' biz cherkassy chernigov chernovtsy ck cn co com crimea cv dn dnepropetrovsk donetsk dp edu gov if in ivano-frankivsk kh kharkov kherson khmelnitskiy kiev kirovograd km kr ks kv lg lugansk lutsk lviv me mk net nikolaev od odessa org pl poltava pp rovno rv sebastopol sumy te ternopil uzhgorod vinnica vn zaporizhzhe zhitomir zp zt ',
+      'ug':' ac co go ne or org sc ',
+      'uk':' ac bl british-library co cym gov govt icnet jet lea ltd me mil mod national-library-scotland nel net nhs nic nls org orgn parliament plc police sch scot soc ',
+      'us':' dni fed isa kids nsn ',
+      'uy':' com edu gub mil net org ',
+      've':' co com edu gob info mil net org web ',
+      'vi':' co com k12 net org ',
+      'vn':' ac biz com edu gov health info int name net org pro ',
+      'ye':' co com gov ltd me net org plc ',
+      'yu':' ac co edu gov org ',
+      'za':' ac agric alt bourse city co cybernet db edu gov grondar iaccess imt inca landesign law mil net ngo nis nom olivetti org pix school tm web ',
+      'zm':' ac co com edu gov net org sch '
+    },
+    // gorhill 2013-10-25: Using indexOf() instead Regexp(). Significant boost
+    // in both performance and memory footprint. No initialization required.
+    // http://jsperf.com/uri-js-sld-regex-vs-binary-search/4
+    // Following methods use lastIndexOf() rather than array.split() in order
+    // to avoid any memory allocations.
+    has: function(domain) {
+      var tldOffset = domain.lastIndexOf('.');
+      if (tldOffset <= 0 || tldOffset >= (domain.length-1)) {
+        return false;
+      }
+      var sldOffset = domain.lastIndexOf('.', tldOffset-1);
+      if (sldOffset <= 0 || sldOffset >= (tldOffset-1)) {
+        return false;
+      }
+      var sldList = SLD.list[domain.slice(tldOffset+1)];
+      if (!sldList) {
+        return false;
+      }
+      return sldList.indexOf(' ' + domain.slice(sldOffset+1, tldOffset) + ' ') >= 0;
+    },
+    is: function(domain) {
+      var tldOffset = domain.lastIndexOf('.');
+      if (tldOffset <= 0 || tldOffset >= (domain.length-1)) {
+        return false;
+      }
+      var sldOffset = domain.lastIndexOf('.', tldOffset-1);
+      if (sldOffset >= 0) {
+        return false;
+      }
+      var sldList = SLD.list[domain.slice(tldOffset+1)];
+      if (!sldList) {
+        return false;
+      }
+      return sldList.indexOf(' ' + domain.slice(0, tldOffset) + ' ') >= 0;
+    },
+    get: function(domain) {
+      var tldOffset = domain.lastIndexOf('.');
+      if (tldOffset <= 0 || tldOffset >= (domain.length-1)) {
+        return null;
+      }
+      var sldOffset = domain.lastIndexOf('.', tldOffset-1);
+      if (sldOffset <= 0 || sldOffset >= (tldOffset-1)) {
+        return null;
+      }
+      var sldList = SLD.list[domain.slice(tldOffset+1)];
+      if (!sldList) {
+        return null;
+      }
+      if (sldList.indexOf(' ' + domain.slice(sldOffset+1, tldOffset) + ' ') < 0) {
+        return null;
+      }
+      return domain.slice(sldOffset+1);
+    },
+    noConflict: function(){
+      if (root.SecondLevelDomains === this) {
+        root.SecondLevelDomains = _SecondLevelDomains;
+      }
+      return this;
+    }
+  };
+
+  return SLD;
+}));
+
+/*!
+ * URI.js - Mutating URLs
+ *
+ * Version: 1.17.1
+ *
+ * Author: Rodney Rehm
+ * Web: http://medialize.github.io/URI.js/
+ *
+ * Licensed under
+ *   MIT License http://www.opensource.org/licenses/mit-license
+ *
+ */
+(function (root, factory) {
+  'use strict';
+  // https://github.com/umdjs/umd/blob/master/returnExports.js
+  if (typeof exports === 'object') {
+    // Node
+    module.exports = factory(require('./punycode'), require('./IPv6'), require('./SecondLevelDomains'));
+  } else if (typeof define === 'function' && define.amd) {
+    // AMD. Register as an anonymous module.
+    define('URIjs',['./punycode', './IPv6', './SecondLevelDomains'], factory);
+  } else {
+    // Browser globals (root is window)
+    root.URI = factory(root.punycode, root.IPv6, root.SecondLevelDomains, root);
+  }
+}(this, function (punycode, IPv6, SLD, root) {
+  'use strict';
+  /*global location, escape, unescape */
+  // FIXME: v2.0.0 renamce non-camelCase properties to uppercase
+  /*jshint camelcase: false */
+
+  // save current URI variable, if any
+  var _URI = root && root.URI;
+
+  function URI(url, base) {
+    var _urlSupplied = arguments.length >= 1;
+    var _baseSupplied = arguments.length >= 2;
+
+    // Allow instantiation without the 'new' keyword
+    if (!(this instanceof URI)) {
+      if (_urlSupplied) {
+        if (_baseSupplied) {
+          return new URI(url, base);
+        }
+
+        return new URI(url);
+      }
+
+      return new URI();
+    }
+
+    if (url === undefined) {
+      if (_urlSupplied) {
+        throw new TypeError('undefined is not a valid argument for URI');
+      }
+
+      if (typeof location !== 'undefined') {
+        url = location.href + '';
+      } else {
+        url = '';
+      }
+    }
+
+    this.href(url);
+
+    // resolve to base according to http://dvcs.w3.org/hg/url/raw-file/tip/Overview.html#constructor
+    if (base !== undefined) {
+      return this.absoluteTo(base);
+    }
+
+    return this;
+  }
+
+  URI.version = '1.17.1';
+
+  var p = URI.prototype;
+  var hasOwn = Object.prototype.hasOwnProperty;
+
+  function escapeRegEx(string) {
+    // https://github.com/medialize/URI.js/commit/85ac21783c11f8ccab06106dba9735a31a86924d#commitcomment-821963
+    return string.replace(/([.*+?^=!:${}()|[\]\/\\])/g, '\\$1');
+  }
+
+  function getType(value) {
+    // IE8 doesn't return [Object Undefined] but [Object Object] for undefined value
+    if (value === undefined) {
+      return 'Undefined';
+    }
+
+    return String(Object.prototype.toString.call(value)).slice(8, -1);
+  }
+
+  function isArray(obj) {
+    return getType(obj) === 'Array';
+  }
+
+  function filterArrayValues(data, value) {
+    var lookup = {};
+    var i, length;
+
+    if (getType(value) === 'RegExp') {
+      lookup = null;
+    } else if (isArray(value)) {
+      for (i = 0, length = value.length; i < length; i++) {
+        lookup[value[i]] = true;
+      }
+    } else {
+      lookup[value] = true;
+    }
+
+    for (i = 0, length = data.length; i < length; i++) {
+      /*jshint laxbreak: true */
+      var _match = lookup && lookup[data[i]] !== undefined
+        || !lookup && value.test(data[i]);
+      /*jshint laxbreak: false */
+      if (_match) {
+        data.splice(i, 1);
+        length--;
+        i--;
+      }
+    }
+
+    return data;
+  }
+
+  function arrayContains(list, value) {
+    var i, length;
+
+    // value may be string, number, array, regexp
+    if (isArray(value)) {
+      // Note: this can be optimized to O(n) (instead of current O(m * n))
+      for (i = 0, length = value.length; i < length; i++) {
+        if (!arrayContains(list, value[i])) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    var _type = getType(value);
+    for (i = 0, length = list.length; i < length; i++) {
+      if (_type === 'RegExp') {
+        if (typeof list[i] === 'string' && list[i].match(value)) {
+          return true;
+        }
+      } else if (list[i] === value) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function arraysEqual(one, two) {
+    if (!isArray(one) || !isArray(two)) {
+      return false;
+    }
+
+    // arrays can't be equal if they have different amount of content
+    if (one.length !== two.length) {
+      return false;
+    }
+
+    one.sort();
+    two.sort();
+
+    for (var i = 0, l = one.length; i < l; i++) {
+      if (one[i] !== two[i]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function trimSlashes(text) {
+    var trim_expression = /^\/+|\/+$/g;
+    return text.replace(trim_expression, '');
+  }
+
+  URI._parts = function() {
+    return {
+      protocol: null,
+      username: null,
+      password: null,
+      hostname: null,
+      urn: null,
+      port: null,
+      path: null,
+      query: null,
+      fragment: null,
+      // state
+      duplicateQueryParameters: URI.duplicateQueryParameters,
+      escapeQuerySpace: URI.escapeQuerySpace
+    };
+  };
+  // state: allow duplicate query parameters (a=1&a=1)
+  URI.duplicateQueryParameters = false;
+  // state: replaces + with %20 (space in query strings)
+  URI.escapeQuerySpace = true;
+  // static properties
+  URI.protocol_expression = /^[a-z][a-z0-9.+-]*$/i;
+  URI.idn_expression = /[^a-z0-9\.-]/i;
+  URI.punycode_expression = /(xn--)/i;
+  // well, 333.444.555.666 matches, but it sure ain't no IPv4 - do we care?
+  URI.ip4_expression = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+  // credits to Rich Brown
+  // source: http://forums.intermapper.com/viewtopic.php?p=1096#1096
+  // specification: http://www.ietf.org/rfc/rfc4291.txt
+  URI.ip6_expression = /^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$/;
+  // expression used is "gruber revised" (@gruber v2) determined to be the
+  // best solution in a regex-golf we did a couple of ages ago at
+  // * http://mathiasbynens.be/demo/url-regex
+  // * http://rodneyrehm.de/t/url-regex.html
+  URI.find_uri_expression = /\b((?:[a-z][\w-]+:(?:\/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))/ig;
+  URI.findUri = {
+    // valid "scheme://" or "www."
+    start: /\b(?:([a-z][a-z0-9.+-]*:\/\/)|www\.)/gi,
+    // everything up to the next whitespace
+    end: /[\s\r\n]|$/,
+    // trim trailing punctuation captured by end RegExp
+    trim: /[`!()\[\]{};:'".,<>?«»“”„‘’]+$/
+  };
+  // http://www.iana.org/assignments/uri-schemes.html
+  // http://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers#Well-known_ports
+  URI.defaultPorts = {
+    http: '80',
+    https: '443',
+    ftp: '21',
+    gopher: '70',
+    ws: '80',
+    wss: '443'
+  };
+  // allowed hostname characters according to RFC 3986
+  // ALPHA DIGIT "-" "." "_" "~" "!" "$" "&" "'" "(" ")" "*" "+" "," ";" "=" %encoded
+  // I've never seen a (non-IDN) hostname other than: ALPHA DIGIT . -
+  URI.invalid_hostname_characters = /[^a-zA-Z0-9\.-]/;
+  // map DOM Elements to their URI attribute
+  URI.domAttributes = {
+    'a': 'href',
+    'blockquote': 'cite',
+    'link': 'href',
+    'base': 'href',
+    'script': 'src',
+    'form': 'action',
+    'img': 'src',
+    'area': 'href',
+    'iframe': 'src',
+    'embed': 'src',
+    'source': 'src',
+    'track': 'src',
+    'input': 'src', // but only if type="image"
+    'audio': 'src',
+    'video': 'src'
+  };
+  URI.getDomAttribute = function(node) {
+    if (!node || !node.nodeName) {
+      return undefined;
+    }
+
+    var nodeName = node.nodeName.toLowerCase();
+    // <input> should only expose src for type="image"
+    if (nodeName === 'input' && node.type !== 'image') {
+      return undefined;
+    }
+
+    return URI.domAttributes[nodeName];
+  };
+
+  function escapeForDumbFirefox36(value) {
+    // https://github.com/medialize/URI.js/issues/91
+    return escape(value);
+  }
+
+  // encoding / decoding according to RFC3986
+  function strictEncodeURIComponent(string) {
+    // see https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/encodeURIComponent
+    return encodeURIComponent(string)
+      .replace(/[!'()*]/g, escapeForDumbFirefox36)
+      .replace(/\*/g, '%2A');
+  }
+  URI.encode = strictEncodeURIComponent;
+  URI.decode = decodeURIComponent;
+  URI.iso8859 = function() {
+    URI.encode = escape;
+    URI.decode = unescape;
+  };
+  URI.unicode = function() {
+    URI.encode = strictEncodeURIComponent;
+    URI.decode = decodeURIComponent;
+  };
+  URI.characters = {
+    pathname: {
+      encode: {
+        // RFC3986 2.1: For consistency, URI producers and normalizers should
+        // use uppercase hexadecimal digits for all percent-encodings.
+        expression: /%(24|26|2B|2C|3B|3D|3A|40)/ig,
+        map: {
+          // -._~!'()*
+          '%24': '$',
+          '%26': '&',
+          '%2B': '+',
+          '%2C': ',',
+          '%3B': ';',
+          '%3D': '=',
+          '%3A': ':',
+          '%40': '@'
+        }
+      },
+      decode: {
+        expression: /[\/\?#]/g,
+        map: {
+          '/': '%2F',
+          '?': '%3F',
+          '#': '%23'
+        }
+      }
+    },
+    reserved: {
+      encode: {
+        // RFC3986 2.1: For consistency, URI producers and normalizers should
+        // use uppercase hexadecimal digits for all percent-encodings.
+        expression: /%(21|23|24|26|27|28|29|2A|2B|2C|2F|3A|3B|3D|3F|40|5B|5D)/ig,
+        map: {
+          // gen-delims
+          '%3A': ':',
+          '%2F': '/',
+          '%3F': '?',
+          '%23': '#',
+          '%5B': '[',
+          '%5D': ']',
+          '%40': '@',
+          // sub-delims
+          '%21': '!',
+          '%24': '$',
+          '%26': '&',
+          '%27': '\'',
+          '%28': '(',
+          '%29': ')',
+          '%2A': '*',
+          '%2B': '+',
+          '%2C': ',',
+          '%3B': ';',
+          '%3D': '='
+        }
+      }
+    },
+    urnpath: {
+      // The characters under `encode` are the characters called out by RFC 2141 as being acceptable
+      // for usage in a URN. RFC2141 also calls out "-", ".", and "_" as acceptable characters, but
+      // these aren't encoded by encodeURIComponent, so we don't have to call them out here. Also
+      // note that the colon character is not featured in the encoding map; this is because URI.js
+      // gives the colons in URNs semantic meaning as the delimiters of path segements, and so it
+      // should not appear unencoded in a segment itself.
+      // See also the note above about RFC3986 and capitalalized hex digits.
+      encode: {
+        expression: /%(21|24|27|28|29|2A|2B|2C|3B|3D|40)/ig,
+        map: {
+          '%21': '!',
+          '%24': '$',
+          '%27': '\'',
+          '%28': '(',
+          '%29': ')',
+          '%2A': '*',
+          '%2B': '+',
+          '%2C': ',',
+          '%3B': ';',
+          '%3D': '=',
+          '%40': '@'
+        }
+      },
+      // These characters are the characters called out by RFC2141 as "reserved" characters that
+      // should never appear in a URN, plus the colon character (see note above).
+      decode: {
+        expression: /[\/\?#:]/g,
+        map: {
+          '/': '%2F',
+          '?': '%3F',
+          '#': '%23',
+          ':': '%3A'
+        }
+      }
+    }
+  };
+  URI.encodeQuery = function(string, escapeQuerySpace) {
+    var escaped = URI.encode(string + '');
+    if (escapeQuerySpace === undefined) {
+      escapeQuerySpace = URI.escapeQuerySpace;
+    }
+
+    return escapeQuerySpace ? escaped.replace(/%20/g, '+') : escaped;
+  };
+  URI.decodeQuery = function(string, escapeQuerySpace) {
+    string += '';
+    if (escapeQuerySpace === undefined) {
+      escapeQuerySpace = URI.escapeQuerySpace;
+    }
+
+    try {
+      return URI.decode(escapeQuerySpace ? string.replace(/\+/g, '%20') : string);
+    } catch(e) {
+      // we're not going to mess with weird encodings,
+      // give up and return the undecoded original string
+      // see https://github.com/medialize/URI.js/issues/87
+      // see https://github.com/medialize/URI.js/issues/92
+      return string;
+    }
+  };
+  // generate encode/decode path functions
+  var _parts = {'encode':'encode', 'decode':'decode'};
+  var _part;
+  var generateAccessor = function(_group, _part) {
+    return function(string) {
+      try {
+        return URI[_part](string + '').replace(URI.characters[_group][_part].expression, function(c) {
+          return URI.characters[_group][_part].map[c];
+        });
+      } catch (e) {
+        // we're not going to mess with weird encodings,
+        // give up and return the undecoded original string
+        // see https://github.com/medialize/URI.js/issues/87
+        // see https://github.com/medialize/URI.js/issues/92
+        return string;
+      }
+    };
+  };
+
+  for (_part in _parts) {
+    URI[_part + 'PathSegment'] = generateAccessor('pathname', _parts[_part]);
+    URI[_part + 'UrnPathSegment'] = generateAccessor('urnpath', _parts[_part]);
+  }
+
+  var generateSegmentedPathFunction = function(_sep, _codingFuncName, _innerCodingFuncName) {
+    return function(string) {
+      // Why pass in names of functions, rather than the function objects themselves? The
+      // definitions of some functions (but in particular, URI.decode) will occasionally change due
+      // to URI.js having ISO8859 and Unicode modes. Passing in the name and getting it will ensure
+      // that the functions we use here are "fresh".
+      var actualCodingFunc;
+      if (!_innerCodingFuncName) {
+        actualCodingFunc = URI[_codingFuncName];
+      } else {
+        actualCodingFunc = function(string) {
+          return URI[_codingFuncName](URI[_innerCodingFuncName](string));
+        };
+      }
+
+      var segments = (string + '').split(_sep);
+
+      for (var i = 0, length = segments.length; i < length; i++) {
+        segments[i] = actualCodingFunc(segments[i]);
+      }
+
+      return segments.join(_sep);
+    };
+  };
+
+  // This takes place outside the above loop because we don't want, e.g., encodeUrnPath functions.
+  URI.decodePath = generateSegmentedPathFunction('/', 'decodePathSegment');
+  URI.decodeUrnPath = generateSegmentedPathFunction(':', 'decodeUrnPathSegment');
+  URI.recodePath = generateSegmentedPathFunction('/', 'encodePathSegment', 'decode');
+  URI.recodeUrnPath = generateSegmentedPathFunction(':', 'encodeUrnPathSegment', 'decode');
+
+  URI.encodeReserved = generateAccessor('reserved', 'encode');
+
+  URI.parse = function(string, parts) {
+    var pos;
+    if (!parts) {
+      parts = {};
+    }
+    // [protocol"://"[username[":"password]"@"]hostname[":"port]"/"?][path]["?"querystring]["#"fragment]
+
+    // extract fragment
+    pos = string.indexOf('#');
+    if (pos > -1) {
+      // escaping?
+      parts.fragment = string.substring(pos + 1) || null;
+      string = string.substring(0, pos);
+    }
+
+    // extract query
+    pos = string.indexOf('?');
+    if (pos > -1) {
+      // escaping?
+      parts.query = string.substring(pos + 1) || null;
+      string = string.substring(0, pos);
+    }
+
+    // extract protocol
+    if (string.substring(0, 2) === '//') {
+      // relative-scheme
+      parts.protocol = null;
+      string = string.substring(2);
+      // extract "user:pass@host:port"
+      string = URI.parseAuthority(string, parts);
+    } else {
+      pos = string.indexOf(':');
+      if (pos > -1) {
+        parts.protocol = string.substring(0, pos) || null;
+        if (parts.protocol && !parts.protocol.match(URI.protocol_expression)) {
+          // : may be within the path
+          parts.protocol = undefined;
+        } else if (string.substring(pos + 1, pos + 3) === '//') {
+          string = string.substring(pos + 3);
+
+          // extract "user:pass@host:port"
+          string = URI.parseAuthority(string, parts);
+        } else {
+          string = string.substring(pos + 1);
+          parts.urn = true;
+        }
+      }
+    }
+
+    // what's left must be the path
+    parts.path = string;
+
+    // and we're done
+    return parts;
+  };
+  URI.parseHost = function(string, parts) {
+    // Copy chrome, IE, opera backslash-handling behavior.
+    // Back slashes before the query string get converted to forward slashes
+    // See: https://github.com/joyent/node/blob/386fd24f49b0e9d1a8a076592a404168faeecc34/lib/url.js#L115-L124
+    // See: https://code.google.com/p/chromium/issues/detail?id=25916
+    // https://github.com/medialize/URI.js/pull/233
+    string = string.replace(/\\/g, '/');
+
+    // extract host:port
+    var pos = string.indexOf('/');
+    var bracketPos;
+    var t;
+
+    if (pos === -1) {
+      pos = string.length;
+    }
+
+    if (string.charAt(0) === '[') {
+      // IPv6 host - http://tools.ietf.org/html/draft-ietf-6man-text-addr-representation-04#section-6
+      // I claim most client software breaks on IPv6 anyways. To simplify things, URI only accepts
+      // IPv6+port in the format [2001:db8::1]:80 (for the time being)
+      bracketPos = string.indexOf(']');
+      parts.hostname = string.substring(1, bracketPos) || null;
+      parts.port = string.substring(bracketPos + 2, pos) || null;
+      if (parts.port === '/') {
+        parts.port = null;
+      }
+    } else {
+      var firstColon = string.indexOf(':');
+      var firstSlash = string.indexOf('/');
+      var nextColon = string.indexOf(':', firstColon + 1);
+      if (nextColon !== -1 && (firstSlash === -1 || nextColon < firstSlash)) {
+        // IPv6 host contains multiple colons - but no port
+        // this notation is actually not allowed by RFC 3986, but we're a liberal parser
+        parts.hostname = string.substring(0, pos) || null;
+        parts.port = null;
+      } else {
+        t = string.substring(0, pos).split(':');
+        parts.hostname = t[0] || null;
+        parts.port = t[1] || null;
+      }
+    }
+
+    if (parts.hostname && string.substring(pos).charAt(0) !== '/') {
+      pos++;
+      string = '/' + string;
+    }
+
+    return string.substring(pos) || '/';
+  };
+  URI.parseAuthority = function(string, parts) {
+    string = URI.parseUserinfo(string, parts);
+    return URI.parseHost(string, parts);
+  };
+  URI.parseUserinfo = function(string, parts) {
+    // extract username:password
+    var firstSlash = string.indexOf('/');
+    var pos = string.lastIndexOf('@', firstSlash > -1 ? firstSlash : string.length - 1);
+    var t;
+
+    // authority@ must come before /path
+    if (pos > -1 && (firstSlash === -1 || pos < firstSlash)) {
+      t = string.substring(0, pos).split(':');
+      parts.username = t[0] ? URI.decode(t[0]) : null;
+      t.shift();
+      parts.password = t[0] ? URI.decode(t.join(':')) : null;
+      string = string.substring(pos + 1);
+    } else {
+      parts.username = null;
+      parts.password = null;
+    }
+
+    return string;
+  };
+  URI.parseQuery = function(string, escapeQuerySpace) {
+    if (!string) {
+      return {};
+    }
+
+    // throw out the funky business - "?"[name"="value"&"]+
+    string = string.replace(/&+/g, '&').replace(/^\?*&*|&+$/g, '');
+
+    if (!string) {
+      return {};
+    }
+
+    var items = {};
+    var splits = string.split('&');
+    var length = splits.length;
+    var v, name, value;
+
+    for (var i = 0; i < length; i++) {
+      v = splits[i].split('=');
+      name = URI.decodeQuery(v.shift(), escapeQuerySpace);
+      // no "=" is null according to http://dvcs.w3.org/hg/url/raw-file/tip/Overview.html#collect-url-parameters
+      value = v.length ? URI.decodeQuery(v.join('='), escapeQuerySpace) : null;
+
+      if (hasOwn.call(items, name)) {
+        if (typeof items[name] === 'string' || items[name] === null) {
+          items[name] = [items[name]];
+        }
+
+        items[name].push(value);
+      } else {
+        items[name] = value;
+      }
+    }
+
+    return items;
+  };
+
+  URI.build = function(parts) {
+    var t = '';
+
+    if (parts.protocol) {
+      t += parts.protocol + ':';
+    }
+
+    if (!parts.urn && (t || parts.hostname)) {
+      t += '//';
+    }
+
+    t += (URI.buildAuthority(parts) || '');
+
+    if (typeof parts.path === 'string') {
+      if (parts.path.charAt(0) !== '/' && typeof parts.hostname === 'string') {
+        t += '/';
+      }
+
+      t += parts.path;
+    }
+
+    if (typeof parts.query === 'string' && parts.query) {
+      t += '?' + parts.query;
+    }
+
+    if (typeof parts.fragment === 'string' && parts.fragment) {
+      t += '#' + parts.fragment;
+    }
+    return t;
+  };
+  URI.buildHost = function(parts) {
+    var t = '';
+
+    if (!parts.hostname) {
+      return '';
+    } else if (URI.ip6_expression.test(parts.hostname)) {
+      t += '[' + parts.hostname + ']';
+    } else {
+      t += parts.hostname;
+    }
+
+    if (parts.port) {
+      t += ':' + parts.port;
+    }
+
+    return t;
+  };
+  URI.buildAuthority = function(parts) {
+    return URI.buildUserinfo(parts) + URI.buildHost(parts);
+  };
+  URI.buildUserinfo = function(parts) {
+    var t = '';
+
+    if (parts.username) {
+      t += URI.encode(parts.username);
+
+      if (parts.password) {
+        t += ':' + URI.encode(parts.password);
+      }
+
+      t += '@';
+    }
+
+    return t;
+  };
+  URI.buildQuery = function(data, duplicateQueryParameters, escapeQuerySpace) {
+    // according to http://tools.ietf.org/html/rfc3986 or http://labs.apache.org/webarch/uri/rfc/rfc3986.html
+    // being »-._~!$&'()*+,;=:@/?« %HEX and alnum are allowed
+    // the RFC explicitly states ?/foo being a valid use case, no mention of parameter syntax!
+    // URI.js treats the query string as being application/x-www-form-urlencoded
+    // see http://www.w3.org/TR/REC-html40/interact/forms.html#form-content-type
+
+    var t = '';
+    var unique, key, i, length;
+    for (key in data) {
+      if (hasOwn.call(data, key) && key) {
+        if (isArray(data[key])) {
+          unique = {};
+          for (i = 0, length = data[key].length; i < length; i++) {
+            if (data[key][i] !== undefined && unique[data[key][i] + ''] === undefined) {
+              t += '&' + URI.buildQueryParameter(key, data[key][i], escapeQuerySpace);
+              if (duplicateQueryParameters !== true) {
+                unique[data[key][i] + ''] = true;
+              }
+            }
+          }
+        } else if (data[key] !== undefined) {
+          t += '&' + URI.buildQueryParameter(key, data[key], escapeQuerySpace);
+        }
+      }
+    }
+
+    return t.substring(1);
+  };
+  URI.buildQueryParameter = function(name, value, escapeQuerySpace) {
+    // http://www.w3.org/TR/REC-html40/interact/forms.html#form-content-type -- application/x-www-form-urlencoded
+    // don't append "=" for null values, according to http://dvcs.w3.org/hg/url/raw-file/tip/Overview.html#url-parameter-serialization
+    return URI.encodeQuery(name, escapeQuerySpace) + (value !== null ? '=' + URI.encodeQuery(value, escapeQuerySpace) : '');
+  };
+
+  URI.addQuery = function(data, name, value) {
+    if (typeof name === 'object') {
+      for (var key in name) {
+        if (hasOwn.call(name, key)) {
+          URI.addQuery(data, key, name[key]);
+        }
+      }
+    } else if (typeof name === 'string') {
+      if (data[name] === undefined) {
+        data[name] = value;
+        return;
+      } else if (typeof data[name] === 'string') {
+        data[name] = [data[name]];
+      }
+
+      if (!isArray(value)) {
+        value = [value];
+      }
+
+      data[name] = (data[name] || []).concat(value);
+    } else {
+      throw new TypeError('URI.addQuery() accepts an object, string as the name parameter');
+    }
+  };
+  URI.removeQuery = function(data, name, value) {
+    var i, length, key;
+
+    if (isArray(name)) {
+      for (i = 0, length = name.length; i < length; i++) {
+        data[name[i]] = undefined;
+      }
+    } else if (getType(name) === 'RegExp') {
+      for (key in data) {
+        if (name.test(key)) {
+          data[key] = undefined;
+        }
+      }
+    } else if (typeof name === 'object') {
+      for (key in name) {
+        if (hasOwn.call(name, key)) {
+          URI.removeQuery(data, key, name[key]);
+        }
+      }
+    } else if (typeof name === 'string') {
+      if (value !== undefined) {
+        if (getType(value) === 'RegExp') {
+          if (!isArray(data[name]) && value.test(data[name])) {
+            data[name] = undefined;
+          } else {
+            data[name] = filterArrayValues(data[name], value);
+          }
+        } else if (data[name] === String(value) && (!isArray(value) || value.length === 1)) {
+          data[name] = undefined;
+        } else if (isArray(data[name])) {
+          data[name] = filterArrayValues(data[name], value);
+        }
+      } else {
+        data[name] = undefined;
+      }
+    } else {
+      throw new TypeError('URI.removeQuery() accepts an object, string, RegExp as the first parameter');
+    }
+  };
+  URI.hasQuery = function(data, name, value, withinArray) {
+    switch (getType(name)) {
+      case 'String':
+        // Nothing to do here
+        break;
+
+      case 'RegExp':
+        for (var key in data) {
+          if (hasOwn.call(data, key)) {
+            if (name.test(key) && (value === undefined || URI.hasQuery(data, key, value))) {
+              return true;
+            }
+          }
+        }
+
+        return false;
+
+      case 'Object':
+        for (var _key in name) {
+          if (hasOwn.call(name, _key)) {
+            if (!URI.hasQuery(data, _key, name[_key])) {
+              return false;
+            }
+          }
+        }
+
+        return true;
+
+      default:
+        throw new TypeError('URI.hasQuery() accepts a string, regular expression or object as the name parameter');
+    }
+
+    switch (getType(value)) {
+      case 'Undefined':
+        // true if exists (but may be empty)
+        return name in data; // data[name] !== undefined;
+
+      case 'Boolean':
+        // true if exists and non-empty
+        var _booly = Boolean(isArray(data[name]) ? data[name].length : data[name]);
+        return value === _booly;
+
+      case 'Function':
+        // allow complex comparison
+        return !!value(data[name], name, data);
+
+      case 'Array':
+        if (!isArray(data[name])) {
+          return false;
+        }
+
+        var op = withinArray ? arrayContains : arraysEqual;
+        return op(data[name], value);
+
+      case 'RegExp':
+        if (!isArray(data[name])) {
+          return Boolean(data[name] && data[name].match(value));
+        }
+
+        if (!withinArray) {
+          return false;
+        }
+
+        return arrayContains(data[name], value);
+
+      case 'Number':
+        value = String(value);
+        /* falls through */
+      case 'String':
+        if (!isArray(data[name])) {
+          return data[name] === value;
+        }
+
+        if (!withinArray) {
+          return false;
+        }
+
+        return arrayContains(data[name], value);
+
+      default:
+        throw new TypeError('URI.hasQuery() accepts undefined, boolean, string, number, RegExp, Function as the value parameter');
+    }
+  };
+
+
+  URI.joinPaths = function() {
+    var input = [];
+    var segments = [];
+    var nonEmptySegments = 0;
+
+    for (var i = 0; i < arguments.length; i++) {
+      var url = new URI(arguments[i]);
+      input.push(url);
+      var _segments = url.segment();
+      for (var s = 0; s < _segments.length; s++) {
+        if (typeof _segments[s] === 'string') {
+          segments.push(_segments[s]);
+        }
+
+        if (_segments[s]) {
+          nonEmptySegments++;
+        }
+      }
+    }
+
+    if (!segments.length || !nonEmptySegments) {
+      return new URI('');
+    }
+
+    var uri = new URI('').segment(segments);
+
+    if (input[0].path() === '' || input[0].path().slice(0, 1) === '/') {
+      uri.path('/' + uri.path());
+    }
+
+    return uri.normalize();
+  };
+
+  URI.commonPath = function(one, two) {
+    var length = Math.min(one.length, two.length);
+    var pos;
+
+    // find first non-matching character
+    for (pos = 0; pos < length; pos++) {
+      if (one.charAt(pos) !== two.charAt(pos)) {
+        pos--;
+        break;
+      }
+    }
+
+    if (pos < 1) {
+      return one.charAt(0) === two.charAt(0) && one.charAt(0) === '/' ? '/' : '';
+    }
+
+    // revert to last /
+    if (one.charAt(pos) !== '/' || two.charAt(pos) !== '/') {
+      pos = one.substring(0, pos).lastIndexOf('/');
+    }
+
+    return one.substring(0, pos + 1);
+  };
+
+  URI.withinString = function(string, callback, options) {
+    options || (options = {});
+    var _start = options.start || URI.findUri.start;
+    var _end = options.end || URI.findUri.end;
+    var _trim = options.trim || URI.findUri.trim;
+    var _attributeOpen = /[a-z0-9-]=["']?$/i;
+
+    _start.lastIndex = 0;
+    while (true) {
+      var match = _start.exec(string);
+      if (!match) {
+        break;
+      }
+
+      var start = match.index;
+      if (options.ignoreHtml) {
+        // attribut(e=["']?$)
+        var attributeOpen = string.slice(Math.max(start - 3, 0), start);
+        if (attributeOpen && _attributeOpen.test(attributeOpen)) {
+          continue;
+        }
+      }
+
+      var end = start + string.slice(start).search(_end);
+      var slice = string.slice(start, end).replace(_trim, '');
+      if (options.ignore && options.ignore.test(slice)) {
+        continue;
+      }
+
+      end = start + slice.length;
+      var result = callback(slice, start, end, string);
+      string = string.slice(0, start) + result + string.slice(end);
+      _start.lastIndex = start + result.length;
+    }
+
+    _start.lastIndex = 0;
+    return string;
+  };
+
+  URI.ensureValidHostname = function(v) {
+    // Theoretically URIs allow percent-encoding in Hostnames (according to RFC 3986)
+    // they are not part of DNS and therefore ignored by URI.js
+
+    if (v.match(URI.invalid_hostname_characters)) {
+      // test punycode
+      if (!punycode) {
+        throw new TypeError('Hostname "' + v + '" contains characters other than [A-Z0-9.-] and Punycode.js is not available');
+      }
+
+      if (punycode.toASCII(v).match(URI.invalid_hostname_characters)) {
+        throw new TypeError('Hostname "' + v + '" contains characters other than [A-Z0-9.-]');
+      }
+    }
+  };
+
+  // noConflict
+  URI.noConflict = function(removeAll) {
+    if (removeAll) {
+      var unconflicted = {
+        URI: this.noConflict()
+      };
+
+      if (root.URITemplate && typeof root.URITemplate.noConflict === 'function') {
+        unconflicted.URITemplate = root.URITemplate.noConflict();
+      }
+
+      if (root.IPv6 && typeof root.IPv6.noConflict === 'function') {
+        unconflicted.IPv6 = root.IPv6.noConflict();
+      }
+
+      if (root.SecondLevelDomains && typeof root.SecondLevelDomains.noConflict === 'function') {
+        unconflicted.SecondLevelDomains = root.SecondLevelDomains.noConflict();
+      }
+
+      return unconflicted;
+    } else if (root.URI === this) {
+      root.URI = _URI;
+    }
+
+    return this;
+  };
+
+  p.build = function(deferBuild) {
+    if (deferBuild === true) {
+      this._deferred_build = true;
+    } else if (deferBuild === undefined || this._deferred_build) {
+      this._string = URI.build(this._parts);
+      this._deferred_build = false;
+    }
+
+    return this;
+  };
+
+  p.clone = function() {
+    return new URI(this);
+  };
+
+  p.valueOf = p.toString = function() {
+    return this.build(false)._string;
+  };
+
+
+  function generateSimpleAccessor(_part){
+    return function(v, build) {
+      if (v === undefined) {
+        return this._parts[_part] || '';
+      } else {
+        this._parts[_part] = v || null;
+        this.build(!build);
+        return this;
+      }
+    };
+  }
+
+  function generatePrefixAccessor(_part, _key){
+    return function(v, build) {
+      if (v === undefined) {
+        return this._parts[_part] || '';
+      } else {
+        if (v !== null) {
+          v = v + '';
+          if (v.charAt(0) === _key) {
+            v = v.substring(1);
+          }
+        }
+
+        this._parts[_part] = v;
+        this.build(!build);
+        return this;
+      }
+    };
+  }
+
+  p.protocol = generateSimpleAccessor('protocol');
+  p.username = generateSimpleAccessor('username');
+  p.password = generateSimpleAccessor('password');
+  p.hostname = generateSimpleAccessor('hostname');
+  p.port = generateSimpleAccessor('port');
+  p.query = generatePrefixAccessor('query', '?');
+  p.fragment = generatePrefixAccessor('fragment', '#');
+
+  p.search = function(v, build) {
+    var t = this.query(v, build);
+    return typeof t === 'string' && t.length ? ('?' + t) : t;
+  };
+  p.hash = function(v, build) {
+    var t = this.fragment(v, build);
+    return typeof t === 'string' && t.length ? ('#' + t) : t;
+  };
+
+  p.pathname = function(v, build) {
+    if (v === undefined || v === true) {
+      var res = this._parts.path || (this._parts.hostname ? '/' : '');
+      return v ? (this._parts.urn ? URI.decodeUrnPath : URI.decodePath)(res) : res;
+    } else {
+      if (this._parts.urn) {
+        this._parts.path = v ? URI.recodeUrnPath(v) : '';
+      } else {
+        this._parts.path = v ? URI.recodePath(v) : '/';
+      }
+      this.build(!build);
+      return this;
+    }
+  };
+  p.path = p.pathname;
+  p.href = function(href, build) {
+    var key;
+
+    if (href === undefined) {
+      return this.toString();
+    }
+
+    this._string = '';
+    this._parts = URI._parts();
+
+    var _URI = href instanceof URI;
+    var _object = typeof href === 'object' && (href.hostname || href.path || href.pathname);
+    if (href.nodeName) {
+      var attribute = URI.getDomAttribute(href);
+      href = href[attribute] || '';
+      _object = false;
+    }
+
+    // window.location is reported to be an object, but it's not the sort
+    // of object we're looking for:
+    // * location.protocol ends with a colon
+    // * location.query != object.search
+    // * location.hash != object.fragment
+    // simply serializing the unknown object should do the trick
+    // (for location, not for everything...)
+    if (!_URI && _object && href.pathname !== undefined) {
+      href = href.toString();
+    }
+
+    if (typeof href === 'string' || href instanceof String) {
+      this._parts = URI.parse(String(href), this._parts);
+    } else if (_URI || _object) {
+      var src = _URI ? href._parts : href;
+      for (key in src) {
+        if (hasOwn.call(this._parts, key)) {
+          this._parts[key] = src[key];
+        }
+      }
+    } else {
+      throw new TypeError('invalid input');
+    }
+
+    this.build(!build);
+    return this;
+  };
+
+  // identification accessors
+  p.is = function(what) {
+    var ip = false;
+    var ip4 = false;
+    var ip6 = false;
+    var name = false;
+    var sld = false;
+    var idn = false;
+    var punycode = false;
+    var relative = !this._parts.urn;
+
+    if (this._parts.hostname) {
+      relative = false;
+      ip4 = URI.ip4_expression.test(this._parts.hostname);
+      ip6 = URI.ip6_expression.test(this._parts.hostname);
+      ip = ip4 || ip6;
+      name = !ip;
+      sld = name && SLD && SLD.has(this._parts.hostname);
+      idn = name && URI.idn_expression.test(this._parts.hostname);
+      punycode = name && URI.punycode_expression.test(this._parts.hostname);
+    }
+
+    switch (what.toLowerCase()) {
+      case 'relative':
+        return relative;
+
+      case 'absolute':
+        return !relative;
+
+      // hostname identification
+      case 'domain':
+      case 'name':
+        return name;
+
+      case 'sld':
+        return sld;
+
+      case 'ip':
+        return ip;
+
+      case 'ip4':
+      case 'ipv4':
+      case 'inet4':
+        return ip4;
+
+      case 'ip6':
+      case 'ipv6':
+      case 'inet6':
+        return ip6;
+
+      case 'idn':
+        return idn;
+
+      case 'url':
+        return !this._parts.urn;
+
+      case 'urn':
+        return !!this._parts.urn;
+
+      case 'punycode':
+        return punycode;
+    }
+
+    return null;
+  };
+
+  // component specific input validation
+  var _protocol = p.protocol;
+  var _port = p.port;
+  var _hostname = p.hostname;
+
+  p.protocol = function(v, build) {
+    if (v !== undefined) {
+      if (v) {
+        // accept trailing ://
+        v = v.replace(/:(\/\/)?$/, '');
+
+        if (!v.match(URI.protocol_expression)) {
+          throw new TypeError('Protocol "' + v + '" contains characters other than [A-Z0-9.+-] or doesn\'t start with [A-Z]');
+        }
+      }
+    }
+    return _protocol.call(this, v, build);
+  };
+  p.scheme = p.protocol;
+  p.port = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v !== undefined) {
+      if (v === 0) {
+        v = null;
+      }
+
+      if (v) {
+        v += '';
+        if (v.charAt(0) === ':') {
+          v = v.substring(1);
+        }
+
+        if (v.match(/[^0-9]/)) {
+          throw new TypeError('Port "' + v + '" contains characters other than [0-9]');
+        }
+      }
+    }
+    return _port.call(this, v, build);
+  };
+  p.hostname = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v !== undefined) {
+      var x = {};
+      var res = URI.parseHost(v, x);
+      if (res !== '/') {
+        throw new TypeError('Hostname "' + v + '" contains characters other than [A-Z0-9.-]');
+      }
+
+      v = x.hostname;
+    }
+    return _hostname.call(this, v, build);
+  };
+
+  // compound accessors
+  p.origin = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v === undefined) {
+      var protocol = this.protocol();
+      var authority = this.authority();
+      if (!authority) {
+        return '';
+      }
+
+      return (protocol ? protocol + '://' : '') + this.authority();
+    } else {
+      var origin = URI(v);
+      this
+        .protocol(origin.protocol())
+        .authority(origin.authority())
+        .build(!build);
+      return this;
+    }
+  };
+  p.host = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v === undefined) {
+      return this._parts.hostname ? URI.buildHost(this._parts) : '';
+    } else {
+      var res = URI.parseHost(v, this._parts);
+      if (res !== '/') {
+        throw new TypeError('Hostname "' + v + '" contains characters other than [A-Z0-9.-]');
+      }
+
+      this.build(!build);
+      return this;
+    }
+  };
+  p.authority = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v === undefined) {
+      return this._parts.hostname ? URI.buildAuthority(this._parts) : '';
+    } else {
+      var res = URI.parseAuthority(v, this._parts);
+      if (res !== '/') {
+        throw new TypeError('Hostname "' + v + '" contains characters other than [A-Z0-9.-]');
+      }
+
+      this.build(!build);
+      return this;
+    }
+  };
+  p.userinfo = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v === undefined) {
+      if (!this._parts.username) {
+        return '';
+      }
+
+      var t = URI.buildUserinfo(this._parts);
+      return t.substring(0, t.length -1);
+    } else {
+      if (v[v.length-1] !== '@') {
+        v += '@';
+      }
+
+      URI.parseUserinfo(v, this._parts);
+      this.build(!build);
+      return this;
+    }
+  };
+  p.resource = function(v, build) {
+    var parts;
+
+    if (v === undefined) {
+      return this.path() + this.search() + this.hash();
+    }
+
+    parts = URI.parse(v);
+    this._parts.path = parts.path;
+    this._parts.query = parts.query;
+    this._parts.fragment = parts.fragment;
+    this.build(!build);
+    return this;
+  };
+
+  // fraction accessors
+  p.subdomain = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    // convenience, return "www" from "www.example.org"
+    if (v === undefined) {
+      if (!this._parts.hostname || this.is('IP')) {
+        return '';
+      }
+
+      // grab domain and add another segment
+      var end = this._parts.hostname.length - this.domain().length - 1;
+      return this._parts.hostname.substring(0, end) || '';
+    } else {
+      var e = this._parts.hostname.length - this.domain().length;
+      var sub = this._parts.hostname.substring(0, e);
+      var replace = new RegExp('^' + escapeRegEx(sub));
+
+      if (v && v.charAt(v.length - 1) !== '.') {
+        v += '.';
+      }
+
+      if (v) {
+        URI.ensureValidHostname(v);
+      }
+
+      this._parts.hostname = this._parts.hostname.replace(replace, v);
+      this.build(!build);
+      return this;
+    }
+  };
+  p.domain = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (typeof v === 'boolean') {
+      build = v;
+      v = undefined;
+    }
+
+    // convenience, return "example.org" from "www.example.org"
+    if (v === undefined) {
+      if (!this._parts.hostname || this.is('IP')) {
+        return '';
+      }
+
+      // if hostname consists of 1 or 2 segments, it must be the domain
+      var t = this._parts.hostname.match(/\./g);
+      if (t && t.length < 2) {
+        return this._parts.hostname;
+      }
+
+      // grab tld and add another segment
+      var end = this._parts.hostname.length - this.tld(build).length - 1;
+      end = this._parts.hostname.lastIndexOf('.', end -1) + 1;
+      return this._parts.hostname.substring(end) || '';
+    } else {
+      if (!v) {
+        throw new TypeError('cannot set domain empty');
+      }
+
+      URI.ensureValidHostname(v);
+
+      if (!this._parts.hostname || this.is('IP')) {
+        this._parts.hostname = v;
+      } else {
+        var replace = new RegExp(escapeRegEx(this.domain()) + '$');
+        this._parts.hostname = this._parts.hostname.replace(replace, v);
+      }
+
+      this.build(!build);
+      return this;
+    }
+  };
+  p.tld = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (typeof v === 'boolean') {
+      build = v;
+      v = undefined;
+    }
+
+    // return "org" from "www.example.org"
+    if (v === undefined) {
+      if (!this._parts.hostname || this.is('IP')) {
+        return '';
+      }
+
+      var pos = this._parts.hostname.lastIndexOf('.');
+      var tld = this._parts.hostname.substring(pos + 1);
+
+      if (build !== true && SLD && SLD.list[tld.toLowerCase()]) {
+        return SLD.get(this._parts.hostname) || tld;
+      }
+
+      return tld;
+    } else {
+      var replace;
+
+      if (!v) {
+        throw new TypeError('cannot set TLD empty');
+      } else if (v.match(/[^a-zA-Z0-9-]/)) {
+        if (SLD && SLD.is(v)) {
+          replace = new RegExp(escapeRegEx(this.tld()) + '$');
+          this._parts.hostname = this._parts.hostname.replace(replace, v);
+        } else {
+          throw new TypeError('TLD "' + v + '" contains characters other than [A-Z0-9]');
+        }
+      } else if (!this._parts.hostname || this.is('IP')) {
+        throw new ReferenceError('cannot set TLD on non-domain host');
+      } else {
+        replace = new RegExp(escapeRegEx(this.tld()) + '$');
+        this._parts.hostname = this._parts.hostname.replace(replace, v);
+      }
+
+      this.build(!build);
+      return this;
+    }
+  };
+  p.directory = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v === undefined || v === true) {
+      if (!this._parts.path && !this._parts.hostname) {
+        return '';
+      }
+
+      if (this._parts.path === '/') {
+        return '/';
+      }
+
+      var end = this._parts.path.length - this.filename().length - 1;
+      var res = this._parts.path.substring(0, end) || (this._parts.hostname ? '/' : '');
+
+      return v ? URI.decodePath(res) : res;
+
+    } else {
+      var e = this._parts.path.length - this.filename().length;
+      var directory = this._parts.path.substring(0, e);
+      var replace = new RegExp('^' + escapeRegEx(directory));
+
+      // fully qualifier directories begin with a slash
+      if (!this.is('relative')) {
+        if (!v) {
+          v = '/';
+        }
+
+        if (v.charAt(0) !== '/') {
+          v = '/' + v;
+        }
+      }
+
+      // directories always end with a slash
+      if (v && v.charAt(v.length - 1) !== '/') {
+        v += '/';
+      }
+
+      v = URI.recodePath(v);
+      this._parts.path = this._parts.path.replace(replace, v);
+      this.build(!build);
+      return this;
+    }
+  };
+  p.filename = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v === undefined || v === true) {
+      if (!this._parts.path || this._parts.path === '/') {
+        return '';
+      }
+
+      var pos = this._parts.path.lastIndexOf('/');
+      var res = this._parts.path.substring(pos+1);
+
+      return v ? URI.decodePathSegment(res) : res;
+    } else {
+      var mutatedDirectory = false;
+
+      if (v.charAt(0) === '/') {
+        v = v.substring(1);
+      }
+
+      if (v.match(/\.?\//)) {
+        mutatedDirectory = true;
+      }
+
+      var replace = new RegExp(escapeRegEx(this.filename()) + '$');
+      v = URI.recodePath(v);
+      this._parts.path = this._parts.path.replace(replace, v);
+
+      if (mutatedDirectory) {
+        this.normalizePath(build);
+      } else {
+        this.build(!build);
+      }
+
+      return this;
+    }
+  };
+  p.suffix = function(v, build) {
+    if (this._parts.urn) {
+      return v === undefined ? '' : this;
+    }
+
+    if (v === undefined || v === true) {
+      if (!this._parts.path || this._parts.path === '/') {
+        return '';
+      }
+
+      var filename = this.filename();
+      var pos = filename.lastIndexOf('.');
+      var s, res;
+
+      if (pos === -1) {
+        return '';
+      }
+
+      // suffix may only contain alnum characters (yup, I made this up.)
+      s = filename.substring(pos+1);
+      res = (/^[a-z0-9%]+$/i).test(s) ? s : '';
+      return v ? URI.decodePathSegment(res) : res;
+    } else {
+      if (v.charAt(0) === '.') {
+        v = v.substring(1);
+      }
+
+      var suffix = this.suffix();
+      var replace;
+
+      if (!suffix) {
+        if (!v) {
+          return this;
+        }
+
+        this._parts.path += '.' + URI.recodePath(v);
+      } else if (!v) {
+        replace = new RegExp(escapeRegEx('.' + suffix) + '$');
+      } else {
+        replace = new RegExp(escapeRegEx(suffix) + '$');
+      }
+
+      if (replace) {
+        v = URI.recodePath(v);
+        this._parts.path = this._parts.path.replace(replace, v);
+      }
+
+      this.build(!build);
+      return this;
+    }
+  };
+  p.segment = function(segment, v, build) {
+    var separator = this._parts.urn ? ':' : '/';
+    var path = this.path();
+    var absolute = path.substring(0, 1) === '/';
+    var segments = path.split(separator);
+
+    if (segment !== undefined && typeof segment !== 'number') {
+      build = v;
+      v = segment;
+      segment = undefined;
+    }
+
+    if (segment !== undefined && typeof segment !== 'number') {
+      throw new Error('Bad segment "' + segment + '", must be 0-based integer');
+    }
+
+    if (absolute) {
+      segments.shift();
+    }
+
+    if (segment < 0) {
+      // allow negative indexes to address from the end
+      segment = Math.max(segments.length + segment, 0);
+    }
+
+    if (v === undefined) {
+      /*jshint laxbreak: true */
+      return segment === undefined
+        ? segments
+        : segments[segment];
+      /*jshint laxbreak: false */
+    } else if (segment === null || segments[segment] === undefined) {
+      if (isArray(v)) {
+        segments = [];
+        // collapse empty elements within array
+        for (var i=0, l=v.length; i < l; i++) {
+          if (!v[i].length && (!segments.length || !segments[segments.length -1].length)) {
+            continue;
+          }
+
+          if (segments.length && !segments[segments.length -1].length) {
+            segments.pop();
+          }
+
+          segments.push(trimSlashes(v[i]));
+        }
+      } else if (v || typeof v === 'string') {
+        v = trimSlashes(v);
+        if (segments[segments.length -1] === '') {
+          // empty trailing elements have to be overwritten
+          // to prevent results such as /foo//bar
+          segments[segments.length -1] = v;
+        } else {
+          segments.push(v);
+        }
+      }
+    } else {
+      if (v) {
+        segments[segment] = trimSlashes(v);
+      } else {
+        segments.splice(segment, 1);
+      }
+    }
+
+    if (absolute) {
+      segments.unshift('');
+    }
+
+    return this.path(segments.join(separator), build);
+  };
+  p.segmentCoded = function(segment, v, build) {
+    var segments, i, l;
+
+    if (typeof segment !== 'number') {
+      build = v;
+      v = segment;
+      segment = undefined;
+    }
+
+    if (v === undefined) {
+      segments = this.segment(segment, v, build);
+      if (!isArray(segments)) {
+        segments = segments !== undefined ? URI.decode(segments) : undefined;
+      } else {
+        for (i = 0, l = segments.length; i < l; i++) {
+          segments[i] = URI.decode(segments[i]);
+        }
+      }
+
+      return segments;
+    }
+
+    if (!isArray(v)) {
+      v = (typeof v === 'string' || v instanceof String) ? URI.encode(v) : v;
+    } else {
+      for (i = 0, l = v.length; i < l; i++) {
+        v[i] = URI.encode(v[i]);
+      }
+    }
+
+    return this.segment(segment, v, build);
+  };
+
+  // mutating query string
+  var q = p.query;
+  p.query = function(v, build) {
+    if (v === true) {
+      return URI.parseQuery(this._parts.query, this._parts.escapeQuerySpace);
+    } else if (typeof v === 'function') {
+      var data = URI.parseQuery(this._parts.query, this._parts.escapeQuerySpace);
+      var result = v.call(this, data);
+      this._parts.query = URI.buildQuery(result || data, this._parts.duplicateQueryParameters, this._parts.escapeQuerySpace);
+      this.build(!build);
+      return this;
+    } else if (v !== undefined && typeof v !== 'string') {
+      this._parts.query = URI.buildQuery(v, this._parts.duplicateQueryParameters, this._parts.escapeQuerySpace);
+      this.build(!build);
+      return this;
+    } else {
+      return q.call(this, v, build);
+    }
+  };
+  p.setQuery = function(name, value, build) {
+    var data = URI.parseQuery(this._parts.query, this._parts.escapeQuerySpace);
+
+    if (typeof name === 'string' || name instanceof String) {
+      data[name] = value !== undefined ? value : null;
+    } else if (typeof name === 'object') {
+      for (var key in name) {
+        if (hasOwn.call(name, key)) {
+          data[key] = name[key];
+        }
+      }
+    } else {
+      throw new TypeError('URI.addQuery() accepts an object, string as the name parameter');
+    }
+
+    this._parts.query = URI.buildQuery(data, this._parts.duplicateQueryParameters, this._parts.escapeQuerySpace);
+    if (typeof name !== 'string') {
+      build = value;
+    }
+
+    this.build(!build);
+    return this;
+  };
+  p.addQuery = function(name, value, build) {
+    var data = URI.parseQuery(this._parts.query, this._parts.escapeQuerySpace);
+    URI.addQuery(data, name, value === undefined ? null : value);
+    this._parts.query = URI.buildQuery(data, this._parts.duplicateQueryParameters, this._parts.escapeQuerySpace);
+    if (typeof name !== 'string') {
+      build = value;
+    }
+
+    this.build(!build);
+    return this;
+  };
+  p.removeQuery = function(name, value, build) {
+    var data = URI.parseQuery(this._parts.query, this._parts.escapeQuerySpace);
+    URI.removeQuery(data, name, value);
+    this._parts.query = URI.buildQuery(data, this._parts.duplicateQueryParameters, this._parts.escapeQuerySpace);
+    if (typeof name !== 'string') {
+      build = value;
+    }
+
+    this.build(!build);
+    return this;
+  };
+  p.hasQuery = function(name, value, withinArray) {
+    var data = URI.parseQuery(this._parts.query, this._parts.escapeQuerySpace);
+    return URI.hasQuery(data, name, value, withinArray);
+  };
+  p.setSearch = p.setQuery;
+  p.addSearch = p.addQuery;
+  p.removeSearch = p.removeQuery;
+  p.hasSearch = p.hasQuery;
+
+  // sanitizing URLs
+  p.normalize = function() {
+    if (this._parts.urn) {
+      return this
+        .normalizeProtocol(false)
+        .normalizePath(false)
+        .normalizeQuery(false)
+        .normalizeFragment(false)
+        .build();
+    }
+
+    return this
+      .normalizeProtocol(false)
+      .normalizeHostname(false)
+      .normalizePort(false)
+      .normalizePath(false)
+      .normalizeQuery(false)
+      .normalizeFragment(false)
+      .build();
+  };
+  p.normalizeProtocol = function(build) {
+    if (typeof this._parts.protocol === 'string') {
+      this._parts.protocol = this._parts.protocol.toLowerCase();
+      this.build(!build);
+    }
+
+    return this;
+  };
+  p.normalizeHostname = function(build) {
+    if (this._parts.hostname) {
+      if (this.is('IDN') && punycode) {
+        this._parts.hostname = punycode.toASCII(this._parts.hostname);
+      } else if (this.is('IPv6') && IPv6) {
+        this._parts.hostname = IPv6.best(this._parts.hostname);
+      }
+
+      this._parts.hostname = this._parts.hostname.toLowerCase();
+      this.build(!build);
+    }
+
+    return this;
+  };
+  p.normalizePort = function(build) {
+    // remove port of it's the protocol's default
+    if (typeof this._parts.protocol === 'string' && this._parts.port === URI.defaultPorts[this._parts.protocol]) {
+      this._parts.port = null;
+      this.build(!build);
+    }
+
+    return this;
+  };
+  p.normalizePath = function(build) {
+    var _path = this._parts.path;
+    if (!_path) {
+      return this;
+    }
+
+    if (this._parts.urn) {
+      this._parts.path = URI.recodeUrnPath(this._parts.path);
+      this.build(!build);
+      return this;
+    }
+
+    if (this._parts.path === '/') {
+      return this;
+    }
+
+    _path = URI.recodePath(_path);
+
+    var _was_relative;
+    var _leadingParents = '';
+    var _parent, _pos;
+
+    // handle relative paths
+    if (_path.charAt(0) !== '/') {
+      _was_relative = true;
+      _path = '/' + _path;
+    }
+
+    // handle relative files (as opposed to directories)
+    if (_path.slice(-3) === '/..' || _path.slice(-2) === '/.') {
+      _path += '/';
+    }
+
+    // resolve simples
+    _path = _path
+      .replace(/(\/(\.\/)+)|(\/\.$)/g, '/')
+      .replace(/\/{2,}/g, '/');
+
+    // remember leading parents
+    if (_was_relative) {
+      _leadingParents = _path.substring(1).match(/^(\.\.\/)+/) || '';
+      if (_leadingParents) {
+        _leadingParents = _leadingParents[0];
+      }
+    }
+
+    // resolve parents
+    while (true) {
+      _parent = _path.search(/\/\.\.(\/|$)/);
+      if (_parent === -1) {
+        // no more ../ to resolve
+        break;
+      } else if (_parent === 0) {
+        // top level cannot be relative, skip it
+        _path = _path.substring(3);
+        continue;
+      }
+
+      _pos = _path.substring(0, _parent).lastIndexOf('/');
+      if (_pos === -1) {
+        _pos = _parent;
+      }
+      _path = _path.substring(0, _pos) + _path.substring(_parent + 3);
+    }
+
+    // revert to relative
+    if (_was_relative && this.is('relative')) {
+      _path = _leadingParents + _path.substring(1);
+    }
+
+    this._parts.path = _path;
+    this.build(!build);
+    return this;
+  };
+  p.normalizePathname = p.normalizePath;
+  p.normalizeQuery = function(build) {
+    if (typeof this._parts.query === 'string') {
+      if (!this._parts.query.length) {
+        this._parts.query = null;
+      } else {
+        this.query(URI.parseQuery(this._parts.query, this._parts.escapeQuerySpace));
+      }
+
+      this.build(!build);
+    }
+
+    return this;
+  };
+  p.normalizeFragment = function(build) {
+    if (!this._parts.fragment) {
+      this._parts.fragment = null;
+      this.build(!build);
+    }
+
+    return this;
+  };
+  p.normalizeSearch = p.normalizeQuery;
+  p.normalizeHash = p.normalizeFragment;
+
+  p.iso8859 = function() {
+    // expect unicode input, iso8859 output
+    var e = URI.encode;
+    var d = URI.decode;
+
+    URI.encode = escape;
+    URI.decode = decodeURIComponent;
+    try {
+      this.normalize();
+    } finally {
+      URI.encode = e;
+      URI.decode = d;
+    }
+    return this;
+  };
+
+  p.unicode = function() {
+    // expect iso8859 input, unicode output
+    var e = URI.encode;
+    var d = URI.decode;
+
+    URI.encode = strictEncodeURIComponent;
+    URI.decode = unescape;
+    try {
+      this.normalize();
+    } finally {
+      URI.encode = e;
+      URI.decode = d;
+    }
+    return this;
+  };
+
+  p.readable = function() {
+    var uri = this.clone();
+    // removing username, password, because they shouldn't be displayed according to RFC 3986
+    uri.username('').password('').normalize();
+    var t = '';
+    if (uri._parts.protocol) {
+      t += uri._parts.protocol + '://';
+    }
+
+    if (uri._parts.hostname) {
+      if (uri.is('punycode') && punycode) {
+        t += punycode.toUnicode(uri._parts.hostname);
+        if (uri._parts.port) {
+          t += ':' + uri._parts.port;
+        }
+      } else {
+        t += uri.host();
+      }
+    }
+
+    if (uri._parts.hostname && uri._parts.path && uri._parts.path.charAt(0) !== '/') {
+      t += '/';
+    }
+
+    t += uri.path(true);
+    if (uri._parts.query) {
+      var q = '';
+      for (var i = 0, qp = uri._parts.query.split('&'), l = qp.length; i < l; i++) {
+        var kv = (qp[i] || '').split('=');
+        q += '&' + URI.decodeQuery(kv[0], this._parts.escapeQuerySpace)
+          .replace(/&/g, '%26');
+
+        if (kv[1] !== undefined) {
+          q += '=' + URI.decodeQuery(kv[1], this._parts.escapeQuerySpace)
+            .replace(/&/g, '%26');
+        }
+      }
+      t += '?' + q.substring(1);
+    }
+
+    t += URI.decodeQuery(uri.hash(), true);
+    return t;
+  };
+
+  // resolving relative and absolute URLs
+  p.absoluteTo = function(base) {
+    var resolved = this.clone();
+    var properties = ['protocol', 'username', 'password', 'hostname', 'port'];
+    var basedir, i, p;
+
+    if (!(base instanceof URI)) {
+      base = new URI(base);
+    }
+
+    // << Readium patch
+    // "filesystem:chrome-extension:"
+    //
+    
+    if (this._parts.protocol == 'filesystem') {
+
+      return resolved;
+    }
+
+    if (base._parts.protocol == 'filesystem') {
+
+      var uri = this.absoluteTo(base._parts.path);
+
+      if (base._parts.path.indexOf("chrome-extension:") !== -1 || base._parts.path.indexOf("http:") !== -1 || base._parts.path.indexOf("https:") !== -1) {
+
+        return new URI('filesystem:' + uri.toString());
+      }
+
+      return uri;
+    }
+
+    if (this._parts.urn) {
+      throw new Error('URNs do not have any generally defined hierarchical components');
+    }
+
+    //
+    // Readium patch >>
+
+    if (!resolved._parts.protocol) {
+      resolved._parts.protocol = base._parts.protocol;
+    }
+
+    if (this._parts.hostname) {
+      return resolved;
+    }
+
+    for (i = 0; (p = properties[i]); i++) {
+      resolved._parts[p] = base._parts[p];
+    }
+
+    if (!resolved._parts.path) {
+      resolved._parts.path = base._parts.path;
+      if (!resolved._parts.query) {
+        resolved._parts.query = base._parts.query;
+      }
+    } else if (resolved._parts.path.substring(-2) === '..') {
+      resolved._parts.path += '/';
+    }
+
+    if (resolved.path().charAt(0) !== '/') {
+      basedir = base.directory();
+      basedir = basedir ? basedir : base.path().indexOf('/') === 0 ? '/' : '';
+      resolved._parts.path = (basedir ? (basedir + '/') : '') + resolved._parts.path;
+      resolved.normalizePath();
+    }
+
+    resolved.build();
+    return resolved;
+  };
+  p.relativeTo = function(base) {
+    var relative = this.clone().normalize();
+    var relativeParts, baseParts, common, relativePath, basePath;
+
+    if (relative._parts.urn) {
+      throw new Error('URNs do not have any generally defined hierarchical components');
+    }
+
+    base = new URI(base).normalize();
+    relativeParts = relative._parts;
+    baseParts = base._parts;
+    relativePath = relative.path();
+    basePath = base.path();
+
+    if (relativePath.charAt(0) !== '/') {
+      throw new Error('URI is already relative');
+    }
+
+    if (basePath.charAt(0) !== '/') {
+      throw new Error('Cannot calculate a URI relative to another relative URI');
+    }
+
+    if (relativeParts.protocol === baseParts.protocol) {
+      relativeParts.protocol = null;
+    }
+
+    if (relativeParts.username !== baseParts.username || relativeParts.password !== baseParts.password) {
+      return relative.build();
+    }
+
+    if (relativeParts.protocol !== null || relativeParts.username !== null || relativeParts.password !== null) {
+      return relative.build();
+    }
+
+    if (relativeParts.hostname === baseParts.hostname && relativeParts.port === baseParts.port) {
+      relativeParts.hostname = null;
+      relativeParts.port = null;
+    } else {
+      return relative.build();
+    }
+
+    if (relativePath === basePath) {
+      relativeParts.path = '';
+      return relative.build();
+    }
+
+    // determine common sub path
+    common = URI.commonPath(relativePath, basePath);
+
+    // If the paths have nothing in common, return a relative URL with the absolute path.
+    if (!common) {
+      return relative.build();
+    }
+
+    var parents = baseParts.path
+      .substring(common.length)
+      .replace(/[^\/]*$/, '')
+      .replace(/.*?\//g, '../');
+
+    relativeParts.path = (parents + relativeParts.path.substring(common.length)) || './';
+
+    return relative.build();
+  };
+
+  // comparing URIs
+  p.equals = function(uri) {
+    var one = this.clone();
+    var two = new URI(uri);
+    var one_map = {};
+    var two_map = {};
+    var checked = {};
+    var one_query, two_query, key;
+
+    one.normalize();
+    two.normalize();
+
+    // exact match
+    if (one.toString() === two.toString()) {
+      return true;
+    }
+
+    // extract query string
+    one_query = one.query();
+    two_query = two.query();
+    one.query('');
+    two.query('');
+
+    // definitely not equal if not even non-query parts match
+    if (one.toString() !== two.toString()) {
+      return false;
+    }
+
+    // query parameters have the same length, even if they're permuted
+    if (one_query.length !== two_query.length) {
+      return false;
+    }
+
+    one_map = URI.parseQuery(one_query, this._parts.escapeQuerySpace);
+    two_map = URI.parseQuery(two_query, this._parts.escapeQuerySpace);
+
+    for (key in one_map) {
+      if (hasOwn.call(one_map, key)) {
+        if (!isArray(one_map[key])) {
+          if (one_map[key] !== two_map[key]) {
+            return false;
+          }
+        } else if (!arraysEqual(one_map[key], two_map[key])) {
+          return false;
+        }
+
+        checked[key] = true;
+      }
+    }
+
+    for (key in two_map) {
+      if (hasOwn.call(two_map, key)) {
+        if (!checked[key]) {
+          // two contains a parameter not present in one
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  // state
+  p.duplicateQueryParameters = function(v) {
+    this._parts.duplicateQueryParameters = !!v;
+    return this;
+  };
+
+  p.escapeQuerySpace = function(v) {
+    this._parts.escapeQuerySpace = !!v;
+    return this;
+  };
+
+  return URI;
+}));
+
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+
+//'text!empty:'
+define('readium_shared_js/globalsSetup',['./globals', 'jquery', 'console_shim', 'es6-collections', 'eventEmitter', 'URIjs', 'readium_cfi_js', 'readium_js_plugins'], function (Globals, $, console_shim, es6collections, EventEmitter, URI, epubCfi, PluginsController) {
+
+    console.log("Globals...");
+
+    if (window["ReadiumSDK"]) {
+        console.log("ReadiumSDK extend.");
+        $.extend(Globals, window.ReadiumSDK);
+    } else {
+        console.log("ReadiumSDK set.");
+    }
+
+    window.ReadiumSDK = Globals;
+
+    // TODO: refactor client code to use emit instead of trigger?
+    EventEmitter.prototype.trigger = EventEmitter.prototype.emit;
+
+    // TODO pass as dependency injection define() function parameter, not window global!
+    window.EventEmitter = EventEmitter;
+
+    // TODO pass as dependency injection define() function parameter, not window global!
+    window.URI = URI;
+
+    // window.URL accessor to window.webkitURL (Safari 6 support)
+    if ('URL' in window === false) {
+        if ('webkitURL' in window === false) {
+            throw Error('Browser does not support window.URL');
+        }
+
+        window.URL = window.webkitURL;
+    }
+    // Plugins bootstrapping begins
+    Globals.Plugins = PluginsController;
+    Globals.on(Globals.Events.READER_INITIALIZED, function(reader) {
+        
+        Globals.logEvent("READER_INITIALIZED", "ON", "globalsSetup.js");
+        
+        try {
+            PluginsController.initialize(reader);
+        } catch (ex) {
+            console.error("Plugins failed to initialize:", ex);
+        }
+
+        _.defer(function() {
+            Globals.logEvent("PLUGINS_LOADED", "EMIT", "globalsSetup.js");
+            Globals.emit(Globals.Events.PLUGINS_LOADED, reader);
+        });
+    });
+
+    if (window._RJS_isBrowser) {
+        // If under a browser env and using RequireJS, dynamically require all plugins
+        var pluginsList = window._RJS_pluginsList;
+        console.log("Plugins included: ", pluginsList.map(function(v) {
+            // To stay consistent with bundled output
+            return v.replace('readium_plugin_', '');
+        }));
+
+        require(pluginsList);
+    } else {
+        // Else list which plugins were included when using almond and bundle(s)
+        setTimeout(function() {
+            // Assume that in the next callback all the plugins have been registered
+            var pluginsList = Object.keys(PluginsController.getLoadedPlugins());
+            console.log("Plugins included: ", pluginsList);
+        }, 0);
+    }
+    // Plugins bootstrapping ends
+});
+>>>>>>> upstream/develop
 
         if (_currentView) {
 
@@ -48074,6 +51478,7 @@ console.trace(JSON.stringify(settingsData));
         return false;
     };
 
+<<<<<<< HEAD
     /**
      * Gets all elements from active content documents based on a query selector.
      *
@@ -48082,6 +51487,9300 @@ console.trace(JSON.stringify(settingsData));
      * @returns {HTMLElement[]}
      */
     this.getElements = function(spineItemIdref, selector) {
+=======
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/spine_item',[], function() {
+
+/**
+ * Wrapper of the SpineItem object received from the host application
+ *
+ * @class Models.SpineItem
+ *
+ * @param itemData spine item properties container
+ * @param {Number} index
+ * @param {Models.Spine} spine
+ *
+ */
+var SpineItem = function(itemData, index, spine){
+
+    var self = this;
+
+    this.idref = itemData.idref;
+    this.href = itemData.href;
+
+    this.linear = itemData.linear ? itemData.linear.toLowerCase() : itemData.linear;
+
+    this.page_spread = itemData.page_spread;
+    
+    this.rendition_viewport = itemData.rendition_viewport;
+    
+    this.rendition_spread = itemData.rendition_spread;
+    
+    //TODO: unused yet!
+    this.rendition_orientation = itemData.rendition_orientation;
+
+    this.rendition_layout = itemData.rendition_layout;
+    
+    this.rendition_flow = itemData.rendition_flow;
+    
+    
+    
+    this.media_overlay_id = itemData.media_overlay_id;
+
+    this.media_type = itemData.media_type;
+
+    this.index = index;
+    this.spine = spine;
+
+    validateSpread();
+
+    this.setSpread = function(spread) {
+        this.page_spread = spread;
+
+        validateSpread();
+    };
+
+    this.isRenditionSpreadAllowed = function() {
+        
+        var rendition_spread = self.getRenditionSpread();
+        return !rendition_spread || rendition_spread != SpineItem.RENDITION_SPREAD_NONE;
+    };
+
+    function validateSpread() {
+
+        if(!self.page_spread) {
+            return;
+        }
+
+        if( self.page_spread != SpineItem.SPREAD_LEFT &&
+            self.page_spread != SpineItem.SPREAD_RIGHT &&
+            self.page_spread != SpineItem.SPREAD_CENTER ) {
+
+            console.error(self.page_spread + " is not a recognized spread type");
+        }
+
+    }
+
+    this.isLeftPage = function() {
+        return self.page_spread == SpineItem.SPREAD_LEFT;
+    };
+
+    this.isRightPage = function() {
+        return self.page_spread == SpineItem.SPREAD_RIGHT;
+    };
+
+    this.isCenterPage = function() {
+        return self.page_spread == SpineItem.SPREAD_CENTER;
+    };
+
+    this.isReflowable = function() {
+        return !self.isFixedLayout();
+    };
+
+    this.isFixedLayout = function() {
+        
+        // cannot use isPropertyValueSetForItemOrPackage() here!
+
+        var isLayoutExplicitlyDefined = self.getRenditionLayout();
+
+        if(isLayoutExplicitlyDefined) {
+
+            if (self.rendition_layout)
+            {
+                if (self.rendition_layout === SpineItem.RENDITION_LAYOUT_PREPAGINATED) return true;
+                if (self.rendition_layout === SpineItem.RENDITION_LAYOUT_REFLOWABLE) return false;
+            }
+
+            return self.spine.package.isFixedLayout();
+        }
+
+        // if image or svg use fixed layout
+        return self.media_type.indexOf("image/") >= 0;
+
+    };
+
+    this.getRenditionFlow = function() {
+
+        if(self.rendition_flow) {
+            return self.rendition_flow;
+        }
+
+        return self.spine.package.rendition_flow;
+    };
+    
+    this.getRenditionViewport = function() {
+
+        if(self.rendition_viewport) {
+            return self.rendition_viewport;
+        }
+
+        return self.spine.package.rendition_viewport;
+    };
+
+    this.getRenditionSpread = function() {
+
+        if(self.rendition_spread) {
+            return self.rendition_spread;
+        }
+
+        return self.spine.package.rendition_spread;
+    };
+
+    this.getRenditionOrientation = function() {
+
+        if(self.rendition_orientation) {
+            return self.rendition_orientation;
+        }
+
+        return self.spine.package.rendition_orientation;
+    };
+
+    this.getRenditionLayout = function() {
+
+        if(self.rendition_layout) {
+            return self.rendition_layout;
+        }
+
+        return self.spine.package.rendition_layout;
+    };
+
+    function isPropertyValueSetForItemOrPackage(propName, propValue) {
+
+        if(self[propName]) {
+            return self[propName] === propValue;
+        }
+
+        if(self.spine.package[propName]) {
+            return self.spine.package[propName] === propValue;
+        }
+
+        return false;
+    }
+
+    this.isFlowScrolledContinuous = function() {
+
+        return isPropertyValueSetForItemOrPackage("rendition_flow", SpineItem.RENDITION_FLOW_SCROLLED_CONTINUOUS);
+    };
+
+    this.isFlowScrolledDoc = function() {
+
+        return isPropertyValueSetForItemOrPackage("rendition_flow", SpineItem.RENDITION_FLOW_SCROLLED_DOC);
+    };
+};
+
+SpineItem.RENDITION_LAYOUT_REFLOWABLE = "reflowable";
+SpineItem.RENDITION_LAYOUT_PREPAGINATED = "pre-paginated";
+
+SpineItem.RENDITION_ORIENTATION_LANDSCAPE = "landscape";
+SpineItem.RENDITION_ORIENTATION_PORTRAIT = "portrait";
+SpineItem.RENDITION_ORIENTATION_AUTO = "auto";
+
+SpineItem.SPREAD_LEFT = "page-spread-left";
+SpineItem.SPREAD_RIGHT = "page-spread-right";
+SpineItem.SPREAD_CENTER = "page-spread-center";
+
+SpineItem.RENDITION_SPREAD_NONE = "none";
+SpineItem.RENDITION_SPREAD_LANDSCAPE = "landscape";
+SpineItem.RENDITION_SPREAD_PORTRAIT = "portrait";
+SpineItem.RENDITION_SPREAD_BOTH = "both";
+SpineItem.RENDITION_SPREAD_AUTO = "auto";
+
+SpineItem.RENDITION_FLOW_PAGINATED = "paginated";
+SpineItem.RENDITION_FLOW_SCROLLED_CONTINUOUS = "scrolled-continuous";
+SpineItem.RENDITION_FLOW_SCROLLED_DOC = "scrolled-doc";
+SpineItem.RENDITION_FLOW_AUTO = "auto";
+
+SpineItem.alternateSpread = function(spread) {
+
+    if(spread === SpineItem.SPREAD_LEFT) {
+        return SpineItem.SPREAD_RIGHT;
+    }
+
+    if(spread === SpineItem.SPREAD_RIGHT) {
+        return SpineItem.SPREAD_LEFT;
+    }
+
+    return spread;
+
+};
+    return SpineItem;
+});
+
+
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+define('readium_shared_js/helpers',["./globals", 'underscore', "jquery", "jquerySizes", "./models/spine_item"], function(Globals, _, $, JQuerySizes, SpineItem) {
+    
+(function()
+{
+/* jshint strict: true */
+/* jshint -W034 */
+    "use strict";
+    
+    if(window.performance)
+    {
+        if (window.performance.now)
+        {
+            return;
+        }
+        
+        var vendors = ['webkitNow', 'mozNow', 'msNow', 'oNow'];
+        
+        for (var i = 0; i < vendors.length; i++)
+        {
+            if (vendors[i] in window.performance)
+            {
+                window.performance.now = window.performance[vendors[i]];
+                return;
+            }
+        }
+    }
+    else
+    {
+        window.performance = {};
+        
+    }
+    
+    if(Date.now)
+    {
+        window.performance.now = function()
+        {
+            return Date.now();
+        };
+        return;
+    }
+    
+    window.performance.now = function()
+    {
+        return +(new Date());
+    };
+})();
+
+var Helpers = {};
+
+/**
+ *
+ * @param ebookURL URL string, or Blob (possibly File)
+ * @returns string representing the file path / name from which the asset referenced by this URL originates
+ */
+Helpers.getEbookUrlFilePath = function(ebookURL) {
+    if (!window.Blob || !window.File) return ebookURL;
+
+    if (ebookURL instanceof File) {
+        return ebookURL.name;
+    } else if (ebookURL instanceof Blob) {
+        return "readium-ebook.epub";
+    } else {
+        return ebookURL;
+    }
+};
+
+/**
+ *
+ * @returns object (map between URL query parameter names and corresponding decoded / unescaped values)
+ */
+Helpers.getURLQueryParams = function() {
+    var params = {};
+
+    var query = window.location.search;
+    if (query && query.length) {
+        query = query.substring(1);
+        var keyParams = query.split('&');
+        for (var x = 0; x < keyParams.length; x++)
+        {
+            var keyVal = keyParams[x].split('=');
+            if (keyVal.length > 1) {
+                params[keyVal[0]] = decodeURIComponent(keyVal[1]);
+            }
+        }
+    }
+
+    return params;
+};
+
+
+/**
+ * @param urlpath: string corresponding a URL without query parameters (i.e. the part before the '?' question mark in index.html?param=value). If undefined/null, the default window.location is used.
+ * @param overrides: object that maps query parameter names with values (to be included in the resulting URL, while any other query params in the current window.location are preserved as-is) 
+ * @returns a string corresponding to a URL obtained by concatenating the given URL with the given query parameters (and those already in window.location)
+ */
+Helpers.buildUrlQueryParameters = function(urlpath, overrides) {
+    
+    if (!urlpath) {
+        urlpath =
+        window.location ? (
+            window.location.protocol
+            + "//"
+            + window.location.hostname
+            + (window.location.port ? (':' + window.location.port) : '')
+            + window.location.pathname
+        ) : 'index.html';
+    }
+
+    var paramsString = "";
+    
+    for (var key in overrides) {
+        if (!overrides.hasOwnProperty(key)) continue;
+        
+        if (!overrides[key]) continue;
+        
+        var val = overrides[key].trim();
+        if (!val) continue;
+        
+        console.debug("URL QUERY PARAM OVERRIDE: " + key + " = " + val);
+
+        paramsString += (key + "=" + encodeURIComponent(val));
+        paramsString += "&";
+    }
+    
+    var urlParams = Helpers.getURLQueryParams();
+    for (var key in urlParams) {
+        if (!urlParams.hasOwnProperty(key)) continue;
+        
+        if (!urlParams[key]) continue;
+        
+        if (overrides[key]) continue;
+
+        var val = urlParams[key].trim();
+        if (!val) continue;
+        
+        console.debug("URL QUERY PARAM PRESERVED: " + key + " = " + val);
+
+        paramsString += (key + "=" + encodeURIComponent(val));
+        paramsString += "&";
+    }
+    
+    return urlpath + "?" + paramsString;
+};
+
+
+/**
+ *
+ * @param left
+ * @param top
+ * @param width
+ * @param height
+ * @constructor
+ */
+Helpers.Rect = function (left, top, width, height) {
+
+    this.left = left;
+    this.top = top;
+    this.width = width;
+    this.height = height;
+
+    this.right = function () {
+        return this.left + this.width;
+    };
+
+    this.bottom = function () {
+        return this.top + this.height;
+    };
+
+    this.isOverlap = function (rect, tolerance) {
+
+        if (tolerance == undefined) {
+            tolerance = 0;
+        }
+
+        return !(rect.right() < this.left + tolerance ||
+        rect.left > this.right() - tolerance ||
+        rect.bottom() < this.top + tolerance ||
+        rect.top > this.bottom() - tolerance);
+    }
+};
+
+/**
+ *
+ * @param $element
+ * @returns {Helpers.Rect}
+ */
+//This method treats multicolumn view as one long column and finds the rectangle of the element in this "long" column
+//we are not using jQuery Offset() and width()/height() function because for multicolumn rendition_layout it produces rectangle as a bounding box of element that
+// reflows between columns this is inconstant and difficult to analyze .
+Helpers.Rect.fromElement = function ($element) {
+
+    var e;
+    if (_.isArray($element) || $element instanceof jQuery)
+        e = $element[0];
+    else
+        e = $element;
+    // TODODM this is somewhat hacky. Text (range?) elements don't have a position so we have to ask the parent.
+    if (e.nodeType === 3) {
+        e = $element.parent()[0];
+    }
+
+
+    var offsetLeft = e.offsetLeft;
+    var offsetTop = e.offsetTop;
+    var offsetWidth = e.offsetWidth;
+    var offsetHeight = e.offsetHeight;
+
+    while (e = e.offsetParent) {
+        offsetLeft += e.offsetLeft;
+        offsetTop += e.offsetTop;
+    }
+
+    return new Helpers.Rect(offsetLeft, offsetTop, offsetWidth, offsetHeight);
+};
+
+Helpers.UpdateHtmlFontSize = function ($epubHtml, fontSize) {
+
+    var perf = false;
+
+    // TODO: very slow on Firefox!
+    // See https://github.com/readium/readium-shared-js/issues/274
+    if (perf) var time1 = window.performance.now();
+
+    var factor = fontSize / 100;
+    var win = $epubHtml[0].ownerDocument.defaultView;
+    var $textblocks = $('p, div, span, h1, h2, h3, h4, h5, h6, li, blockquote, td, pre', $epubHtml);
+    var originalLineHeight;
+
+
+    // need to do two passes because it is possible to have nested text blocks.
+    // If you change the font size of the parent this will then create an inaccurate
+    // font size for any children.
+    for (var i = 0; i < $textblocks.length; i++) {
+        var ele = $textblocks[i],
+            fontSizeAttr = ele.getAttribute('data-original-font-size');
+
+        if (!fontSizeAttr) {
+            var style = win.getComputedStyle(ele);
+            var originalFontSize = parseInt(style.fontSize);
+            originalLineHeight = parseInt(style.lineHeight);
+
+            ele.setAttribute('data-original-font-size', originalFontSize);
+            // getComputedStyle will not calculate the line-height if the value is 'normal'. In this case parseInt will return NaN
+            if (originalLineHeight) {
+                ele.setAttribute('data-original-line-height', originalLineHeight);
+            }
+        }
+    }
+
+    // reset variable so the below logic works. All variables in JS are function scoped.
+    originalLineHeight = 0;
+    for (var i = 0; i < $textblocks.length; i++) {
+        var ele = $textblocks[i],
+            fontSizeAttr = ele.getAttribute('data-original-font-size'),
+            lineHeightAttr = ele.getAttribute('data-original-line-height'),
+            originalFontSize = Number(fontSizeAttr);
+
+        if (lineHeightAttr) {
+            originalLineHeight = Number(lineHeightAttr);
+        }
+        else {
+            originalLineHeight = 0;
+        }
+
+        $(ele).css("font-size", (originalFontSize * factor) + 'px');
+        if (originalLineHeight) {
+            $(ele).css("line-height", (originalLineHeight * factor) + 'px');
+        }
+
+    }
+    $epubHtml.css("font-size", fontSize + "%");
+    
+    if (perf) {
+        var time2 = window.performance.now();
+    
+        // Firefox: 80+
+        // Chrome: 4-10
+        // Edge: 15-34
+        // IE: 10-15
+        // https://readium.firebase.com/?epub=..%2Fepub_content%2Faccessible_epub_3&goto=%7B%22idref%22%3A%22id-id2635343%22%2C%22elementCfi%22%3A%22%2F4%2F2%5Bbuilding_a_better_epub%5D%2F10%2F44%2F6%2C%2F1%3A334%2C%2F1%3A335%22%7D
+        
+        var diff = time2-time1;
+        console.log(diff);
+        
+        // setTimeout(function(){
+        //     alert(diff);
+        // }, 2000);
+    }
+};
+
+
+/**
+ *
+ * @param contentRef
+ * @param sourceFileHref
+ * @returns {string}
+ * @constructor
+ */
+Helpers.ResolveContentRef = function (contentRef, sourceFileHref) {
+
+    if (!sourceFileHref) {
+        return contentRef;
+    }
+
+    var sourceParts = sourceFileHref.split("/");
+    sourceParts.pop(); //remove source file name
+
+    var pathComponents = contentRef.split("/");
+
+    while (sourceParts.length > 0 && pathComponents[0] === "..") {
+
+        sourceParts.pop();
+        pathComponents.splice(0, 1);
+    }
+
+    var combined = sourceParts.concat(pathComponents);
+
+    return combined.join("/");
+
+};
+
+/**
+ *
+ * @param str
+ * @param suffix
+ * @returns {boolean}
+ * @static
+ */
+Helpers.EndsWith = function (str, suffix) {
+    return str.indexOf(suffix, str.length - suffix.length) !== -1;
+};
+
+/**
+ *
+ * @param str
+ * @param suffix
+ * @returns {boolean}
+ * @static
+ */
+Helpers.BeginsWith = function (str, suffix) {
+
+    return str.indexOf(suffix) === 0;
+};
+
+/**
+ *
+ * @param str
+ * @param toRemove
+ * @returns {string}
+ * @static
+ */
+Helpers.RemoveFromString = function (str, toRemove) {
+
+    var startIx = str.indexOf(toRemove);
+
+    if (startIx == -1) {
+        return str;
+    }
+
+    return str.substring(0, startIx) + str.substring(startIx + toRemove.length);
+};
+
+/**
+ *
+ * @param margin
+ * @param border
+ * @param padding
+ * @constructor
+ */
+Helpers.Margins = function (margin, border, padding) {
+
+    this.margin = margin;
+    this.border = border;
+    this.padding = padding;
+
+    this.left = this.margin.left + this.border.left + this.padding.left;
+    this.right = this.margin.right + this.border.right + this.padding.right;
+    this.top = this.margin.top + this.border.top + this.padding.top;
+    this.bottom = this.margin.bottom + this.border.bottom + this.padding.bottom;
+
+    this.width = function () {
+        return this.left + this.right;
+    };
+
+    this.height = function () {
+        return this.top + this.bottom;
+    }
+};
+
+/**
+ *
+ * @param $iframe
+ */
+Helpers.triggerLayout = function ($iframe) {
+
+    var doc = $iframe[0].contentDocument;
+
+    if (!doc) {
+        return;
+    }
+
+    var ss = undefined;
+    try {
+        ss = doc.styleSheets && doc.styleSheets.length ? doc.styleSheets[0] : undefined;
+        if (!ss) {
+            var style = doc.createElement('style');
+            doc.head.appendChild(style);
+            style.appendChild(doc.createTextNode(''));
+            ss = style.sheet;
+        }
+
+        if (ss) {
+            var cssRule = 'body:first-child::before {content:\'READIUM\';color: red;font-weight: bold;}';
+            if (ss.cssRules) {
+                ss.insertRule(cssRule, ss.cssRules.length);
+            } else {
+                ss.insertRule(cssRule, 0);
+            }
+        }
+    }
+    catch (ex) {
+        console.error(ex);
+    }
+
+    try {
+        var el = doc.createElementNS("http://www.w3.org/1999/xhtml", "style");
+        el.appendChild(doc.createTextNode("*{}"));
+        doc.body.appendChild(el);
+        doc.body.removeChild(el);
+
+        if (ss) {
+            if (ss.cssRules) {
+                ss.deleteRule(ss.cssRules.length - 1);
+            } else {
+                ss.deleteRule(0);
+            }
+        }
+    }
+    catch (ex) {
+        console.error(ex);
+    }
+
+    if (doc.body) {
+        var val = doc.body.offsetTop; // triggers layout
+    }
+
+};
+
+/**
+ *
+ * @param $viewport
+ * @param spineItem
+ * @param settings
+ * @returns {boolean}
+ */
+//Based on https://docs.google.com/spreadsheet/ccc?key=0AoPMUkQhc4wcdDI0anFvWm96N0xRT184ZE96MXFRdFE&usp=drive_web#gid=0 doc
+// Returns falsy and truthy
+// true and false mean that the synthetic-spread or single-page is "forced" (to be respected whatever the external conditions)
+// 1 and 0 mean that the synthetic-spread or single-page is "not forced" (is allowed to be overriden by external conditions, such as optimum column width / text line number of characters, etc.)
+Helpers.deduceSyntheticSpread = function ($viewport, spineItem, settings) {
+
+    if (!$viewport || $viewport.length == 0) {
+        return 0; // non-forced
+    }
+
+    //http://www.idpf.org/epub/fxl/#property-spread-values
+
+    var rendition_spread = spineItem ? spineItem.getRenditionSpread() : undefined;
+
+    if (rendition_spread === SpineItem.RENDITION_SPREAD_NONE) {
+        return false; // forced
+
+        //"Reading Systems must not incorporate this spine item in a synthetic spread."
+    }
+
+    if (settings.syntheticSpread == "double") {
+        return true; // forced
+    }
+    else if (settings.syntheticSpread == "single") {
+        return false; // forced
+    }
+
+    if (!spineItem) {
+        return 0; // non-forced
+    }
+
+    if (rendition_spread === SpineItem.RENDITION_SPREAD_BOTH) {
+        return true; // forced
+
+        //"Reading Systems should incorporate this spine item in a synthetic spread regardless of device orientation."
+    }
+
+    var orientation = Helpers.getOrientation($viewport);
+
+    if (rendition_spread === SpineItem.RENDITION_SPREAD_LANDSCAPE) {
+        return orientation === Globals.Views.ORIENTATION_LANDSCAPE; // forced
+
+        //"Reading Systems should incorporate this spine item in a synthetic spread only when the device is in landscape orientation."
+    }
+
+    if (rendition_spread === SpineItem.RENDITION_SPREAD_PORTRAIT) {
+        return orientation === Globals.Views.ORIENTATION_PORTRAIT; // forced
+
+        //"Reading Systems should incorporate this spine item in a synthetic spread only when the device is in portrait orientation."
+    }
+
+    if (!rendition_spread || rendition_spread === SpineItem.RENDITION_SPREAD_AUTO) {
+        // if no spread set in document and user didn't set in in setting we will do double for landscape
+        var landscape = orientation === Globals.Views.ORIENTATION_LANDSCAPE;
+        return landscape ? 1 : 0; // non-forced
+
+        //"Reading Systems may use synthetic spreads in specific or all device orientations as part of a display area utilization optimization process."
+    }
+
+    console.warn("Helpers.deduceSyntheticSpread: spread properties?!");
+    return 0; // non-forced
+};
+
+/**
+ *
+ * @param $element
+ * @returns {Helpers.Rect}
+ */
+Helpers.Margins.fromElement = function ($element) {
+    return new this($element.margin(), $element.border(), $element.padding());
+};
+
+/**
+ * @returns {Helpers.Rect}
+ */
+Helpers.Margins.empty = function () {
+
+    return new this({left: 0, right: 0, top: 0, bottom: 0}, {left: 0, right: 0, top: 0, bottom: 0}, {
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0
+    });
+
+};
+
+/**
+ *
+ * @param name
+ * @param params
+ * @returns {Helpers.loadTemplate.cache}
+ */
+Helpers.loadTemplate = function (name, params) {
+    return Helpers.loadTemplate.cache[name];
+};
+
+/**
+ *
+ * @type {{fixed_book_frame: string, single_page_frame: string, scrolled_book_frame: string, reflowable_book_frame: string, reflowable_book_page_frame: string}}
+ */
+Helpers.loadTemplate.cache = {
+    "fixed_book_frame": '<div id="fixed-book-frame" class="clearfix book-frame fixed-book-frame"></div>',
+
+    "single_page_frame": '<div><div id="scaler"><iframe scrolling="no" class="iframe-fixed"></iframe></div></div>',
+    //"single_page_frame" : '<div><iframe scrolling="no" class="iframe-fixed" id="scaler"></iframe></div>',
+
+    "scrolled_book_frame": '<div id="reflowable-book-frame" class="clearfix book-frame reflowable-book-frame"><div id="scrolled-content-frame"></div></div>',
+    "reflowable_book_frame": '<div id="reflowable-book-frame" class="clearfix book-frame reflowable-book-frame"></div>',
+    "reflowable_book_page_frame": '<div id="reflowable-content-frame" class="reflowable-content-frame"><iframe scrolling="no" id="epubContentIframe"></iframe></div>'
+};
+
+/**
+ *
+ * @param styles
+ * @param $element
+ */
+Helpers.setStyles = function (styles, $element) {
+
+    var count = styles.length;
+
+    if (!count) {
+        return;
+    }
+
+    for (var i = 0; i < count; i++) {
+        var style = styles[i];
+        if (style.selector) {
+            $(style.selector, $element).css(style.declarations);
+        }
+        else {
+            $element.css(style.declarations);
+        }
+    }
+
+};
+
+/**
+ *
+ * @param iframe
+ * @returns {boolean}
+ */
+Helpers.isIframeAlive = function (iframe) {
+    var w = undefined;
+    var d = undefined;
+    try {
+        w = iframe.contentWindow;
+        d = iframe.contentDocument;
+    }
+    catch (ex) {
+        console.error(ex);
+        return false;
+    }
+
+    return w && d;
+};
+
+/**
+ *
+ * @param $viewport
+ * @returns {Globals.Views.ORIENTATION_LANDSCAPE|Globals.Views.ORIENTATION_PORTRAIT}
+ */
+Helpers.getOrientation = function ($viewport) {
+
+    var viewportWidth = $viewport.width();
+    var viewportHeight = $viewport.height();
+
+    if (!viewportWidth || !viewportHeight) {
+        return undefined;
+    }
+
+    return viewportWidth >= viewportHeight ? Globals.Views.ORIENTATION_LANDSCAPE : Globals.Views.ORIENTATION_PORTRAIT;
+};
+
+/**
+ *
+ * @param item
+ * @param orientation
+ * @returns {boolean}
+ */
+Helpers.isRenditionSpreadPermittedForItem = function (item, orientation) {
+
+    var rendition_spread = item.getRenditionSpread();
+
+    return !rendition_spread
+        || rendition_spread == SpineItem.RENDITION_SPREAD_BOTH
+        || rendition_spread == SpineItem.RENDITION_SPREAD_AUTO
+        || (rendition_spread == SpineItem.RENDITION_SPREAD_LANDSCAPE
+        && orientation == Globals.Views.ORIENTATION_LANDSCAPE)
+        || (rendition_spread == SpineItem.RENDITION_SPREAD_PORTRAIT
+        && orientation == Globals.Views.ORIENTATION_PORTRAIT );
+};
+
+Helpers.CSSTransition = function ($el, trans) {
+
+    // does not work!
+    //$el.css('transition', trans);
+
+    var css = {};
+    // empty '' prefix FIRST!
+    _.each(['', '-webkit-', '-moz-', '-ms-'], function (prefix) {
+        css[prefix + 'transition'] = prefix + trans;
+    });
+    $el.css(css);
+}
+
+//scale, left, top, angle, origin
+Helpers.CSSTransformString = function (options) {
+    var enable3D = options.enable3D ? true : false;
+
+    var translate, scale, rotation,
+        origin = options.origin;
+
+    if (options.left || options.top) {
+        var left = options.left || 0,
+            top = options.top || 0;
+
+        translate = enable3D ? ("translate3D(" + left + "px, " + top + "px, 0)") : ("translate(" + left + "px, " + top + "px)");
+    }
+    if (options.scale) {
+        scale = enable3D ? ("scale3D(" + options.scale + ", " + options.scale + ", 0)") : ("scale(" + options.scale + ")");
+    }
+    if (options.angle) {
+        rotation = enable3D ? ("rotate3D(0,0," + options.angle + "deg)") : ("rotate(" + options.angle + "deg)");
+    }
+
+    if (!(translate || scale || rotation)) {
+        return {};
+    }
+
+    var transformString = (translate && scale) ? (translate + " " + scale) : (translate ? translate : scale); // the order is important!
+    if (rotation) {
+        transformString = transformString + " " + rotation;
+        //transformString = rotation + " " + transformString;
+    }
+
+    var css = {};
+    css['transform'] = transformString;
+    css['transform-origin'] = origin ? origin : (enable3D ? '0 0 0' : '0 0');
+    return css;
+};
+
+Helpers.extendedThrottle = function (startCb, tickCb, endCb, tickRate, waitThreshold, context) {
+    if (!tickRate) tickRate = 250;
+    if (!waitThreshold) waitThreshold = tickRate;
+
+    var first = true,
+        last,
+        deferTimer;
+
+    return function () {
+        var ctx = context || this,
+            now = (Date.now && Date.now()) || new Date().getTime(),
+            args = arguments;
+
+        if (!(last && now < last + tickRate)) {
+            last = now;
+            if (first) {
+                startCb.apply(ctx, args);
+                first = false;
+            } else {
+                tickCb.apply(ctx, args);
+            }
+        }
+
+        clearTimeout(deferTimer);
+        deferTimer = setTimeout(function () {
+            last = now;
+            first = true;
+            endCb.apply(ctx, args);
+        }, waitThreshold);
+    };
+};
+
+
+//TODO: consider using CSSOM escape() or polyfill
+//https://github.com/mathiasbynens/CSS.escape/blob/master/css.escape.js
+//http://mathiasbynens.be/notes/css-escapes
+/**
+ *
+ * @param sel
+ * @returns {string}
+ */
+Helpers.escapeJQuerySelector = function (sel) {
+    //http://api.jquery.com/category/selectors/
+    //!"#$%&'()*+,./:;<=>?@[\]^`{|}~
+    // double backslash escape
+
+    if (!sel) return undefined;
+
+    var selector = sel.replace(/([;&,\.\+\*\~\?':"\!\^#$%@\[\]\(\)<=>\|\/\\{}`])/g, '\\$1');
+
+    // if (selector !== sel)
+    // {
+    //     console.debug("---- SELECTOR ESCAPED");
+    //     console.debug("1: " + sel);
+    //     console.debug("2: " + selector);
+    // }
+    // else
+    // {
+    //     console.debug("---- SELECTOR OKAY: " + sel);
+    // }
+
+    return selector;
+};
+
+Helpers.polyfillCaretRangeFromPoint = function(document) {
+    //Derived from css-regions-polyfill:
+    // https://github.com/FremyCompany/css-regions-polyfill/blob/bfbb6445ec2a2a883005ab8801d8463fa54b5701/src/range-extensions.js
+    //Copyright (c) 2013 François REMY
+    //Copyright (c) 2013 Adobe Systems Inc.
+    //Licensed under the Apache License, Version 2.0
+    if (!document.caretRangeFromPoint) {
+        if (document.caretPositionFromPoint) {
+            document.caretRangeFromPoint = function caretRangeFromPoint(x, y) {
+                var r = document.createRange();
+                var p = document.caretPositionFromPoint(x, y);
+                if (!p) return null;
+                if (p.offsetNode) {
+                    r.setStart(p.offsetNode, p.offset);
+                    r.setEnd(p.offsetNode, p.offset);
+                }
+                return r;
+            }
+        } else if ((document.body || document.createElement('body')).createTextRange) {
+            //
+            // we may want to convert TextRange to Range
+            //
+
+            //TextRangeUtils, taken from: https://code.google.com/p/ierange/
+            //Copyright (c) 2009 Tim Cameron Ryan
+            //Released under the MIT/X License
+            var TextRangeUtils = {
+                convertToDOMRange: function(textRange, document) {
+                    var adoptBoundary = function(domRange, textRangeInner, bStart) {
+                        // iterate backwards through parent element to find anchor location
+                        var cursorNode = document.createElement('a'),
+                            cursor = textRangeInner.duplicate();
+                        cursor.collapse(bStart);
+                        var parent = cursor.parentElement();
+                        do {
+                            parent.insertBefore(cursorNode, cursorNode.previousSibling);
+                            cursor.moveToElementText(cursorNode);
+                        } while (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRangeInner) > 0 && cursorNode.previousSibling);
+                        // when we exceed or meet the cursor, we've found the node
+                        if (cursor.compareEndPoints(bStart ? 'StartToStart' : 'StartToEnd', textRangeInner) == -1 && cursorNode.nextSibling) {
+                            // data node
+                            cursor.setEndPoint(bStart ? 'EndToStart' : 'EndToEnd', textRangeInner);
+                            domRange[bStart ? 'setStart' : 'setEnd'](cursorNode.nextSibling, cursor.text.length);
+                        } else {
+                            // element
+                            domRange[bStart ? 'setStartBefore' : 'setEndBefore'](cursorNode);
+                        }
+                        cursorNode.parentNode.removeChild(cursorNode);
+                    };
+                    // return a DOM range
+                    var domRange = document.createRange();
+                    adoptBoundary(domRange, textRange, true);
+                    adoptBoundary(domRange, textRange, false);
+                    return domRange;
+                }
+            };
+
+            document.caretRangeFromPoint = function caretRangeFromPoint(x, y) {
+                // the accepted number of vertical backtracking, in CSS pixels
+                var IYDepth = 40;
+                // try to create a text range at the specified location
+                var tr = document.body.createTextRange();
+                for (var iy = IYDepth; iy; iy = iy - 4) {
+                    try {
+                        tr.moveToPoint(x, iy + y - IYDepth);
+                        return TextRangeUtils.convertToDOMRange(tr, document);
+                    } catch (ex) {
+                    }
+                }
+                // if that fails, return the location just after the element located there
+                try {
+                    var elem = document.elementFromPoint(x - 1, y - 1);
+                    var r = document.createRange();
+                    r.setStartAfter(elem);
+                    return r;
+                } catch (ex) {
+                    return null;
+                }
+            }
+        }
+    }
+};
+
+return Helpers;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+/**
+ * CFI navigation helper class
+ *
+ * @param options Additional settings for NavigationLogic object
+ *      - paginationInfo            Layout details, used by clientRect-based geometry
+ *      - visibleContentOffsets     Function that returns offsets. If supplied it is used instead of the inferred offsets
+ *      - frameDimensions           Function that returns an object with width and height properties. Needs to be set.
+ *      - $iframe                   Iframe reference, and needs to be set.
+ * @constructor
+ */
+define('readium_shared_js/views/cfi_navigation_logic',["jquery", "underscore", "../helpers", 'readium_cfi_js'], function($, _, Helpers, epubCfi) {
+
+var CfiNavigationLogic = function(options) {
+
+    var self = this;
+    options = options || {};
+
+    var debugMode = ReadiumSDK.DEBUG_MODE;
+
+    this.getRootElement = function() {
+
+        return options.$iframe[0].contentDocument.documentElement;
+    };
+    
+    this.getBodyElement = function () {
+        
+        // In SVG documents the root element can be considered the body.
+        return this.getRootDocument().body || this.getRootElement();
+    };
+
+    this.getRootDocument = function () {
+        return options.$iframe[0].contentDocument;
+    };
+
+    function createRange() {
+        return self.getRootDocument().createRange();
+    }
+
+    function getNodeClientRect(node) {
+        var range = createRange();
+        range.selectNode(node);
+        return normalizeRectangle(range.getBoundingClientRect(),0,0);
+    }
+
+    function getNodeContentsClientRect(node) {
+        var range = createRange();
+        range.selectNodeContents(node);
+        return normalizeRectangle(range.getBoundingClientRect(),0,0);
+    }
+
+    function getElementClientRect($element) {
+        return normalizeRectangle($element[0].getBoundingClientRect(),0,0);
+    }
+
+    function getNodeRangeClientRect(startNode, startOffset, endNode, endOffset) {
+        var range = createRange();
+        range.setStart(startNode, startOffset ? startOffset : 0);
+        if (endNode.nodeType === Node.ELEMENT_NODE) {
+            range.setEnd(endNode, endOffset ? endOffset : endNode.childNodes.length);
+        } else if (endNode.nodeType === Node.TEXT_NODE) {
+            range.setEnd(endNode, endOffset ? endOffset : 0);
+        }
+        return normalizeRectangle(range.getBoundingClientRect(),0,0);
+    }
+
+    function getNodeClientRectList(node, visibleContentOffsets) {
+        visibleContentOffsets = visibleContentOffsets || getVisibleContentOffsets();
+        
+        var range = createRange();
+        range.selectNode(node);
+        return _.map(range.getClientRects(), function (rect) {
+            return normalizeRectangle(rect, visibleContentOffsets.left, visibleContentOffsets.top);
+        });
+    }
+
+    function getFrameDimensions() {
+        if (options.frameDimensions) {
+            return options.frameDimensions();
+        }
+        
+        console.error('CfiNavigationLogic: No frame dimensions specified!');
+        return null;
+    }
+
+    function getCaretRangeFromPoint(x, y, document) {
+        document = document || self.getRootDocument();
+        Helpers.polyfillCaretRangeFromPoint(document); //only polyfills once, no-op afterwards
+        return document.caretRangeFromPoint(x, y);
+    }
+
+    function isPaginatedView() {
+        return !!options.paginationInfo;
+    }
+
+    /**
+     * @private
+     * Checks whether or not pages are rendered right-to-left
+     *
+     * @returns {boolean}
+     */
+    function isPageProgressionRightToLeft() {
+        return options.paginationInfo && !!options.paginationInfo.rightToLeft;
+    }
+
+    /**
+     * @private
+     * Checks whether or not pages are rendered with vertical writing mode
+     *
+     * @returns {boolean}
+     */
+    function isVerticalWritingMode() {
+        return options.paginationInfo && !!options.paginationInfo.isVerticalWritingMode;
+    }
+
+
+    /**
+     * @private
+     * Checks whether or not a (fully adjusted) rectangle is at least partly visible
+     *
+     * @param {Object} rect
+     * @param {Object} [frameDimensions]
+     * @param {boolean} [isVwm]           isVerticalWritingMode
+     * @returns {boolean}
+     */
+    function isRectVisible(rect, ignorePartiallyVisible, frameDimensions, isVwm) {
+
+        frameDimensions = frameDimensions || getFrameDimensions();
+        isVwm = isVwm || isVerticalWritingMode();
+
+        //Text nodes without printable text dont have client rectangles
+        if (!rect) {
+            return false;
+        }
+        //Sometimes we get client rects that are "empty" and aren't supposed to be visible
+        if (rect.left == 0 && rect.right == 0 && rect.top == 0 && rect.bottom == 0) {
+            return false;
+        }
+
+        if (isPaginatedView()) {
+            return (rect.left >= 0 && rect.left < frameDimensions.width) || 
+                (!ignorePartiallyVisible && rect.left < 0 && rect.right >= 0);
+        } else {
+            return (rect.top >= 0 && rect.top < frameDimensions.height) || 
+                (!ignorePartiallyVisible && rect.top < 0 && rect.bottom >= 0);
+        }
+
+    }
+
+    /**
+     * @private
+     * Retrieves _current_ full width of a column (including its gap)
+     *
+     * @returns {number} Full width of a column in pixels
+     */
+    function getColumnFullWidth() {
+
+        if (!options.paginationInfo || isVerticalWritingMode())
+        {
+            return options.$iframe.width();
+        }
+
+        return options.paginationInfo.columnWidth + options.paginationInfo.columnGap;
+    }
+
+    /**
+     * @private
+     *
+     * Retrieves _current_ offset of a viewport
+     * (related to the beginning of the chapter)
+     *
+     * @returns {Object}
+     */
+    function getVisibleContentOffsets() {
+        if (options.visibleContentOffsets) {
+            return options.visibleContentOffsets();
+        }
+
+        if (isVerticalWritingMode()) {
+            return {
+                top: (options.paginationInfo ? options.paginationInfo.pageOffset : 0),
+                left: 0
+            };
+        }
+
+        return {
+            top: 0,
+            left: 0
+        };
+    }
+
+    /**
+     * New (rectangle-based) algorithm, useful in multi-column layouts
+     *
+     * Note: the second param (props) is ignored intentionally
+     * (no need to use those in normalization)
+     *
+     * @param {jQuery} $element
+     * @param {Object} _props
+     * @param {boolean} shouldCalculateVisibilityPercentage
+     * @param {Object} [frameDimensions]
+     * @returns {number|null}
+     *      0 for non-visible elements,
+     *      0 < n <= 100 for visible elements
+     *      (will just give 100, if `shouldCalculateVisibilityPercentage` => false)
+     *      null for elements with display:none
+     */
+    function checkVisibilityByRectangles($element, shouldCalculateVisibilityPercentage, visibleContentOffsets, frameDimensions) {
+        visibleContentOffsets = visibleContentOffsets || getVisibleContentOffsets();
+        frameDimensions = frameDimensions || getFrameDimensions();
+
+        var clientRectangles = getNormalizedRectangles($element, visibleContentOffsets);
+        if (clientRectangles.length === 0) { // elements with display:none, etc.
+            return null;
+        }
+
+        var visibilityPercentage = 0;
+
+        if (clientRectangles.length === 1) {
+            var adjustedRect = clientRectangles[0];
+            
+            if (isPaginatedView()) {
+                if (adjustedRect.bottom > frameDimensions.height || adjustedRect.top < 0) {
+                    // because of webkit inconsistency, that single rectangle should be adjusted
+                    // until it hits the end OR will be based on the FIRST column that is visible
+                    adjustRectangle(adjustedRect, true, frameDimensions);
+                }
+            }
+
+            if (isRectVisible(adjustedRect, false, frameDimensions)) {
+                //it might still be partially visible in webkit
+                if (shouldCalculateVisibilityPercentage && adjustedRect.top < 0) {
+                    visibilityPercentage =
+                        Math.floor(100 * (adjustedRect.height + adjustedRect.top) / adjustedRect.height);
+                } else {
+                    visibilityPercentage = 100;
+                }
+            }
+        } else {
+            // for an element split between several CSS columns,z
+            // both Firefox and IE produce as many client rectangles;
+            // each of those should be checked
+            for (var i = 0, l = clientRectangles.length; i < l; ++i) {
+                if (isRectVisible(clientRectangles[i], false, frameDimensions)) {
+                    visibilityPercentage = shouldCalculateVisibilityPercentage
+                        ? measureVisibilityPercentageByRectangles(clientRectangles, i)
+                        : 100;
+                    break;
+                }
+            }
+        }
+
+        return visibilityPercentage;
+    }
+
+    /**
+     * Finds a page index (0-based) for a specific element.
+     * Calculations are based on rectangles retrieved with getClientRects() method.
+     *
+     * @param {jQuery} $element
+     * @param {number} spatialVerticalOffset
+     * @returns {number|null}
+     */
+    function findPageByRectangles($element, spatialVerticalOffset) {
+
+        var visibleContentOffsets = getVisibleContentOffsets();
+
+        var clientRectangles = getNormalizedRectangles($element, visibleContentOffsets);
+        if (clientRectangles.length === 0) { // elements with display:none, etc.
+            return null;
+        }
+
+        return calculatePageIndexByRectangles(clientRectangles, spatialVerticalOffset);
+    }
+
+    /**
+     * @private
+     * Calculate a page index (0-based) for given client rectangles.
+     *
+     * @param {object} clientRectangles
+     * @param {number} [spatialVerticalOffset]
+     * @param {object} [frameDimensions]
+     * @param {object} [columnFullWidth]
+     * @returns {number|null}
+     */
+    function calculatePageIndexByRectangles(clientRectangles, spatialVerticalOffset, frameDimensions, columnFullWidth) {
+        var isRtl = isPageProgressionRightToLeft();
+        var isVwm = isVerticalWritingMode();
+        columnFullWidth = columnFullWidth || getColumnFullWidth();
+        frameDimensions = frameDimensions || getFrameDimensions();
+
+        if (spatialVerticalOffset) {
+            trimRectanglesByVertOffset(clientRectangles, spatialVerticalOffset,
+                frameDimensions, columnFullWidth, isRtl, isVwm);
+        }
+
+        var firstRectangle = _.first(clientRectangles);
+        if (clientRectangles.length === 1) {
+            adjustRectangle(firstRectangle, false, frameDimensions, columnFullWidth, isRtl, isVwm);
+        }
+
+        var pageIndex;
+
+        if (isVwm) {
+            var topOffset = firstRectangle.top;
+            pageIndex = Math.floor(topOffset / frameDimensions.height);
+        } else {
+            var leftOffset = firstRectangle.left;
+            if (isRtl) {
+                leftOffset = (columnFullWidth * (options.paginationInfo ? options.paginationInfo.visibleColumnCount : 1)) - leftOffset;
+            }
+            pageIndex = Math.floor(leftOffset / columnFullWidth);
+        }
+
+        if (pageIndex < 0) {
+            pageIndex = 0;
+        }
+        else if (pageIndex >= (options.paginationInfo ? options.paginationInfo.columnCount : 1)) {
+            pageIndex = (options.paginationInfo ? (options.paginationInfo.columnCount - 1) : 0);
+        }
+
+        return pageIndex;
+    }
+
+    /**
+     * Finds a page index (0-based) for a specific client rectangle.
+     * Calculations are based on viewport dimensions, offsets, and rectangle coordinates
+     *
+     * @param {ClientRect} clientRectangle
+     * @param {Object} [visibleContentOffsets]
+     * @param {Object} [frameDimensions]
+     * @returns {number|null}
+     */
+    function findPageBySingleRectangle(clientRectangle, visibleContentOffsets, frameDimensions) {
+        visibleContentOffsets = visibleContentOffsets || getVisibleContentOffsets();
+        frameDimensions = frameDimensions || getFrameDimensions();
+        
+        var normalizedRectangle = normalizeRectangle(
+            clientRectangle, visibleContentOffsets.left, visibleContentOffsets.top);
+
+        return calculatePageIndexByRectangles([normalizedRectangle], frameDimensions);
+    }
+
+    /**
+     * @private
+     * Calculates the visibility offset percentage based on ClientRect dimensions
+     *
+     * @param {Array} clientRectangles (should already be normalized)
+     * @param {number} firstVisibleRectIndex
+     * @returns {number} - visibility percentage (0 < n <= 100)
+     */
+    function measureVisibilityPercentageByRectangles(clientRectangles, firstVisibleRectIndex) {
+
+        var heightTotal = 0;
+        var heightVisible = 0;
+
+        if (clientRectangles.length > 1) {
+            _.each(clientRectangles, function (rect, index) {
+                heightTotal += rect.height;
+                if (index >= firstVisibleRectIndex) {
+                    // in this case, all the rectangles after the first visible
+                    // should be counted as visible
+                    heightVisible += rect.height;
+                }
+            });
+        }
+        else {
+            // should already be normalized and adjusted
+            heightTotal = clientRectangles[0].height;
+            heightVisible = clientRectangles[0].height - Math.max(
+                0, -clientRectangles[0].top);
+        }
+        return heightVisible === heightTotal
+            ? 100 // trivial case: element is 100% visible
+            : Math.floor(100 * heightVisible / heightTotal);
+    }
+
+    /**
+     * @private
+     * Retrieves the position of $element in multi-column layout
+     *
+     * @param {jQuery} $el
+     * @param {Object} [visibleContentOffsets]
+     * @returns {Object}
+     */
+    function getNormalizedRectangles($el, visibleContentOffsets) {
+
+        visibleContentOffsets = visibleContentOffsets || {};
+        var leftOffset = visibleContentOffsets.left || 0;
+        var topOffset = visibleContentOffsets.top || 0;
+
+        var isTextNode = ($el[0].nodeType === Node.TEXT_NODE);
+        var clientRectList;
+
+        if (isTextNode) {
+            var range = createRange();
+            range.selectNode($el[0]);
+            clientRectList = range.getClientRects();
+        } else {
+            clientRectList = $el[0].getClientRects();
+        }
+
+        // all the separate rectangles (for detecting position of the element
+        // split between several columns)
+        var clientRectangles = [];
+        for (var i = 0, l = clientRectList.length; i < l; ++i) {
+            if (clientRectList[i].height > 0) {
+                // Firefox sometimes gets it wrong,
+                // adding literally empty (height = 0) client rectangle preceding the real one,
+                // that empty client rectanle shouldn't be retrieved
+                clientRectangles.push(
+                    normalizeRectangle(clientRectList[i], leftOffset, topOffset));
+            }
+        }
+
+        return clientRectangles;
+    }
+
+    function getNormalizedBoundingRect($el, visibleContentOffsets) {
+        visibleContentOffsets = visibleContentOffsets || {};
+        var leftOffset = visibleContentOffsets.left || 0;
+        var topOffset = visibleContentOffsets.top || 0;
+
+        var isTextNode = ($el[0].nodeType === Node.TEXT_NODE);
+        var boundingClientRect;
+
+        if (isTextNode) {
+            var range = createRange();
+            range.selectNode($el[0]);
+            boundingClientRect = range.getBoundingClientRect();
+        } else {
+            boundingClientRect = $el[0].getBoundingClientRect();
+        }
+
+        // union of all rectangles wrapping the element
+        return normalizeRectangle(boundingClientRect, leftOffset, topOffset);
+    }
+
+    /**
+     * @private
+     * Converts TextRectangle object into a plain object,
+     * taking content offsets (=scrolls, position shifts etc.) into account
+     *
+     * @param {TextRectangle} textRect
+     * @param {number} leftOffset
+     * @param {number} topOffset
+     * @returns {Object}
+     */
+    function normalizeRectangle(textRect, leftOffset, topOffset) {
+
+        var plainRectObject = {
+            left: textRect.left,
+            right: textRect.right,
+            top: textRect.top,
+            bottom: textRect.bottom,
+            width: textRect.right - textRect.left,
+            height: textRect.bottom - textRect.top
+        };
+        offsetRectangle(plainRectObject, leftOffset, topOffset);
+        return plainRectObject;
+    }
+
+    /**
+     * @private
+     * Offsets plain object (which represents a TextRectangle).
+     *
+     * @param {Object} rect
+     * @param {number} leftOffset
+     * @param {number} topOffset
+     */
+    function offsetRectangle(rect, leftOffset, topOffset) {
+
+        rect.left += leftOffset;
+        rect.right += leftOffset;
+        rect.top += topOffset;
+        rect.bottom += topOffset;
+    }
+
+    /**
+     * @private
+     *
+     * When element is spilled over two or more columns,
+     * most of the time Webkit-based browsers
+     * still assign a single clientRectangle to it, setting its `top` property to negative value
+     * (so it looks like it's rendered based on the second column)
+     * Alas, sometimes they decide to continue the leftmost column - from _below_ its real height.
+     * In this case, `bottom` property is actually greater than element's height and had to be adjusted accordingly.
+     *
+     * Ugh.
+     *
+     * @param {Object} rect
+     * @param {boolean} [shouldLookForFirstVisibleColumn]
+     *      If set, there'll be two-phase adjustment
+     *      (to align a rectangle with a viewport)
+     * @param {Object} [frameDimensions]
+     * @param {number} [columnFullWidth]
+     * @param {boolean} [isRtl]
+     * @param {boolean} [isVwm]               isVerticalWritingMode
+     */
+    function adjustRectangle(rect, shouldLookForFirstVisibleColumn, frameDimensions, columnFullWidth, isRtl, isVwm) {
+
+        frameDimensions = frameDimensions || getFrameDimensions();
+        columnFullWidth = columnFullWidth || getColumnFullWidth();
+        isRtl = isRtl || isPageProgressionRightToLeft();
+        isVwm = isVwm || isVerticalWritingMode();
+
+        // Rectangle adjustment is not needed in VWM since it does not deal with columns
+        if (isVwm) {
+            return;
+        }
+
+        if (isRtl) {
+            columnFullWidth *= -1; // horizontal shifts are reverted in RTL mode
+        }
+
+        // first we go left/right (rebasing onto the very first column available)
+        while (rect.top < 0) {
+            offsetRectangle(rect, -columnFullWidth, frameDimensions.height);
+        }
+
+        // ... then, if necessary (for visibility offset checks),
+        // each column is tried again (now in reverse order)
+        // the loop will be stopped when the column is aligned with a viewport
+        // (i.e., is the first visible one).
+        if (shouldLookForFirstVisibleColumn) {
+            while (rect.bottom >= frameDimensions.height) {
+                if (isRectVisible(rect, false, frameDimensions, isVwm)) {
+                    break;
+                }
+                offsetRectangle(rect, columnFullWidth, -frameDimensions.height);
+            }
+        }
+    }
+
+    /**
+     * @private
+     * Trims the rectangle(s) representing the given element.
+     *
+     * @param {Array} rects
+     * @param {number} verticalOffset
+     * @param {number} frameDimensions
+     * @param {number} columnFullWidth
+     * @param {boolean} isRtl
+     * @param {boolean} isVwm               isVerticalWritingMode
+     */
+    function trimRectanglesByVertOffset(
+            rects, verticalOffset, frameDimensions, columnFullWidth, isRtl, isVwm) {
+
+        frameDimensions = frameDimensions || getFrameDimensions();
+        columnFullWidth = columnFullWidth || getColumnFullWidth();
+        isRtl = isRtl || isPageProgressionRightToLeft();
+        isVwm = isVwm || isVerticalWritingMode();
+
+        //TODO: Support vertical writing mode
+        if (isVwm) {
+            return;
+        }
+
+        var totalHeight = _.reduce(rects, function(prev, cur) {
+            return prev + cur.height;
+        }, 0);
+
+        var heightToHide = totalHeight * verticalOffset / 100;
+        if (rects.length > 1) {
+            var heightAccum = 0;
+            do {
+                heightAccum += rects[0].height;
+                if (heightAccum > heightToHide) {
+                    break;
+                }
+                rects.shift();
+            } while (rects.length > 1);
+        }
+        else {
+            // rebase to the last possible column
+            // (so that adding to top will be properly processed later)
+            if (isRtl) {
+                columnFullWidth *= -1;
+            }
+            while (rects[0].bottom >= frameDimensions.height) {
+                offsetRectangle(rects[0], columnFullWidth, -frameDimensions.height);
+            }
+
+            rects[0].top += heightToHide;
+            rects[0].height -= heightToHide;
+        }
+    }
+
+    this.getCfiForElement = function (element) {
+        var cfi = EPUBcfi.Generator.generateElementCFIComponent(element,
+            ["cfi-marker"],
+            [],
+            ["MathJax_Message", "MathJax_SVG_Hidden"]);
+
+        if (cfi[0] == "!") {
+            cfi = cfi.substring(1);
+        }
+        return cfi;
+    };
+
+    this.getVisibleCfiFromPoint = function (x, y, precisePoint) {
+        var document = self.getRootDocument();
+        var firstVisibleCaretRange = getCaretRangeFromPoint(x, y, document);
+        var elementFromPoint = document.elementFromPoint(x, y);
+        var invalidElementFromPoint = !elementFromPoint || elementFromPoint === document.documentElement;
+
+        if (precisePoint) {
+            if (!elementFromPoint || invalidElementFromPoint) {
+                return null;
+            }
+            var testRect = getNodeContentsClientRect(elementFromPoint);
+            if (!isRectVisible(testRect, false)) {
+                return null;
+            }
+            if ((x < testRect.left || x > testRect.right) || (y < testRect.top || y > testRect.bottom)) {
+                return null;
+            }
+        }
+
+        if (!firstVisibleCaretRange) {
+            if (invalidElementFromPoint) {
+                console.error("Could not generate CFI no visible element on page");
+                return null;
+            }
+            firstVisibleCaretRange = createRange();
+            firstVisibleCaretRange.selectNode(elementFromPoint);
+        }
+
+        var range = firstVisibleCaretRange;
+        var cfi;
+        //if we get a text node we need to get an approximate range for the first visible character offsets.
+        var node = range.startContainer;
+        var startOffset, endOffset;
+        if (node.nodeType === Node.TEXT_NODE) {
+            if (precisePoint && node.parentNode !== elementFromPoint) {
+                return null;
+            }
+            if (node.length === 1 && range.startOffset === 1) {
+                startOffset = 0;
+                endOffset = 1;
+            } else if (range.startOffset === node.length) {
+                startOffset = range.startOffset - 1;
+                endOffset = range.startOffset;
+            } else {
+                startOffset = range.startOffset;
+                endOffset = range.startOffset + 1;
+            }
+            var wrappedRange = {
+                startContainer: node,
+                endContainer: node,
+                startOffset: startOffset,
+                endOffset: endOffset,
+                commonAncestorContainer: range.commonAncestorContainer
+            };
+
+            if (debugMode) {
+                drawDebugOverlayFromDomRange(wrappedRange);
+            }
+
+            cfi = generateCfiFromDomRange(wrappedRange);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            node =
+                range.startContainer.childNodes[range.startOffset] ||
+                range.startContainer.childNodes[0] ||
+                range.startContainer;
+            if (precisePoint && node !== elementFromPoint) {
+                return null;
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                cfi = generateCfiFromDomRange(range);
+            } else {
+                cfi = self.getCfiForElement(node);
+            }
+        } else {
+            if (precisePoint && node !== elementFromPoint) {
+                return null;
+            }
+
+            cfi = self.getCfiForElement(elementFromPoint);
+        }
+
+        //This should not happen but if it does print some output, just in case
+        if (cfi && cfi.indexOf('NaN') !== -1) {
+            console.log('Did not generate a valid CFI:' + cfi);
+            return undefined;
+        }
+
+        return cfi;
+    };
+
+    this.getRangeCfiFromPoints = function(startX, startY, endX, endY) {
+        var document = self.getRootDocument();
+        var start = getCaretRangeFromPoint(startX, startY, document),
+            end = getCaretRangeFromPoint(endX, endY, document),
+            range = createRange();
+        range.setStart(start.startContainer, start.startOffset);
+        range.setEnd(end.startContainer, end.startOffset);
+        // if we're looking at a text node create a nice range (n, n+1)
+        if (start.startContainer === start.endContainer && start.startContainer.nodeType === Node.TEXT_NODE && end.startContainer.length > end.startOffset+1) {
+            range.setEnd(end.startContainer, end.startOffset+1);
+        }
+        return generateCfiFromDomRange(range);
+    };
+
+    function getTextNodeRectCornerPairs(rect) {
+        //
+        //    top left             top right
+        //    ╲                   ╱
+        //  ── ▒T▒E▒X▒T▒ ▒R▒E▒C▒T▒ ──
+        //
+        // top left corner & top right corner
+        // but for y coord use the mid point between top and bottom
+
+        if (isVerticalWritingMode()) {
+            var x = rect.right - (rect.width / 2);
+            return [{x: x, y: rect.top}, {x: x, y: rect.bottom}];
+        } else {
+            var y = rect.top + (rect.height / 2);
+            var result = [{x: rect.left, y: y}, {x: rect.right, y: y}]
+            return isPageProgressionRightToLeft() ? result.reverse() : result;
+        }
+    }
+
+    var DEBUG = true;
+
+    function getVisibleTextRangeOffsetsSelectedByFunc(textNode, pickerFunc, visibleContentOffsets, frameDimensions) {
+        visibleContentOffsets = visibleContentOffsets || getVisibleContentOffsets();
+        
+        var textNodeFragments = getNodeClientRectList(textNode, visibleContentOffsets);
+
+        var visibleFragments = _.filter(textNodeFragments, function (rect) {
+            return isRectVisible(rect, false, frameDimensions);
+        });
+
+        var fragment = pickerFunc(visibleFragments);
+        if (!fragment) {
+            //no visible fragment, empty text node?
+            return null;
+        }
+        var fragmentCorner = pickerFunc(getTextNodeRectCornerPairs(fragment));
+        // Reverse taking into account of visible content offsets
+        fragmentCorner.x -= visibleContentOffsets.left;
+        fragmentCorner.y -= visibleContentOffsets.top;
+        
+        var caretRange = getCaretRangeFromPoint(fragmentCorner.x, fragmentCorner.y);
+
+        // Workaround for inconsistencies with the caretRangeFromPoint IE TextRange based shim.
+        if (caretRange && caretRange.startContainer !== textNode && caretRange.startContainer === textNode.parentNode) {
+            if (DEBUG) console.log('ieTextRangeWorkaround needed');
+            var startOrEnd = pickerFunc([0, 1]);
+
+            // #1
+            if (caretRange.startOffset === caretRange.endOffset) {
+                var checkNode = caretRange.startContainer.childNodes[Math.max(caretRange.startOffset - 1, 0)];
+                if (checkNode === textNode) {
+                    caretRange = {
+                        startContainer: textNode,
+                        endContainer: textNode,
+                        startOffset: startOrEnd === 0 ? 0 : textNode.nodeValue.length,
+                        startOffset: startOrEnd === 0 ? 0 : textNode.nodeValue.length
+                    };
+                    if (DEBUG) console.log('ieTextRangeWorkaround #1:', caretRange);
+                }
+            }
+
+            // Failed
+            else if (DEBUG) {
+                console.log('ieTextRangeWorkaround didn\'t work :(');
+            }
+        }
+
+        if (DEBUG)
+        console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'a0');
+        
+        // Desperately try to find it from all angles! Darn sub pixeling..
+        //TODO: remove the need for this brute-force method, since it's making the result non-deterministic
+        if (!caretRange || caretRange.startContainer !== textNode) {
+            caretRange = getCaretRangeFromPoint(fragmentCorner.x - 1, fragmentCorner.y);
+            
+            if (DEBUG)
+            console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'a1');
+        }
+        if (!caretRange || caretRange.startContainer !== textNode) {
+            caretRange = getCaretRangeFromPoint(fragmentCorner.x, fragmentCorner.y - 1);
+            
+            if (DEBUG)
+            console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'a2');
+        }
+        if (!caretRange || caretRange.startContainer !== textNode) {
+            caretRange = getCaretRangeFromPoint(fragmentCorner.x - 1, fragmentCorner.y - 1);
+            
+            if (DEBUG)
+            console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'a3');
+        }
+        if (!caretRange || caretRange.startContainer !== textNode) {
+            fragmentCorner.x = Math.floor(fragmentCorner.x);
+            fragmentCorner.y = Math.floor(fragmentCorner.y);
+            caretRange = getCaretRangeFromPoint(fragmentCorner.x, fragmentCorner.y);
+            
+            if (DEBUG)
+            console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'b0');
+        }
+        // Desperately try to find it from all angles! Darn sub pixeling..
+        if (!caretRange || caretRange.startContainer !== textNode) {
+            caretRange = getCaretRangeFromPoint(fragmentCorner.x - 1, fragmentCorner.y);
+            
+            if (DEBUG)
+            console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'b1');
+        }
+        if (!caretRange || caretRange.startContainer !== textNode) {
+            caretRange = getCaretRangeFromPoint(fragmentCorner.x, fragmentCorner.y - 1);
+            
+            if (DEBUG)
+            console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'b2');
+        }
+        if (!caretRange || caretRange.startContainer !== textNode) {
+            caretRange = getCaretRangeFromPoint(fragmentCorner.x - 1, fragmentCorner.y - 1);
+            
+            if (DEBUG)
+            console.log('getVisibleTextRangeOffsetsSelectedByFunc: ', 'b3');
+        }
+
+        // Still nothing? fall through..
+        if (!caretRange) {
+            
+            if (DEBUG)
+            console.warn('getVisibleTextRangeOffsetsSelectedByFunc: no caret range result');
+            
+            return null;
+        }
+
+        if (caretRange.startContainer === textNode) {
+            return pickerFunc(
+                [{start: caretRange.startOffset, end: caretRange.startOffset + 1},
+                {start: caretRange.startOffset - 1, end: caretRange.startOffset}]
+            );
+        } else {
+            
+            if (DEBUG)
+            console.warn('getVisibleTextRangeOffsetsSelectedByFunc: incorrect caret range result');
+            
+            return null;
+        }
+    }
+
+    function findVisibleLeafNodeCfi(leafNodeList, pickerFunc, targetLeafNode, visibleContentOffsets, frameDimensions, startingParent) {
+        var index = 0;
+        if (!targetLeafNode) {
+            index = leafNodeList.indexOf(pickerFunc(leafNodeList));
+            var leafNode = leafNodeList[index];
+            if (leafNode) {
+                startingParent = leafNode.element;
+            }
+        } else {
+            index = leafNodeList.indexOf(targetLeafNode);
+            if (index === -1) {
+                //target leaf node not the right type? not in list?
+                return null;
+            }
+            // use the next leaf node in the list
+            index += pickerFunc([1, -1]);
+        }
+        var visibleLeafNode = leafNodeList[index];
+
+        if (!visibleLeafNode) {
+            return null;
+        }
+
+        var element = visibleLeafNode.element;
+        var textNode = visibleLeafNode.textNode;
+
+        if (targetLeafNode && element !== startingParent && !_.contains($(textNode || element).parents(), startingParent)) {
+            if (DEBUG) console.warn("findVisibleLeafNodeCfi: stopped recursion early");
+            return null;
+        }
+
+        //if a valid text node is found, try to generate a CFI with range offsets
+        if (textNode && isValidTextNode(textNode)) {
+            var visibleRange = getVisibleTextRangeOffsetsSelectedByFunc(textNode, pickerFunc, visibleContentOffsets, frameDimensions);
+            if (!visibleRange) {
+                //the text node is valid, but not visible..
+                //let's try again with the next node in the list
+                return findVisibleLeafNodeCfi(leafNodeList, pickerFunc, visibleLeafNode, visibleContentOffsets, frameDimensions, startingParent);
+            }
+            var range = createRange();
+            range.setStart(textNode, visibleRange.start);
+            range.setEnd(textNode, visibleRange.end);
+            return generateCfiFromDomRange(range);
+        } else {
+            //if not then generate a CFI for the element
+            return self.getCfiForElement(element);
+        }
+    }
+
+    // get an array of visible text elements and then select one based on the func supplied
+    // and generate a CFI for the first visible text subrange.
+    function getVisibleTextRangeCfiForTextElementSelectedByFunc(pickerFunc, visibleContentOffsets, frameDimensions) {        
+        var visibleLeafNodeList = self.getVisibleLeafNodes(visibleContentOffsets, frameDimensions);
+        return findVisibleLeafNodeCfi(visibleLeafNodeList, pickerFunc, null, visibleContentOffsets, frameDimensions);
+    }
+
+    function getLastVisibleTextRangeCfi(visibleContentOffsets, frameDimensions) {
+        return getVisibleTextRangeCfiForTextElementSelectedByFunc(_.last, visibleContentOffsets, frameDimensions);
+    }
+
+    function getFirstVisibleTextRangeCfi(visibleContentOffsets, frameDimensions) {
+        return getVisibleTextRangeCfiForTextElementSelectedByFunc(_.first, visibleContentOffsets, frameDimensions);
+    }
+
+    this.getFirstVisibleCfi = function (visibleContentOffsets, frameDimensions) {
+        return getFirstVisibleTextRangeCfi(visibleContentOffsets, frameDimensions);
+    };
+
+    this.getLastVisibleCfi = function (visibleContentOffsets, frameDimensions) {
+        return getLastVisibleTextRangeCfi(visibleContentOffsets, frameDimensions);
+    };
+
+    function generateCfiFromDomRange(range) {
+        return EPUBcfi.generateRangeComponent(
+            range.startContainer, range.startOffset,
+            range.endContainer, range.endOffset,
+            ['cfi-marker'], [], ["MathJax_Message", "MathJax_SVG_Hidden"]);
+    }
+
+    function getRangeTargetNodes(rangeCfi) {
+        return EPUBcfi.getRangeTargetElements(
+            getWrappedCfiRelativeToContent(rangeCfi),
+            self.getRootDocument(),
+            ['cfi-marker'], [], ["MathJax_Message", "MathJax_SVG_Hidden"]);
+    }
+
+    this.getDomRangeFromRangeCfi = function(rangeCfi, rangeCfi2, inclusive) {
+        var range = createRange();
+
+        if (!rangeCfi2) {
+            if (self.isRangeCfi(rangeCfi)) {
+                var rangeInfo = getRangeTargetNodes(rangeCfi);
+                range.setStart(rangeInfo.startElement, rangeInfo.startOffset);
+                range.setEnd(rangeInfo.endElement, rangeInfo.endOffset);
+            } else {
+                var element = self.getElementByCfi(rangeCfi,
+                    ['cfi-marker'], [], ["MathJax_Message", "MathJax_SVG_Hidden"])[0];
+                range.selectNode(element);
+            }
+        } else {
+            if (self.isRangeCfi(rangeCfi)) {
+                var rangeInfo1 = getRangeTargetNodes(rangeCfi);
+                range.setStart(rangeInfo1.startElement, rangeInfo1.startOffset);
+            } else {
+                var startElement = self.getElementByCfi(rangeCfi,
+                    ['cfi-marker'], [], ["MathJax_Message", "MathJax_SVG_Hidden"])[0];
+                range.setStart(startElement, 0);
+            }
+
+            if (self.isRangeCfi(rangeCfi2)) {
+                var rangeInfo2 = getRangeTargetNodes(rangeCfi2);
+                if (inclusive) {
+                    range.setEnd(rangeInfo2.endElement, rangeInfo2.endOffset);
+                } else {
+                    range.setEnd(rangeInfo2.startElement, rangeInfo2.startOffset);
+                }
+            } else {
+                var endElement = self.getElementByCfi(rangeCfi2,
+                    ['cfi-marker'], [], ["MathJax_Message", "MathJax_SVG_Hidden"])[0];
+                range.setEnd(endElement, endElement.childNodes.length);
+            }
+        }
+        return range;
+    };
+
+    this.getRangeCfiFromDomRange = function(domRange) {
+        return generateCfiFromDomRange(domRange);
+    };
+
+    function getWrappedCfi(partialCfi) {
+        return "epubcfi(" + partialCfi + ")";
+    }
+
+    function getWrappedCfiRelativeToContent(partialCfi) {
+        return "epubcfi(/99!" + partialCfi + ")";
+    }
+
+    this.isRangeCfi = function (partialCfi) {
+        return EPUBcfi.Interpreter.isRangeCfi(getWrappedCfi(partialCfi)) || EPUBcfi.Interpreter.isRangeCfi(getWrappedCfiRelativeToContent(partialCfi));
+    };
+
+    this.getPageForElementCfi = function (cfi, classBlacklist, elementBlacklist, idBlacklist) {
+
+        var cfiParts = splitCfi(cfi);
+        var partialCfi = cfiParts.cfi;
+
+        if (this.isRangeCfi(partialCfi)) {
+            //if given a range cfi the exact page index needs to be calculated by getting node info from the range cfi
+            var nodeRangeInfoFromCfi = this.getNodeRangeInfoFromCfi(partialCfi);
+            //the page index is calculated from the node's client rectangle
+            return findPageBySingleRectangle(nodeRangeInfoFromCfi.clientRect);
+        }
+
+        var $element = getElementByPartialCfi(cfiParts.cfi, classBlacklist, elementBlacklist, idBlacklist);
+
+        if (!$element) {
+            return -1;
+        }
+
+        var pageIndex = this.getPageForPointOnElement($element, cfiParts.x, cfiParts.y);
+
+        return pageIndex;
+
+    };
+
+    function getElementByPartialCfi(cfi, classBlacklist, elementBlacklist, idBlacklist) {
+
+        var contentDoc = self.getRootDocument();
+
+        var wrappedCfi = getWrappedCfi(cfi);
+
+        try {
+            //noinspection JSUnresolvedVariable
+            var $element = EPUBcfi.getTargetElementWithPartialCFI(wrappedCfi, contentDoc, classBlacklist, elementBlacklist, idBlacklist);
+
+        } catch (ex) {
+            //EPUBcfi.Interpreter can throw a SyntaxError
+        }
+
+        if (!$element || $element.length == 0) {
+            console.log("Can't find element for CFI: " + cfi);
+            return undefined;
+        }
+
+        return $element;
+    }
+
+    this.getElementFromPoint = function (x, y) {
+
+        var document = self.getRootDocument();
+        return document.elementFromPoint(x, y);
+    };
+
+    this.getNodeRangeInfoFromCfi = function (cfi) {
+        var contentDoc = self.getRootDocument();
+        if (self.isRangeCfi(cfi)) {
+            var wrappedCfi = getWrappedCfiRelativeToContent(cfi);
+
+            try {
+                //noinspection JSUnresolvedVariable
+                var nodeResult = EPUBcfi.Interpreter.getRangeTargetElements(wrappedCfi, contentDoc,
+                    ["cfi-marker"],
+                    [],
+                    ["MathJax_Message", "MathJax_SVG_Hidden"]);
+
+                if (debugMode) {
+                    console.log(nodeResult);
+                }
+            } catch (ex) {
+                //EPUBcfi.Interpreter can throw a SyntaxError
+            }
+
+            if (!nodeResult) {
+                console.log("Can't find nodes for range CFI: " + cfi);
+                return undefined;
+            }
+
+            var startRangeInfo = {node: nodeResult.startElement, offset: nodeResult.startOffset};
+            var endRangeInfo = {node: nodeResult.endElement, offset: nodeResult.endOffset};
+            var nodeRangeClientRect =
+                startRangeInfo && endRangeInfo ?
+                    getNodeRangeClientRect(
+                        startRangeInfo.node,
+                        startRangeInfo.offset,
+                        endRangeInfo.node,
+                        endRangeInfo.offset)
+                    : null;
+
+            if (debugMode) {
+                console.log(nodeRangeClientRect);
+                addOverlayRect(nodeRangeClientRect, 'purple', contentDoc);
+            }
+
+            return {startInfo: startRangeInfo, endInfo: endRangeInfo, clientRect: nodeRangeClientRect}
+        } else {
+            var $element = self.getElementByCfi(cfi,
+                ["cfi-marker"],
+                [],
+                ["MathJax_Message", "MathJax_SVG_Hidden"]);
+
+            var visibleContentOffsets = getVisibleContentOffsets();
+            return {startInfo: null, endInfo: null, clientRect: getNormalizedBoundingRect($element, visibleContentOffsets)};
+        }
+    };
+
+    this.isNodeFromRangeCfiVisible = function (cfi) {
+        var nodeRangeInfo = this.getNodeRangeInfoFromCfi(cfi);
+        if (nodeRangeInfo) {
+            return isRectVisible(nodeRangeInfo.clientRect, false);
+        } else {
+            return undefined;
+        }
+    };
+
+    this.getElementByCfi = function (cfi, classBlacklist, elementBlacklist, idBlacklist) {
+
+        var cfiParts = splitCfi(cfi);
+        return getElementByPartialCfi(cfiParts.cfi, classBlacklist, elementBlacklist, idBlacklist);
+    };
+
+    this.getPageForElement = function ($element) {
+
+        return this.getPageForPointOnElement($element, 0, 0);
+    };
+
+    this.getPageForPointOnElement = function ($element, x, y) {
+
+        var pageIndex = findPageByRectangles($element, y);
+        if (pageIndex === null) {
+            console.warn('Impossible to locate a hidden element: ', $element);
+            return 0;
+        }
+        return pageIndex;
+    };
+
+    this.getElementById = function (id) {
+
+        var contentDoc = this.getRootDocument();
+
+        var $element = $(contentDoc.getElementById(id));
+        //$("#" + Helpers.escapeJQuerySelector(id), contentDoc);
+
+        if($element.length == 0) {
+            return undefined;
+        }
+
+        return $element;
+    };
+
+    this.getPageForElementId = function (id) {
+
+        var $element = this.getElementById(id);
+        if (!$element) {
+            return -1;
+        }
+
+        return this.getPageForElement($element);
+    };
+
+    function splitCfi(cfi) {
+
+        var ret = {
+            cfi: "",
+            x: 0,
+            y: 0
+        };
+
+        var ix = cfi.indexOf("@");
+
+        if (ix != -1) {
+            var terminus = cfi.substring(ix + 1);
+
+            var colIx = terminus.indexOf(":");
+            if (colIx != -1) {
+                ret.x = parseInt(terminus.substr(0, colIx));
+                ret.y = parseInt(terminus.substr(colIx + 1));
+            }
+            else {
+                console.log("Unexpected terminating step format");
+            }
+
+            ret.cfi = cfi.substring(0, ix);
+        }
+        else {
+
+            ret.cfi = cfi;
+        }
+
+        return ret;
+    }
+
+    // returns raw DOM element (not $ jQuery-wrapped)
+    this.getFirstVisibleMediaOverlayElement = function(visibleContentOffsets) {
+        var $root = $(this.getBodyElement());
+        if (!$root || !$root.length || !$root[0]) return undefined;
+
+        var that = this;
+
+        var firstPartial = undefined;
+
+        function traverseArray(arr) {
+            if (!arr || !arr.length) return undefined;
+
+            for (var i = 0, count = arr.length; i < count; i++) {
+                var item = arr[i];
+                if (!item) continue;
+
+                var $item = $(item);
+
+                if ($item.data("mediaOverlayData")) {
+                    var visible = that.getElementVisibility($item, visibleContentOffsets);
+                    if (visible) {
+                        if (!firstPartial) firstPartial = item;
+
+                        if (visible == 100) return item;
+                    }
+                }
+                else {
+                    var elem = traverseArray(item.children);
+                    if (elem) return elem;
+                }
+            }
+
+            return undefined;
+        }
+
+        var el = traverseArray([$root[0]]);
+        if (!el) el = firstPartial;
+        return el;
+
+        // var $elements = this.getMediaOverlayElements($root);
+        // return this.getVisibleElements($elements, visibleContentOffsets);
+    };
+
+    this.getElementVisibility = function ($element, visibleContentOffsets) {
+        return checkVisibilityByRectangles($element, true, visibleContentOffsets);
+    };
+
+
+    this.isElementVisible = checkVisibilityByRectangles;
+
+    this.getVisibleElementsWithFilter = function (visibleContentOffsets, filterFunction) {
+        var $elements = this.getElementsWithFilter($(this.getBodyElement()), filterFunction);
+        return this.getVisibleElements($elements, visibleContentOffsets);
+    };
+
+    this.getAllElementsWithFilter = function (filterFunction) {
+        var $elements = this.getElementsWithFilter($(this.getBodyElement()), filterFunction);
+        return $elements;
+    };
+
+    this.getAllVisibleElementsWithSelector = function (selector, visibleContentOffset) {
+        var elements = $(selector, this.getRootElement());
+        var $newElements = [];
+        $.each(elements, function () {
+            $newElements.push($(this));
+        });
+        var visibleElements = this.getVisibleElements($newElements, visibleContentOffset);
+        return visibleElements;
+    };
+
+    this.getVisibleElements = function ($elements, visibleContentOffsets, frameDimensions) {
+
+        var visibleElements = [];
+
+        _.each($elements, function ($node) {
+            var isTextNode = ($node[0].nodeType === Node.TEXT_NODE);
+            var $element = isTextNode ? $node.parent() : $node;
+            var visibilityPercentage = checkVisibilityByRectangles(
+                $node, true, visibleContentOffsets, frameDimensions);
+
+            if (visibilityPercentage) {
+                visibleElements.push({
+                    element: $element[0], // DOM Element is pushed
+                    textNode: isTextNode ? $node[0] : null,
+                    percentVisible: visibilityPercentage
+                });
+            }
+        });
+
+        return visibleElements;
+    };
+
+    this.getVisibleLeafNodes = function (visibleContentOffsets, frameDimensions) {
+
+        if (_cacheEnabled) {
+            var cacheKey = (options.paginationInfo || {}).currentSpreadIndex || 0;
+            var fromCache = _cache.visibleLeafNodes.get(cacheKey);
+            if (fromCache) {
+                return fromCache;
+            }
+        }
+
+        var $elements = this.getLeafNodeElements($(this.getBodyElement()));
+
+        var visibleElements = this.getVisibleElements($elements, visibleContentOffsets, frameDimensions);
+
+        if (_cacheEnabled) {
+            _cache.visibleLeafNodes.set(cacheKey, visibleElements);
+        }
+
+        return visibleElements;
+    };
+
+    this.getElementsWithFilter = function ($root, filterFunction) {
+
+        var $elements = [];
+
+        function traverseCollection(elements) {
+
+            if (elements == undefined) return;
+
+            for (var i = 0, count = elements.length; i < count; i++) {
+
+                var $element = $(elements[i]);
+
+                if (filterFunction($element)) {
+                    $elements.push($element);
+                }
+                else {
+                    traverseCollection($element[0].children);
+                }
+
+            }
+        }
+
+        traverseCollection([$root[0]]);
+
+        return $elements;
+    };
+
+    function isElementBlacklisted($element) {
+        //TODO: Ok we really need to have a single point of reference for this blacklist
+        var blacklist = {
+            classes: ["cfi-marker", "mo-cfi-highlight"],
+            elements: [], //not looked at
+            ids: ["MathJax_Message", "MathJax_SVG_Hidden"]
+        };
+
+        var isBlacklisted = false;
+
+        _.some(blacklist.classes, function (value) {
+            if ($element.hasClass(value)) {
+                isBlacklisted = true;
+            }
+            return isBlacklisted;
+        });
+
+        _.some(blacklist.ids, function (value) {
+            if ($element.attr("id") === value) {
+                isBlacklisted = true;
+            }
+            return isBlacklisted;
+        });
+
+
+        return isBlacklisted;
+    }
+
+    this.getLeafNodeElements = function ($root) {
+
+        if (_cacheEnabled) {
+            var fromCache = _cache.leafNodeElements.get($root);
+            if (fromCache) {
+                return fromCache;
+            }
+        }
+
+        var nodeIterator = document.createNodeIterator(
+            $root[0],
+            NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+            function() {
+                return NodeFilter.FILTER_ACCEPT;
+            },
+            false
+        );
+
+        var $leafNodeElements = [];
+
+        var node;
+        while ((node = nodeIterator.nextNode())) {
+            var isLeafNode = node.nodeType === Node.ELEMENT_NODE && !node.childElementCount && !isValidTextNodeContent(node.textContent);
+            if (isLeafNode || isValidTextNode(node)){
+                var $node = $(node);
+                var $element = (node.nodeType === Node.TEXT_NODE) ? $node.parent() : $node;
+                if (!isElementBlacklisted($element)) {
+                    $leafNodeElements.push($node);
+                }
+            }
+        }
+
+        if (_cacheEnabled) {
+            _cache.leafNodeElements.set($root, $leafNodeElements);
+        }
+
+        return $leafNodeElements;
+    };
+
+    function isValidTextNode(node) {
+
+        if (node.nodeType === Node.TEXT_NODE) {
+
+            return isValidTextNodeContent(node.nodeValue);
+        }
+
+        return false;
+
+    }
+
+    function isValidTextNodeContent(text) {
+        // Heuristic to find a text node with actual text
+        // If we don't do this, we may get a reference to a node that doesn't get rendered
+        // (such as for example a node that has tab character and a bunch of spaces)
+        // this is would be bad! ask me why.
+        return text.replace(/[\s\n\r\t]/g, "").length > 0;
+    }
+
+    this.getElements = function (selector) {
+        if (!selector) {
+            return $(this.getRootElement()).children();
+        }
+        return $(selector, this.getRootElement());
+    };
+
+    this.getElement = function (selector) {
+
+        var $element = this.getElements(selector);
+
+        if($element.length > 0) {
+            return $element;
+        }
+
+        return undefined;
+    };
+
+    function Cache() {
+        var that = this;
+
+        //true = survives invalidation
+        var props = {
+            leafNodeElements: true,
+            visibleLeafNodes: false
+        };
+
+        _.each(props, function (val, key) {
+            that[key] = new Map();
+        });
+
+        this._invalidate = function () {
+            _.each(props, function (val, key) {
+                if (!val) {
+                    that[key] = new Map();
+                }
+            });
+        }
+    }
+
+    var _cache = new Cache();
+
+    var _cacheEnabled = false;
+
+    this.invalidateCache = function () {
+        _cache._invalidate();
+    };
+
+
+    // dmitry debug
+    // dmitry debug
+    // dmitry debug
+    // dmitry debug
+    // dmitry debug
+    // dmitry debug
+
+    var parseContentCfi = function(cont) {
+        return cont.replace(/\[(.*?)\]/, "").split(/[\/,:]/).map(function(n) { return parseInt(n); }).filter(Boolean);
+    };
+
+    var contentCfiComparator = function(cont1, cont2) {
+        cont1 = this.parseContentCfi(cont1);
+        cont2 = this.parseContentCfi(cont2);
+
+        //compare cont arrays looking for differences
+        for (var i=0; i<cont1.length; i++) {
+            if (cont1[i] > cont2[i]) {
+                return 1;
+            }
+            else if (cont1[i] < cont2[i]) {
+                return -1;
+            }
+        }
+
+        //no differences found, so confirm that cont2 did not have values we didn't check
+        if (cont1.length < cont2.length) {
+            return -1;
+        }
+
+        //cont arrays are identical
+        return 0;
+    };
+
+
+    // end dmitry debug
+
+    //if (debugMode) {
+
+        var $debugOverlays = [];
+
+        //used for visual debug atm
+        function getRandomColor() {
+            var letters = '0123456789ABCDEF'.split('');
+            var color = '#';
+            for (var i = 0; i < 6; i++) {
+                color += letters[Math.round(Math.random() * 15)];
+            }
+            return color;
+        }
+
+        //used for visual debug atm
+        function addOverlayRect(rects, color, doc) {
+            var random = getRandomColor();
+            if (!(rects instanceof Array)) {
+                rects = [rects];
+            }
+            for (var i = 0; i != rects.length; i++) {
+                var rect = rects[i];
+                var overlayDiv = doc.createElement('div');
+                overlayDiv.style.position = 'absolute';
+                $(overlayDiv).css('z-index', '1000');
+                $(overlayDiv).css('pointer-events', 'none');
+                $(overlayDiv).css('opacity', '0.4');
+                overlayDiv.style.border = '1px solid white';
+                if (!color && !random) {
+                    overlayDiv.style.background = 'purple';
+                } else if (random && !color) {
+                    overlayDiv.style.background = random;
+                } else {
+                    if (color === true) {
+                        color = 'red';
+                    }
+                    overlayDiv.style.border = '1px dashed ' + color;
+                    overlayDiv.style.background = 'yellow';
+                }
+
+                overlayDiv.style.margin = overlayDiv.style.padding = '0';
+                overlayDiv.style.top = (rect.top ) + 'px';
+                overlayDiv.style.left = (rect.left ) + 'px';
+                // we want rect.width to be the border width, so content width is 2px less.
+                overlayDiv.style.width = (rect.width - 2) + 'px';
+                overlayDiv.style.height = (rect.height - 2) + 'px';
+                doc.documentElement.appendChild(overlayDiv);
+                $debugOverlays.push($(overlayDiv));
+            }
+        }
+
+        function drawDebugOverlayFromRect(rect) {
+            var leftOffset, topOffset;
+
+            if (isVerticalWritingMode()) {
+                leftOffset = 0;
+                topOffset = -getPaginationLeftOffset();
+            } else {
+                leftOffset = -getPaginationLeftOffset();
+                topOffset = 0;
+            }
+
+            addOverlayRect({
+                left: rect.left + leftOffset,
+                top: rect.top + topOffset,
+                width: rect.width,
+                height: rect.height
+            }, true, self.getRootDocument());
+        }
+
+        function drawDebugOverlayFromDomRange(range) {
+            var rect = getNodeRangeClientRect(
+                range.startContainer,
+                range.startOffset,
+                range.endContainer,
+                range.endOffset);
+            drawDebugOverlayFromRect(rect);
+            return rect;
+        }
+
+        function drawDebugOverlayFromNode(node) {
+            drawDebugOverlayFromRect(getNodeClientRect(node));
+        }
+
+        function getPaginationLeftOffset() {
+
+            var $htmlElement = $("html", self.getRootDocument());
+            var offsetLeftPixels = $htmlElement.css(isVerticalWritingMode() ? "top" : (isPageProgressionRightToLeft() ? "right" : "left"));
+            var offsetLeft = parseInt(offsetLeftPixels.replace("px", ""));
+            if (isNaN(offsetLeft)) {
+                //for fixed layouts, $htmlElement.css("left") has no numerical value
+                offsetLeft = 0;
+            }
+            if (isPageProgressionRightToLeft() && !isVerticalWritingMode()) return -offsetLeft; 
+            return offsetLeft;
+        }
+
+        function clearDebugOverlays() {
+            _.each($debugOverlays, function($el){
+                $el.remove();
+            });
+            $debugOverlays.clear();
+        }
+
+        ReadiumSDK._DEBUG_CfiNavigationLogic = {
+            clearDebugOverlays: clearDebugOverlays,
+            drawDebugOverlayFromRect: drawDebugOverlayFromRect,
+            drawDebugOverlayFromDomRange: drawDebugOverlayFromDomRange,
+            drawDebugOverlayFromNode: drawDebugOverlayFromNode,
+            debugVisibleCfis: function () {
+                console.log(JSON.stringify(ReadiumSDK.reader.getPaginationInfo().openPages));
+
+                var cfi1 = ReadiumSDK.reader.getFirstVisibleCfi();
+                var range1 = ReadiumSDK.reader.getDomRangeFromRangeCfi(cfi1);
+                console.log(cfi1, range1, drawDebugOverlayFromDomRange(range1));
+
+                var cfi2 = ReadiumSDK.reader.getLastVisibleCfi();
+                var range2 = ReadiumSDK.reader.getDomRangeFromRangeCfi(cfi2);
+                console.log(cfi2, range2, drawDebugOverlayFromDomRange(range2));
+            }
+        };
+
+        //
+   // }
+
+};
+return CfiNavigationLogic;
+});
+
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/viewer_settings',[], function() {
+/**
+ *
+ * @param settingsData
+ * @constructor
+ */
+var ViewerSettings = function(settingsData) {
+
+    var self = this;
+
+    this.syntheticSpread = "auto";
+    this.fontSize = 100;
+    this.columnGap = 20;
+    
+    this.columnMaxWidth = 700;
+    this.columnMinWidth = 400;
+
+    this.mediaOverlaysPreservePlaybackWhenScroll = false;
+
+    this.mediaOverlaysSkipSkippables = false;
+    this.mediaOverlaysEscapeEscapables = true;
+
+    this.mediaOverlaysSkippables = [];
+    this.mediaOverlaysEscapables = [];
+    
+    this.mediaOverlaysEnableClick = true;
+    this.mediaOverlaysRate = 1;
+    this.mediaOverlaysVolume = 100;
+    
+    this.mediaOverlaysSynchronizationGranularity = "";
+
+    this.mediaOverlaysAutomaticPageTurn = true;
+
+    this.enableGPUHardwareAccelerationCSS3D = false;
+
+    // -1 ==> disable
+    // [0...n] ==> index of transition in pre-defined array
+    this.pageTransition = -1;
+    
+    this.scroll = "auto";
+
+    function buildArray(str)
+    {
+        var retArr = [];
+        var arr = str.split(/[\s,;]+/); //','
+        for (var i = 0; i < arr.length; i++)
+        {
+            var item = arr[i].trim();
+            if (item !== "")
+            {
+                retArr.push(item);
+            }
+        }
+        return retArr;
+    }
+
+    function mapProperty(propName, settingsData, functionToApply) {
+
+        if(settingsData[propName] !== undefined) {
+            if(functionToApply) {
+
+                self[propName] = functionToApply(settingsData[propName]);
+            }
+            else {
+                self[propName] = settingsData[propName];
+            }
+        }
+
+    }
+
+    this.update = function(settingsData) {
+
+        mapProperty("columnGap", settingsData);
+        mapProperty("columnMaxWidth", settingsData);
+        mapProperty("columnMinWidth", settingsData);
+        mapProperty("fontSize", settingsData);
+        mapProperty("mediaOverlaysPreservePlaybackWhenScroll", settingsData);
+        mapProperty("mediaOverlaysSkipSkippables", settingsData);
+        mapProperty("mediaOverlaysEscapeEscapables", settingsData);
+        mapProperty("mediaOverlaysSkippables", settingsData, buildArray);
+        mapProperty("mediaOverlaysEscapables", settingsData, buildArray);
+        mapProperty("mediaOverlaysEnableClick", settingsData);
+        mapProperty("mediaOverlaysRate", settingsData);
+        mapProperty("mediaOverlaysVolume", settingsData);
+        mapProperty("mediaOverlaysSynchronizationGranularity", settingsData);
+        mapProperty("mediaOverlaysAutomaticPageTurn", settingsData);
+        mapProperty("scroll", settingsData);
+        mapProperty("syntheticSpread", settingsData);
+        mapProperty("pageTransition", settingsData);
+        mapProperty("enableGPUHardwareAccelerationCSS3D", settingsData);
+    };
+
+    this.update(settingsData);
+};
+    return ViewerSettings;
+});
+
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+define('readium_shared_js/views/one_page_view',["../globals", "jquery", "underscore", "eventEmitter", "./cfi_navigation_logic", "../helpers", "../models/viewer_settings", "../models/bookmark_data"],
+    function (Globals, $, _, EventEmitter, CfiNavigationLogic, Helpers, ViewerSettings, BookmarkData) {
+
+/**
+ * Renders one page of fixed layout spread
+ *
+ * @param options
+ * @param classes
+ * @param enableBookStyleOverrides
+ * @constructor
+ */
+var OnePageView = function (options, classes, enableBookStyleOverrides, reader) {
+
+    $.extend(this, new EventEmitter());
+
+    var self = this;
+
+    var _$epubHtml;
+    var _$el;
+    var _$iframe;
+    var _currentSpineItem;
+    var _spine = options.spine;
+    var _iframeLoader = options.iframeLoader;
+    var _navigationLogic = undefined;
+    var _bookStyles = options.bookStyles;
+
+    var _$viewport = options.$viewport;
+
+    var _isIframeLoaded = false;
+
+    var _$scaler;
+
+    var PageTransitionHandler = function (opts) {
+        var PageTransition = function (begin, end) {
+            this.begin = begin;
+            this.end = end;
+        };
+
+        var _pageTransition_OPACITY = new PageTransition(
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("opacity", "0");
+            },
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("transform", "none");
+
+                Helpers.CSSTransition($el, "opacity 150ms ease-out");
+
+                $el.css("opacity", "1");
+            }
+        );
+
+        var _pageTransition_TRANSLATE = new PageTransition(
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("opacity", "0");
+
+                var elWidth = Math.ceil(meta_width * scale);
+
+                var initialLeft = elWidth * 0.8 * (pageSwitchDir === 2 ? 1 : -1);
+                var move = Helpers.CSSTransformString({
+                    left: Math.round(initialLeft),
+                    origin: "50% 50% 0",
+                    enable3D: _enable3D
+                });
+                $el.css(move);
+            },
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("opacity", "1");
+
+                Helpers.CSSTransition($el, "transform 150ms ease-out");
+
+                $el.css("transform", "none");
+            }
+        );
+
+        var _pageTransition_ROTATE = new PageTransition(
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("opacity", "0");
+
+                var elWidth = Math.ceil(meta_width * scale);
+
+                var initialLeft = elWidth * 1.7 * (pageSwitchDir === 2 ? 1 : -1);
+                var trans = Helpers.CSSTransformString({
+                    left: Math.round(initialLeft),
+                    angle: (pageSwitchDir === 2 ? -1 : 1) * 30,
+                    origin: "50% 50% 0",
+                    enable3D: _enable3D
+                }); //(pageSwitchDir === 2 ? '0% 0%' : '100% 0%')
+                $el.css(trans);
+            },
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("opacity", "1");
+
+                Helpers.CSSTransition($el, "transform 300ms ease-in-out");
+
+                $el.css("transform", "none");
+            }
+        );
+
+        var _pageTransition_SWING = new PageTransition(
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("opacity", "0");
+
+                // SUPER HACKY!! (just for demo)
+                var isLeft = false;
+                var isCenter = false;
+                var isRight = false;
+                for (var i = 0; i < classes.length; i++) {
+                    var c = classes[i].toLowerCase();
+                    if (c.indexOf("left") >= 0) {
+                        isLeft = true;
+                        break;
+                    }
+                    if (c.indexOf("right") >= 0) {
+                        isRight = true;
+                        break;
+                    }
+                    if (c.indexOf("center") >= 0) {
+                        isCenter = true;
+                        break;
+                    }
+                }
+
+                var elWidth = Math.ceil(meta_width * scale);
+
+                var initialLeft = elWidth * 0.5 * ((isLeft || isCenter && pageSwitchDir === 1) ? 1 : -1);
+                var trans = Helpers.CSSTransformString({
+                    scale: 0.2,
+                    left: Math.round(initialLeft),
+                    angle: ((isLeft || isCenter && pageSwitchDir === 1) ? 1 : -1) * 30,
+                    origin: '50% 50% 0',
+                    enable3D: _enable3D
+                });
+                $el.css(trans);
+            },
+            function (scale, left, top, $el, meta_width, meta_height, pageSwitchDir) {
+                $el.css("opacity", "1");
+
+                Helpers.CSSTransition($el, "transform 400ms ease-out");
+
+                $el.css("transform", "none");
+            }
+        );
+
+        var _pageTransitions = [];
+        _pageTransitions.push(_pageTransition_OPACITY); // 0
+        _pageTransitions.push(_pageTransition_TRANSLATE); // 1
+        _pageTransitions.push(_pageTransition_ROTATE); // 2
+        _pageTransitions.push(_pageTransition_SWING); // 3
+
+        var _disablePageTransitions = opts.disablePageTransitions || false;
+                
+        // TODO: page transitions are broken, sp we disable them to avoid nasty visual artefacts
+        _disablePageTransitions = true;
+
+        var _pageTransition = -1;
+
+        var _enable3D = new ViewerSettings({}).enableGPUHardwareAccelerationCSS3D;
+
+        var _viewerSettings = undefined;
+        this.updateOptions = function (o) {
+            _viewerSettings = o;
+
+            var settings = _viewerSettings;
+            if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined") {
+                //defaults
+                settings = new ViewerSettings({});
+            }
+            if (settings.enableGPUHardwareAccelerationCSS3D) {
+                _enable3D = true;
+            }
+
+            if (o.pageTransition !== null && typeof o.pageTransition !== "undefined") {
+                _pageTransition = o.pageTransition;
+            }
+        };
+        this.updateOptions(opts);
+
+        var _pageSwitchDir = 0;
+        var _pageSwitchActuallyChanged = false;
+        var _pageSwitchActuallyChanged_IFRAME_LOAD = false;
+
+        // dir: 0 => new or same page, 1 => previous, 2 => next
+        this.updatePageSwitchDir = function (dir, hasChanged) {
+            if (_pageSwitchActuallyChanged_IFRAME_LOAD) {
+                return;
+            }
+
+            _pageSwitchDir = dir;
+            _pageSwitchActuallyChanged = hasChanged;
+        };
+
+        this.onIFrameLoad = function () {
+            _pageSwitchActuallyChanged_IFRAME_LOAD = true; // second pass, but initial display for transition
+        };
+
+        this.transformContentImmediate_BEGIN = function ($el, scale, left, top) {
+            var pageSwitchActuallyChanged = _pageSwitchActuallyChanged || _pageSwitchActuallyChanged_IFRAME_LOAD;
+            _pageSwitchActuallyChanged_IFRAME_LOAD = false;
+
+            if (_disablePageTransitions || _pageTransition === -1) return;
+
+            Helpers.CSSTransition($el, "all 0 ease 0");
+
+            if (!pageSwitchActuallyChanged) return;
+
+            var pageTransition = (_pageTransition >= 0 && _pageTransition < _pageTransitions.length) ? _pageTransitions[_pageTransition] : undefined;
+
+            if (_pageSwitchDir === 0 || !pageTransition) {
+                $el.css("opacity", "0");
+            }
+            else {
+                pageTransition.begin(scale, left, top, $el, self.meta_width(), self.meta_height(), _pageSwitchDir);
+            }
+        };
+
+        this.transformContentImmediate_END = function ($el, scale, left, top) {
+            if (_disablePageTransitions || _pageTransition === -1) {
+                $el.css("transform", "none");
+                return;
+            }
+
+            setTimeout(function () {
+                var pageTransition = (_pageTransition >= 0 && _pageTransition < _pageTransitions.length) ? _pageTransitions[_pageTransition] : undefined;
+
+                if (_pageSwitchDir === 0 || !pageTransition) {
+                    $el.css("transform", "none");
+
+                    Helpers.CSSTransition($el, "opacity 250ms linear");
+
+                    $el.css("opacity", "1");
+                }
+                else {
+                    pageTransition.end(scale, left, top, $el, self.meta_width(), self.meta_height(), _pageSwitchDir);
+                }
+
+            }, 10);
+        };
+    };
+    var _pageTransitionHandler = new PageTransitionHandler(options);
+
+
+    // fixed layout does not apply user styles to publisher content, but reflowable scroll view does
+    var _enableBookStyleOverrides = enableBookStyleOverrides || false;
+
+    var _meta_size = {
+        width: 0,
+        height: 0
+    };
+
+    this.element = function () {
+        return _$el;
+    };
+
+    this.meta_height = function () {
+        return _meta_size.height;
+    };
+
+    this.meta_width = function () {
+        return _meta_size.width;
+    };
+
+    this.isDisplaying = function () {
+
+        return _isIframeLoaded; //_$iframe && _$iframe[0] && _$epubHtml
+    };
+
+    this.render = function () {
+
+        var template = Helpers.loadTemplate("single_page_frame", {});
+
+        _$el = $(template);
+
+        _$scaler = $("#scaler", _$el);
+
+        Helpers.CSSTransition(_$el, "all 0 ease 0");
+
+        _$el.css("transform", "none");
+
+        var settings = reader.viewerSettings();
+        if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined") {
+            //defaults
+            settings = new ViewerSettings({});
+        }
+        if (settings.enableGPUHardwareAccelerationCSS3D) {
+
+            // This fixes rendering issues with WebView (native apps), which crops content embedded in iframes unless GPU hardware acceleration is enabled for CSS rendering.
+            _$el.css("transform", "translateZ(0)");
+        }
+
+        _$el.css("height", "100%");
+        _$el.css("width", "100%");
+
+        for (var i = 0, count = classes.length; i < count; i++) {
+            _$el.addClass(classes[i]);
+        }
+
+        _$iframe = $("iframe", _$el);
+
+        return this;
+    };
+
+
+    this.decorateIframe = function () {
+        if (!_$iframe || !_$iframe.length) return;
+
+        _$iframe.css("border-bottom", "1px dashed silver");
+        _$iframe.css("border-top", "1px dashed silver");
+    };
+
+    this.remove = function () {
+        this.clear();
+        
+        _currentSpineItem = undefined;
+        
+        if (_$el && _$el[0]) {
+            _$el.remove();
+        }
+        
+        _$el = undefined;
+        _$scaler = undefined;
+        _$iframe = undefined;
+    };
+
+    this.clear = function () {
+        _isIframeLoaded = false;
+        
+        if (_$iframe && _$iframe[0]) {
+            _$iframe[0].src = "";
+        }
+    };
+
+    this.currentSpineItem = function () {
+
+        return _currentSpineItem;
+    };
+
+    function onIFrameLoad(success) {
+
+        if (success) {
+            _isIframeLoaded = true;
+            var epubContentDocument = _$iframe[0].contentDocument;
+            _$epubHtml = $("html", epubContentDocument);
+            if (!_$epubHtml || _$epubHtml.length == 0) {
+                _$epubHtml = $("svg", epubContentDocument);
+            }
+
+            //_$epubHtml.css("overflow", "hidden");
+
+            if (_enableBookStyleOverrides) {
+                self.applyBookStyles();
+            }
+
+            updateMetaSize();
+
+            _pageTransitionHandler.onIFrameLoad();
+        }
+    }
+
+    var _viewSettings = undefined;
+    this.setViewSettings = function (settings) {
+
+        _viewSettings = settings;
+
+        if (_enableBookStyleOverrides) {
+            self.applyBookStyles();
+        }
+
+        updateMetaSize();
+
+        _pageTransitionHandler.updateOptions(settings);
+    };
+
+    function updateHtmlFontSize() {
+
+        if (!_enableBookStyleOverrides) return;
+
+        if (_$epubHtml && _viewSettings) {
+            Helpers.UpdateHtmlFontSize(_$epubHtml, _viewSettings.fontSize);
+        }
+    }
+
+    this.applyBookStyles = function () {
+
+        if (!_enableBookStyleOverrides) return;
+
+        if (_$epubHtml) {
+            Helpers.setStyles(_bookStyles.getStyles(), _$epubHtml);
+            updateHtmlFontSize();
+        }
+    };
+
+    //this is called by scroll_view for fixed spine item
+    this.scaleToWidth = function (width) {
+
+        if (_meta_size.width <= 0) return; // resize event too early!
+
+        var scale = width / _meta_size.width;
+        self.transformContentImmediate(scale, 0, 0);
+    };
+
+    //this is called by scroll_view for reflowable spine item
+    this.resizeIFrameToContent = function () {
+        var contHeight = getContentDocHeight();
+        //console.log("resizeIFrameToContent: " + contHeight);
+
+        self.setHeight(contHeight);
+
+        self.showIFrame();
+    };
+
+    this.setHeight = function (height) {
+
+        _$scaler.css("height", height + "px");
+        _$el.css("height", height + "px");
+
+//        _$iframe.css("height", height + "px");
+    };
+
+    var _useCSSTransformToHideIframe = true;
+
+    this.showIFrame = function () {
+
+        _$iframe.css("visibility", "visible");
+
+        if (_useCSSTransformToHideIframe) {
+            _$iframe.css("transform", "none");
+
+            var enable3D = false;
+            var settings = _viewSettings;
+            if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined") {
+                //defaults
+                settings = new ViewerSettings({});
+            }
+            if (settings.enableGPUHardwareAccelerationCSS3D) {
+                enable3D = true;
+                _$iframe.css("transform", "translateZ(0)");
+            }
+        }
+        else {
+            _$iframe.css({left: "0px", top: "0px"});
+        }
+    };
+
+    this.hideIFrame = function () {
+
+        _$iframe.css("visibility", "hidden");
+
+        // With some books, despite the iframe and its containing div wrapper being hidden,
+        // the iframe's contentWindow / contentDocument is still visible!
+        // Thus why we translate the iframe out of view instead.
+
+        if (_useCSSTransformToHideIframe) {
+            var enable3D = false;
+            var settings = _viewSettings;
+            if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined") {
+                //defaults
+                settings = new ViewerSettings({});
+            }
+            if (settings.enableGPUHardwareAccelerationCSS3D) {
+                enable3D = true;
+            }
+
+            var css = Helpers.CSSTransformString({left: "10000", top: "10000", enable3D: enable3D});
+            _$iframe.css(css);
+        }
+        else {
+            _$iframe.css({left: "10000px", top: "10000px"});
+        }
+    };
+
+    function getContentDocHeight() {
+
+        if (!_$iframe || !_$iframe.length) {
+            return 0;
+        }
+
+        if (Helpers.isIframeAlive(_$iframe[0])) {
+            var win = _$iframe[0].contentWindow;
+            var doc = _$iframe[0].contentDocument;
+
+            var height = Math.round(parseFloat(win.getComputedStyle(doc.documentElement).height)); //body can be shorter!
+            return height;
+        }
+        else if (_$epubHtml) {
+            console.error("getContentDocHeight ??");
+
+            var jqueryHeight = _$epubHtml.height();
+            return jqueryHeight;
+        }
+
+        return 0;
+    }
+
+    // dir: 0 => new or same page, 1 => previous, 2 => next
+    this.updatePageSwitchDir = function (dir, hasChanged) {
+        _pageTransitionHandler.updatePageSwitchDir(dir, hasChanged);
+    };
+
+
+    this.transformContentImmediate = function (scale, left, top) {
+
+        var elWidth = Math.ceil(_meta_size.width * scale);
+        var elHeight = Math.floor(_meta_size.height * scale);
+
+        _pageTransitionHandler.transformContentImmediate_BEGIN(_$el, scale, left, top);
+
+        _$el.css("left", left + "px");
+        _$el.css("top", top + "px");
+        _$el.css("width", elWidth + "px");
+        _$el.css("height", elHeight + "px");
+
+        if (!_$epubHtml) {
+//                  debugger;
+            return;
+        }
+
+        var enable3D = false;
+        var settings = _viewSettings;
+        if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined") {
+            //defaults
+            settings = new ViewerSettings({});
+        }
+        if (settings.enableGPUHardwareAccelerationCSS3D) {
+            enable3D = true;
+        }
+
+        if (reader.needsFixedLayoutScalerWorkAround()) {
+            var css1 = Helpers.CSSTransformString({scale: scale, enable3D: enable3D});
+            _$epubHtml.css(css1);
+
+            var css2 = Helpers.CSSTransformString({scale : 1, enable3D: enable3D});
+            css2["width"] = _meta_size.width * scale;
+            css2["height"] = _meta_size.height * scale;
+
+            _$scaler.css(css2);
+        }
+        else {
+            var css = Helpers.CSSTransformString({scale: scale, enable3D: enable3D});
+            css["width"] = _meta_size.width;
+            css["height"] = _meta_size.height;
+            _$scaler.css(css);
+        }
+                
+        // Chrome workaround: otherwise text is sometimes invisible (probably a rendering glitch due to the 3D transform graphics backend?)
+        //_$epubHtml.css("visibility", "hidden"); // "flashing" in two-page spread mode is annoying :(
+        _$epubHtml.css("opacity", "0.999");
+
+        self.showIFrame();
+
+        setTimeout(function () {
+            //_$epubHtml.css("visibility", "visible");
+            _$epubHtml.css("opacity", "1");
+        }, 0);
+        
+        // TODO: the CSS transitions do not work anymore, tested on Firefox and Chrome.
+        // The line of code below still needs to be invoked, but the logic in _pageTransitionHandler probably need adjusting to work around the animation timing issue.
+        // PS: opacity=1 above seems to interfere with the fade-in transition, probably a browser issue with mixing inner-iframe effects with effects applied to the iframe parent/ancestors.
+        _pageTransitionHandler.transformContentImmediate_END(_$el, scale, left, top);
+    };
+
+    this.getCalculatedPageHeight = function () {
+        return _$el.height();
+    };
+
+    this.transformContent = _.bind(_.debounce(this.transformContentImmediate, 50), self);
+
+    function updateMetaSize() {
+
+        _meta_size.width = 0;
+        _meta_size.height = 0;
+
+        var size = undefined;
+
+        var isFallbackDimension = false;
+        var widthPercent = undefined;
+        var heightPercent = undefined;
+
+        var contentDocument = _$iframe[0].contentDocument;
+
+        // first try to read viewport size
+        var content = $('meta[name=viewport]', contentDocument).attr("content");
+
+        // if not found try viewbox (used for SVG)
+        if (!content) {
+            content = $('meta[name=viewbox]', contentDocument).attr("content");
+        }
+
+        if (content) {
+            size = parseMetaSize(content);
+        }
+
+        if (!size) {
+
+            //var $svg = $(contentDocument).find('svg');
+            // if($svg.length > 0) {
+            if (contentDocument && contentDocument.documentElement && contentDocument.documentElement.nodeName && contentDocument.documentElement.nodeName.toLowerCase() == "svg") {
+
+                var width = undefined;
+                var height = undefined;
+
+                var wAttr = contentDocument.documentElement.getAttribute("width");
+                var isWidthPercent = wAttr && wAttr.length >= 1 && wAttr[wAttr.length - 1] == '%';
+                if (wAttr) {
+                    try {
+                        width = parseInt(wAttr, 10);
+                    }
+                    catch (err) {}
+                }
+                if (width && isWidthPercent) {
+                    widthPercent = width;
+                    width = undefined;
+                }
+
+                var hAttr = contentDocument.documentElement.getAttribute("height");
+                var isHeightPercent = hAttr && hAttr.length >= 1 && hAttr[hAttr.length - 1] == '%';
+                if (hAttr) {
+                    try {
+                        height = parseInt(hAttr, 10);
+                    }
+                    catch (err) {}
+                }
+                if (height && isHeightPercent) {
+                    heightPercent = height;
+                    height = undefined;
+                }
+
+                if (width && height) {
+                    size = {
+                        width: width,
+                        height: height
+                    }
+                }
+                else {
+                    /// DISABLED (not a satisfactory fallback)
+                    // content = $svg.attr('viewBox');
+                    // if(content) {
+                    //     size = parseViewBoxSize(content);
+                    // }
+                    //
+                    // if (size) {
+                    //     console.warn("Viewport SVG: using viewbox!");
+                    // }
+                }
+            }
+        }
+
+        if (!size && _currentSpineItem) {
+            content = _currentSpineItem.getRenditionViewport();
+
+            if (content) {
+                size = parseMetaSize(content);
+                if (size) {
+                    console.log("Viewport: using rendition:viewport dimensions");
+                }
+            }
+        }
+
+        if (!size) {
+            // Image fallback (auto-generated HTML template when WebView / iFrame is fed with image media type)
+            var $img = $(contentDocument).find('img');
+            if ($img.length > 0) {
+                size = {
+                    width: $img.width(),
+                    height: $img.height()
+                };
+
+                var isImage = _currentSpineItem && _currentSpineItem.media_type && _currentSpineItem.media_type.length && _currentSpineItem.media_type.indexOf("image/") == 0;
+                if (!isImage) {
+                    console.warn("Viewport: using img dimensions!");
+                }
+            }
+            else {
+                $img = $(contentDocument).find('image');
+                if ($img.length > 0) {
+                    var width = undefined;
+                    var height = undefined;
+
+                    var wAttr = $img[0].getAttribute("width");
+                    if (wAttr) {
+                        try {
+                            width = parseInt(wAttr, 10);
+                        }
+                        catch (err) {}
+                    }
+                    var hAttr = $img[0].getAttribute("height");
+                    if (hAttr) {
+                        try {
+                            height = parseInt(hAttr, 10);
+                        }
+                        catch (err) {}
+                    }
+
+
+                    if (width && height) {
+                        size = {
+                            width: width,
+                            height: height
+                        };
+
+                        isFallbackDimension = true;
+
+                        console.warn("Viewport: using image dimensions!");
+                    }
+                }
+            }
+        }
+
+        if (!size) {
+            // Not a great fallback, as it has the aspect ratio of the full window, but it is better than no display at all.
+            width = _$viewport.width();
+            height = _$viewport.height();
+
+            // hacky method to determine the actual available horizontal space (half the two-page spread is a reasonable approximation, this means that whatever the size of the other iframe / one_page_view, the aspect ratio of this one exactly corresponds to half the viewport rendering surface)
+            var isTwoPageSyntheticSpread = $("iframe.iframe-fixed", _$viewport).length > 1;
+            if (isTwoPageSyntheticSpread) width *= 0.5;
+
+            // the original SVG width/height might have been specified as a percentage of the containing viewport
+            if (widthPercent) {
+                width *= (widthPercent / 100);
+            }
+            if (heightPercent) {
+                height *= (heightPercent / 100);
+            }
+
+            size = {
+                width: width,
+                height: height
+            };
+
+            isFallbackDimension = true;
+
+            console.warn("Viewport: using browser / e-reader viewport dimensions!");
+        }
+
+        if (size) {
+            _meta_size.width = size.width;
+            _meta_size.height = size.height;
+
+            // Not strictly necessary, let's preserve the percentage values
+            // if (isFallbackDimension && contentDocument && contentDocument.documentElement && contentDocument.documentElement.nodeName && contentDocument.documentElement.nodeName.toLowerCase() == "svg") {
+            //     contentDocument.documentElement.setAttribute("width", size.width + "px");
+            //     contentDocument.documentElement.setAttribute("height", size.height + "px");
+            // }
+        }
+    }
+
+    //expected callback signature: function(success, $iframe, spineItem, isNewlyLoaded, context)
+    this.loadSpineItem = function (spineItem, callback, context) {
+
+        if (_currentSpineItem != spineItem) {
+
+            _currentSpineItem = spineItem;
+            var src = _spine.package.resolveRelativeUrl(spineItem.href);
+
+            //if (spineItem && spineItem.isFixedLayout())
+            if (true) // both fixed layout and reflowable documents need hiding due to flashing during layout/rendering
+            {
+                //hide iframe until content is scaled
+                self.hideIFrame();
+            }
+
+            Globals.logEvent("OnePageView.Events.SPINE_ITEM_OPEN_START", "EMIT", "one_page_view.js [ " + spineItem.href + " -- " + src + " ]");
+            self.emit(OnePageView.Events.SPINE_ITEM_OPEN_START, _$iframe, _currentSpineItem);
+            
+            _iframeLoader.loadIframe(_$iframe[0], src, function (success) {
+
+                if (success && callback) {
+                    var func = function () {
+                        callback(success, _$iframe, _currentSpineItem, true, context);
+                    };
+
+                    if (Helpers.isIframeAlive(_$iframe[0])) {
+                        onIFrameLoad(success); // applies styles
+
+                        func();
+                    }
+                    else {
+                        console.error("onIFrameLoad !! doc && win + TIMEOUT");
+                        console.debug(spineItem.href);
+
+                        onIFrameLoad(success);
+
+                        setTimeout(func, 500);
+                    }
+                }
+                else {
+                    onIFrameLoad(success);
+                }
+
+            }, self, {spineItem: _currentSpineItem});
+        }
+        else {
+            if (callback) {
+                callback(true, _$iframe, _currentSpineItem, false, context);
+            }
+        }
+    };
+    //
+    // function parseViewBoxSize(viewBoxString) {
+    //
+    //     var parts = viewBoxString.split(' ');
+    //
+    //     if(parts.length < 4) {
+    //         console.warn(viewBoxString + " value is not valid viewBox size")
+    //         return undefined;
+    //     }
+    //
+    //     var width = parseInt(parts[2]);
+    //     var height = parseInt(parts[3]);
+    //
+    //     if(!isNaN(width) && !isNaN(height)) {
+    //         return { width: width, height: height} ;
+    //     }
+    //
+    //     return undefined;
+    // }
+
+    function parseMetaSize(content) {
+
+        var pairs = content.replace(/\s/g, '').split(",");
+
+        var dict = {};
+
+        for (var i = 0; i < pairs.length; i++) {
+            var nameVal = pairs[i].split("=");
+            if (nameVal.length == 2) {
+
+                dict[nameVal[0]] = nameVal[1];
+            }
+        }
+
+        var width = Number.NaN;
+        var height = Number.NaN;
+
+        if (dict["width"]) {
+            width = parseInt(dict["width"]);
+        }
+
+        if (dict["height"]) {
+            height = parseInt(dict["height"]);
+        }
+
+        if (!isNaN(width) && !isNaN(height)) {
+            return {width: width, height: height};
+        }
+
+        return undefined;
+    }
+
+    function getVisibleContentOffsets() {
+        return {
+            top: -_$el.parent().scrollTop(),
+            left: 0
+        };
+    }
+    
+    function getFrameDimensions() {
+        return {
+            width: _$el.parent()[0].clientWidth,
+            height: _$el.parent()[0].clientHeight
+        };
+    }
+    
+    this.getNavigator = function () {
+        return new CfiNavigationLogic({
+            $iframe: _$iframe,
+            frameDimensions: getFrameDimensions,
+            visibleContentOffsets: getVisibleContentOffsets
+        });
+    };
+
+    this.getElementByCfi = function (spineItemIdref, cfi, classBlacklist, elementBlacklist, idBlacklist) {
+
+        if (spineItemIdref != _currentSpineItem.idref) {
+            console.error("spine item is not loaded");
+            return undefined;
+        }
+
+        var navigation = self.getNavigator();
+        return navigation.getElementByCfi(cfi, classBlacklist, elementBlacklist, idBlacklist);
+    };
+
+    this.getElementById = function (spineItemIdref, id) {
+
+        if (spineItemIdref != _currentSpineItem.idref) {
+            console.error("spine item is not loaded");
+            return undefined;
+        }
+
+        var navigation = self.getNavigator();
+        return navigation.getElementById(id);
+    };
+
+    this.getElement = function (spineItemIdref, selector) {
+
+        if(spineItemIdref != _currentSpineItem.idref) {
+            console.error("spine item is not loaded");
+            return undefined;
+        }
+
+        var navigation = self.getNavigator();
+        return navigation.getElement(selector);
+    };
+
+    this.getFirstVisibleMediaOverlayElement = function() {
+        var navigation = self.getNavigator();
+        return navigation.getFirstVisibleMediaOverlayElement();
+    };
+
+    this.offset = function () {
+        if (_$iframe) {
+            return _$iframe.offset();
+        }
+        return undefined;
+    };
+
+    this.getVisibleElementsWithFilter = function (filterFunction) {
+        var navigation = self.getNavigator();
+        var elements = navigation.getVisibleElementsWithFilter(null, filterFunction);
+        return elements;
+    };
+
+    this.getVisibleElements = function (selector) {
+
+        var navigation = self.getNavigator();
+        var elements = navigation.getAllVisibleElementsWithSelector(selector);
+        return elements;
+    };
+
+    this.getAllElementsWithFilter = function (filterFunction, outsideBody) {
+        var navigation = self.getNavigator();
+        var elements = navigation.getAllElementsWithFilter(filterFunction, outsideBody);
+        return elements;
+    };
+
+    this.getElements = function(spineItemIdref, selector) {
+
+        if(spineItemIdref != _currentSpineItem.idref) {
+            console.error("spine item is not loaded");
+            return undefined;
+        }
+
+        var navigation = self.getNavigator();
+
+        return navigation.getElements(selector);
+    };
+
+    this.getNodeRangeInfoFromCfi = function (spineIdRef, partialCfi) {
+        if (spineIdRef != _currentSpineItem.idref) {
+            console.warn("spine item is not loaded");
+            return undefined;
+        }
+        var navigation = self.getNavigator();
+
+        return navigation.getNodeRangeInfoFromCfi(partialCfi);
+    };
+
+    function createBookmarkFromCfi(cfi){
+        return new BookmarkData(_currentSpineItem.idref, cfi);
+    }
+
+    this.getLoadedContentFrames = function () {
+        return [{spineItem: _currentSpineItem, $iframe: _$iframe}];
+    };
+
+    this.getFirstVisibleCfi = function (visibleContentOffsets, frameDimensions) {
+        return createBookmarkFromCfi(self.getNavigator().getFirstVisibleCfi(visibleContentOffsets, frameDimensions));
+    };
+
+    this.getLastVisibleCfi = function (visibleContentOffsets, frameDimensions) {
+        return createBookmarkFromCfi(self.getNavigator().getLastVisibleCfi(visibleContentOffsets, frameDimensions));
+    };
+
+    this.getDomRangeFromRangeCfi = function (rangeCfi, rangeCfi2, inclusive) {
+        return self.getNavigator().getDomRangeFromRangeCfi(rangeCfi, rangeCfi2, inclusive);
+    };
+
+    this.getRangeCfiFromDomRange = function (domRange) {
+        return createBookmarkFromCfi(self.getNavigator().getRangeCfiFromDomRange(domRange));
+    };
+
+    this.getVisibleCfiFromPoint = function (x, y, precisePoint) {
+        return createBookmarkFromCfi(self.getNavigator().getVisibleCfiFromPoint(x, y, precisePoint));
+    };
+
+    this.getRangeCfiFromPoints = function(startX, startY, endX, endY) {
+        return createBookmarkFromCfi(self.getNavigator().getRangeCfiFromPoints(startX, startY, endX, endY));
+    };
+
+    this.getCfiForElement = function(x, y) {
+        return createBookmarkFromCfi(self.getNavigator().getCfiForElement(x, y));
+    };
+
+    this.getElementFromPoint = function (x, y) {
+        return self.getNavigator().getElementFromPoint(x, y);
+    };
+
+};
+
+OnePageView.Events = {
+    SPINE_ITEM_OPEN_START: "SpineItemOpenStart"
+};
+return OnePageView;
+});
+
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/page_open_request',[],function() {
+/**
+ * Representation of opening page request
+ * Provides the spine item to be opened and one of the following properties:
+ *  spineItemPageIndex {Number},
+ *  elementId {String},
+ *  elementCfi {String},
+ *  firstPage {bool},
+ *  lastPage {bool}
+ *
+ * @param {Models.SpineItem} spineItem
+ * @param {object} [initiator]
+ *
+ * @constructor
+ */
+var PageOpenRequest = function(spineItem, initiator) {
+
+    this.spineItem = spineItem;
+    this.spineItemPageIndex = undefined;
+    this.elementId = undefined;
+    this.elementCfi = undefined;
+    this.firstPage = false;
+    this.lastPage = false;
+    this.initiator = initiator;
+
+    this.reset = function() {
+        this.spineItemPageIndex = undefined;
+        this.elementId = undefined;
+        this.elementCfi = undefined;
+        this.firstPage = false;
+        this.lastPage = false;
+    };
+
+    this.setFirstPage = function() {
+        this.reset();
+        this.firstPage = true;
+    };
+
+    this.setLastPage = function() {
+        this.reset();
+        this.lastPage = true;
+    };
+
+    this.setPageIndex = function(pageIndex) {
+        this.reset();
+        this.spineItemPageIndex = pageIndex;
+    };
+
+    this.setElementId = function(elementId) {
+        this.reset();
+        this.elementId = elementId;
+    };
+
+    this.setElementCfi = function(elementCfi) {
+
+        this.reset();
+        this.elementCfi = elementCfi;
+    };
+
+
+};
+
+return PageOpenRequest;
+});
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define ('readium_shared_js/views/fixed_view',["../globals", "jquery", "underscore", "eventEmitter", "../models/bookmark_data", "../models/current_pages_info",
+    "../models/fixed_page_spread", "./one_page_view", "../models/page_open_request", "../helpers"],
+    function(Globals, $, _, EventEmitter, BookmarkData, CurrentPagesInfo,
+             Spread, OnePageView, PageOpenRequest, Helpers) {
+/**
+ * View for rendering fixed layout page spread
+ * @param options
+ * @param reader
+ * @constructor
+ */
+var FixedView = function(options, reader){
+
+    $.extend(this, new EventEmitter());
+
+    var self = this;
+
+    var _$el;
+    var _$viewport = options.$viewport;
+    var _spine = options.spine;
+    var _userStyles = options.userStyles;
+    var _bookStyles = options.bookStyles;
+    var _zoom = options.zoom || {style: 'default'};
+    var _currentScale;
+    var _iframeLoader = options.iframeLoader;
+    var _viewSettings = undefined;
+
+    var _leftPageView = createOnePageView("fixed-page-frame-left");
+    var _rightPageView = createOnePageView("fixed-page-frame-right");
+    var _centerPageView = createOnePageView("fixed-page-frame-center");
+
+    var _pageViews = [];
+    _pageViews.push(_leftPageView);
+    _pageViews.push(_rightPageView);
+    _pageViews.push(_centerPageView);
+
+    var _spread = new Spread(_spine, false);
+    var _bookMargins;
+    var _contentMetaSize;
+    var _isRedrowing = false;
+    var _redrawRequest = false;
+
+    function createOnePageView(elementClass) {
+
+        var pageView = new OnePageView(options,
+        [elementClass],
+        false, //enableBookStyleOverrides
+        reader
+        );
+
+
+        pageView.on(OnePageView.Events.SPINE_ITEM_OPEN_START, function($iframe, spineItem) {
+            
+            Globals.logEvent("OnePageView.Events.SPINE_ITEM_OPEN_START", "ON", "fixed_view.js [ " + spineItem.href + " ]");
+
+            Globals.logEvent("CONTENT_DOCUMENT_LOAD_START", "EMIT", "fixed_view.js [ " + spineItem.href + " ]");
+            self.emit(Globals.Events.CONTENT_DOCUMENT_LOAD_START, $iframe, spineItem);
+        });   
+    
+        return pageView;
+    }
+
+    this.isReflowable = function() {
+        return false;
+    };
+
+    this.setZoom = function(zoom){
+        _zoom = zoom;
+
+        resizeBook(false); 
+    }
+
+    this.render = function(){
+
+        var template = Helpers.loadTemplate("fixed_book_frame", {});
+
+        _$el = $(template);
+
+        Helpers.CSSTransition(_$el, "all 0 ease 0");
+        
+        _$el.css("overflow", "hidden");
+        
+        // Removed, see one_page_view@render()
+        // var settings = reader.viewerSettings();
+        // if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined")
+        // {
+        //     //defaults
+        //     settings = new Globals.Models.ViewerSettings({});
+        // }
+        // if (settings.enableGPUHardwareAccelerationCSS3D) {
+        //
+        //     // This fixes rendering issues with WebView (native apps), which crops content embedded in iframes unless GPU hardware acceleration is enabled for CSS rendering.
+        //     _$el.css("transform", "translateZ(0)");
+        // }
+        
+        _$viewport.append(_$el);
+
+        self.applyStyles();
+
+        return this;
+    };
+
+    this.remove = function() {
+
+        _$el.remove();
+    };
+
+
+    this.setViewSettings = function(settings) {
+        
+        _viewSettings = settings;
+        
+        _spread.setSyntheticSpread(Helpers.deduceSyntheticSpread(_$viewport, getFirstVisibleItem(), _viewSettings) == true); // force boolean value (from truthy/falsey return value)
+
+        var views = getDisplayingViews();
+        for(var i = 0, count = views.length; i < count; i++) {
+            views[i].setViewSettings(settings);
+        }
+    };
+
+    function getFirstVisibleItem() {
+
+        var visibleItems = _spread.validItems();
+        return visibleItems[0];
+    }
+
+    function redraw(initiator, paginationRequest) {
+
+        if(_isRedrowing) {
+            _redrawRequest = {initiator: initiator, paginationRequest: paginationRequest};
+            return;
+        }
+
+        _isRedrowing = true;
+
+        var context = {isElementAdded : false};
+
+        var pageLoadDeferrals = createPageLoadDeferrals([
+            {pageView: _leftPageView, spineItem: _spread.leftItem, context: context},
+            {pageView: _rightPageView, spineItem: _spread.rightItem, context: context},
+            {pageView: _centerPageView, spineItem: _spread.centerItem, context: context}]);
+
+        $.when.apply($, pageLoadDeferrals).done(function(){
+            _isRedrowing = false;
+
+            if(_redrawRequest) {
+                var p1 = _redrawRequest.initiator;
+                var p2 = _redrawRequest.paginationRequest;
+                _redrawRequest = undefined;
+                redraw(p1, p2);
+            }
+            else {
+                
+                if(context.isElementAdded) {
+                    //self.applyStyles();
+                    
+                    Helpers.setStyles(_userStyles.getStyles(), _$el.parent());
+                    updateBookMargins();
+                    // updateContentMetaSize() and resizeBook() are invoked in onPagesLoaded below
+                }
+
+                if (paginationRequest)
+                {
+                    onPagesLoaded(initiator, paginationRequest.spineItem, paginationRequest.elementId)
+                }
+                else
+                {
+                    onPagesLoaded(initiator);
+                }
+            }
+
+        });
+
+    }
+
+    // dir: 0 => new or same page, 1 => previous, 2 => next
+    var updatePageSwitchDir = function(dir, hasChanged)
+    {
+        // irrespective of display state
+        if (_leftPageView) _leftPageView.updatePageSwitchDir(dir, hasChanged);
+        if (_rightPageView) _rightPageView.updatePageSwitchDir(dir, hasChanged);
+        if (_centerPageView) _centerPageView.updatePageSwitchDir(dir, hasChanged);
+
+        // var views = getDisplayingViews();
+        // for(var i = 0, count = views.length; i < count; i++) {
+        //     views[i].updatePageSwitchDir(dir, hasChanged);
+        // }
+    };
+    
+
+    this.applyStyles = function() {
+
+        Helpers.setStyles(_userStyles.getStyles(), _$el.parent());
+        updateBookMargins();
+        
+        updateContentMetaSize();
+        resizeBook();
+    };
+
+    this.applyBookStyles = function() {
+
+        var views = getDisplayingViews();
+
+        for(var i = 0, count = views.length; i < count; i++) {
+            views[i].applyBookStyles();
+        }
+    };
+
+    function createPageLoadDeferrals(viewItemPairs) {
+
+        var pageLoadDeferrals = [];
+
+        for(var i = 0; i < viewItemPairs.length; i++) {
+
+            var dfd = updatePageViewForItem(viewItemPairs[i].pageView, viewItemPairs[i].spineItem, viewItemPairs[i].context);
+            pageLoadDeferrals.push(dfd);
+        }
+
+        return pageLoadDeferrals;
+
+    }
+
+    function onPagesLoaded(initiator, paginationRequest_spineItem, paginationRequest_elementId) {
+        
+        updateContentMetaSize();
+        resizeBook();
+        
+        window.setTimeout(function () {
+            
+            Globals.logEvent("InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED", "EMIT", "fixed_view.js");
+            self.emit(Globals.InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED, {
+                paginationInfo: self.getPaginationInfo(),
+                initiator: initiator,
+                spineItem: paginationRequest_spineItem,
+                elementId: paginationRequest_elementId
+            });
+        }, 60);
+        //this delay of 60ms is to ensure that it triggers
+        // after any other 10-50ms timers that defer the pagination process in OnePageView
+    }
+
+    this.onViewportResize = function() {
+
+        //because change of the viewport orientation can alter pagination behaviour we have to check if
+        //visible content stays same
+
+        var firstVisibleItem = getFirstVisibleItem();
+        if(!firstVisibleItem) {
+            return;
+        }
+
+        var isSyntheticSpread = Helpers.deduceSyntheticSpread(_$viewport, firstVisibleItem, _viewSettings) == true; // force boolean value (from truthy/falsey return value)
+
+        if(isSpreadChanged(firstVisibleItem, isSyntheticSpread)) {
+            _spread.setSyntheticSpread(isSyntheticSpread);
+            var paginationRequest = new PageOpenRequest(firstVisibleItem, self);
+            self.openPage(paginationRequest);
+        }
+        else {
+            resizeBook(true);
+        }
+    };
+
+    function isSpreadChanged(firstVisibleItem, isSyntheticSpread) {
+
+        var tmpSpread = new Spread(_spine, isSyntheticSpread);
+        tmpSpread.openItem(firstVisibleItem);
+
+        return _spread.leftItem != tmpSpread.leftItem || _spread.rightItem != tmpSpread.rightItem || _spread.centerItem != tmpSpread.centerItem;
+    }
+
+    this.getViewScale = function(){
+        return _currentScale;
+    };
+
+    function isContentRendered() {
+
+        if(!_contentMetaSize || !_bookMargins) {
+            return false;
+        }
+
+        var viewportWidth = _$viewport.width();
+        var viewportHeight = _$viewport.height();
+
+        return viewportWidth && viewportHeight;
+    }
+
+    function resizeBook(viewportIsResizing) {
+
+        updatePageSwitchDir(0, false);
+        
+        if(!isContentRendered()) {
+            return;
+        }
+
+        var viewportWidth = _$viewport.width();
+        var viewportHeight = _$viewport.height();
+
+        var leftPageMargins = _leftPageView.isDisplaying() ? Helpers.Margins.fromElement(_leftPageView.element()) : Helpers.Margins.empty();
+        var rightPageMargins = _rightPageView.isDisplaying() ? Helpers.Margins.fromElement(_rightPageView.element()) : Helpers.Margins.empty();
+        var centerPageMargins = _centerPageView.isDisplaying() ? Helpers.Margins.fromElement(_centerPageView.element()) : Helpers.Margins.empty();
+
+        var pageMargins = getMaxPageMargins(leftPageMargins, rightPageMargins, centerPageMargins);
+
+        var potentialTargetElementSize = {   width: viewportWidth - _bookMargins.width(),
+                                             height: viewportHeight - _bookMargins.height()};
+
+        var potentialContentSize = {    width: potentialTargetElementSize.width - pageMargins.width(),
+                                        height: potentialTargetElementSize.height - pageMargins.height() };
+
+        if(potentialTargetElementSize.width <= 0 || potentialTargetElementSize.height <= 0) {
+            return;
+        }
+
+        var horScale = potentialContentSize.width / _contentMetaSize.width;
+        var verScale = potentialContentSize.height / _contentMetaSize.height;
+        
+        _$viewport.css("overflow", "auto");
+            
+        var scale;
+        if (_zoom.style == 'fit-width'){
+            scale = horScale;
+        }
+        else if (_zoom.style == 'fit-height'){
+            scale = verScale;
+        }
+        else if (_zoom.style == 'user'){
+            scale = _zoom.scale;
+        }
+        else{
+            scale = Math.min(horScale, verScale);
+
+            // no need for pan during "viewport fit" zoom
+            _$viewport.css("overflow", "hidden");
+        }
+
+        _currentScale = scale;
+
+        var contentSize = { width: _contentMetaSize.width * scale,
+                            height: _contentMetaSize.height * scale };
+
+        var targetElementSize = {   width: contentSize.width + pageMargins.width(),
+                                    height: contentSize.height + pageMargins.height() };
+
+        var bookSize = {    width: targetElementSize.width + _bookMargins.width(),
+                            height: targetElementSize.height + _bookMargins.height() };
+
+
+        var bookLeft = Math.floor((viewportWidth - bookSize.width) / 2);
+        var bookTop = Math.floor((viewportHeight - bookSize.height) / 2);
+
+        if(bookLeft < 0) bookLeft = 0;
+        if(bookTop < 0) bookTop = 0;
+        
+        _$el.css("left", bookLeft + "px");
+        _$el.css("top", bookTop + "px");
+        _$el.css("width", targetElementSize.width + "px");
+        _$el.css("height", targetElementSize.height + "px");
+
+        var left = _bookMargins.padding.left;
+        var top = _bookMargins.padding.top;
+
+        var transFunc = viewportIsResizing ? "transformContentImmediate" : "transformContent";
+
+        if(_leftPageView.isDisplaying()) {
+
+             _leftPageView[transFunc](scale, left, top);
+        }
+
+        if(_rightPageView.isDisplaying()) {
+
+            left += _contentMetaSize.separatorPosition * scale;
+
+            if(_leftPageView.isDisplaying()) {
+                left += leftPageMargins.left;
+            }
+
+            _rightPageView[transFunc](scale, left, top);
+        }
+
+        if(_centerPageView.isDisplaying()) {
+
+            _centerPageView[transFunc](scale, left, top);
+        }
+        
+        Globals.logEvent("FXL_VIEW_RESIZED", "EMIT", "fixed_view.js");
+        self.emit(Globals.Events.FXL_VIEW_RESIZED);
+    }
+
+    function getMaxPageMargins(leftPageMargins, rightPageMargins, centerPageMargins) {
+
+         var sumMargin = {
+            left: Math.max(leftPageMargins.margin.left, rightPageMargins.margin.left, centerPageMargins.margin.left),
+            right: Math.max(leftPageMargins.margin.right, rightPageMargins.margin.right, centerPageMargins.margin.right),
+            top: Math.max(leftPageMargins.margin.top, rightPageMargins.margin.top, centerPageMargins.margin.top),
+            bottom: Math.max(leftPageMargins.margin.bottom, rightPageMargins.margin.bottom, centerPageMargins.margin.bottom)
+        };
+
+        var sumBorder = {
+            left: Math.max(leftPageMargins.border.left, rightPageMargins.border.left, centerPageMargins.border.left),
+            right: Math.max(leftPageMargins.border.right, rightPageMargins.border.right, centerPageMargins.border.right),
+            top: Math.max(leftPageMargins.border.top, rightPageMargins.border.top, centerPageMargins.border.top),
+            bottom: Math.max(leftPageMargins.border.bottom, rightPageMargins.border.bottom, centerPageMargins.border.bottom)
+        };
+
+        var sumPAdding = {
+            left: Math.max(leftPageMargins.padding.left, rightPageMargins.padding.left, centerPageMargins.padding.left),
+            right: Math.max(leftPageMargins.padding.right, rightPageMargins.padding.right, centerPageMargins.padding.right),
+            top: Math.max(leftPageMargins.padding.top, rightPageMargins.padding.top, centerPageMargins.padding.top),
+            bottom: Math.max(leftPageMargins.padding.bottom, rightPageMargins.padding.bottom, centerPageMargins.padding.bottom)
+        };
+
+        return new Helpers.Margins(sumMargin, sumBorder, sumPAdding);
+
+    }
+
+    function updateContentMetaSize() {
+
+        _contentMetaSize = {};
+
+        if(_centerPageView.isDisplaying()) {
+            _contentMetaSize.width = _centerPageView.meta_width();
+            _contentMetaSize.height = _centerPageView.meta_height();
+            _contentMetaSize.separatorPosition = 0;
+        }
+        else if(_leftPageView.isDisplaying() && _rightPageView.isDisplaying()) {
+            if(_leftPageView.meta_height() == _rightPageView.meta_height()) {
+                _contentMetaSize.width = _leftPageView.meta_width() + _rightPageView.meta_width();
+                _contentMetaSize.height = _leftPageView.meta_height();
+                _contentMetaSize.separatorPosition = _leftPageView.meta_width();
+            }
+            else {
+                //normalize by height
+                _contentMetaSize.width = _leftPageView.meta_width() + _rightPageView.meta_width() * (_leftPageView.meta_height() / _rightPageView.meta_height());
+                _contentMetaSize.height = _leftPageView.meta_height();
+                _contentMetaSize.separatorPosition = _leftPageView.meta_width();
+            }
+        }
+        else if(_leftPageView.isDisplaying()) {
+            _contentMetaSize.width = _leftPageView.meta_width() * 2;
+            _contentMetaSize.height = _leftPageView.meta_height();
+            _contentMetaSize.separatorPosition = _leftPageView.meta_width();
+        }
+        else if(_rightPageView.isDisplaying()) {
+            _contentMetaSize.width = _rightPageView.meta_width() * 2;
+            _contentMetaSize.height = _rightPageView.meta_height();
+            _contentMetaSize.separatorPosition = _rightPageView.meta_width();
+        }
+        else {
+            _contentMetaSize = undefined;
+        }
+
+    }
+
+    function updateBookMargins() {
+        _bookMargins = Helpers.Margins.fromElement(_$el);
+    }
+
+    // dir: 0 => new or same page, 1 => previous, 2 => next
+    this.openPage =  function(paginationRequest, dir) {
+
+        if(!paginationRequest.spineItem) {
+            return;
+        }
+
+        var leftItem = _spread.leftItem;
+        var rightItem = _spread.rightItem;
+        var centerItem = _spread.centerItem;
+
+        var isSyntheticSpread = Helpers.deduceSyntheticSpread(_$viewport, paginationRequest.spineItem, _viewSettings) == true; // force boolean value (from truthy/falsey return value)
+        _spread.setSyntheticSpread(isSyntheticSpread);
+        _spread.openItem(paginationRequest.spineItem);
+        
+        var hasChanged = leftItem !== _spread.leftItem || rightItem !== _spread.rightItem || centerItem !== _spread.centerItem;
+        
+        if (dir === null || typeof dir === "undefined") dir = 0;
+        
+        updatePageSwitchDir(dir === 0 ? 0 : (_spread.spine.isRightToLeft() ? (dir === 1 ? 2 : 1) : dir), hasChanged);
+        
+        redraw(paginationRequest.initiator, paginationRequest);
+    };
+
+
+    this.openPagePrev = function(initiator) {
+
+        _spread.openPrev();
+        
+        updatePageSwitchDir(_spread.spine.isRightToLeft() ? 2 : 1, true);
+        
+        redraw(initiator, undefined);
+    };
+
+    this.openPageNext = function(initiator) {
+
+        _spread.openNext();
+        
+        updatePageSwitchDir(_spread.spine.isRightToLeft() ? 1 : 2, true);
+        
+        redraw(initiator, undefined);
+    };
+
+    function updatePageViewForItem(pageView, item, context) {
+
+        var dfd = $.Deferred();
+
+        if(!item) {
+            if(pageView.isDisplaying()) {
+                pageView.remove();
+            }
+
+            dfd.resolve();
+        }
+        else {
+
+            //if(pageView.isDisplaying()) { // always DO (no iframe reuse, as this creates problems with BlobURIs, and navigator history ... just like the reflowable view, we re-create an iframe from the template whenever needed for a new spine item URI)
+            pageView.remove();
+            
+            //if(!pageView.isDisplaying()) { // always TRUE
+            _$el.append(pageView.render().element());
+            context.isElementAdded = true;
+        
+
+            pageView.loadSpineItem(item, function(success, $iframe, spineItem, isNewContentDocumentLoaded, context){
+
+                if(success && isNewContentDocumentLoaded) {
+
+                    //if we a re loading fixed view meta size should be defined
+                    if(!pageView.meta_height() || !pageView.meta_width()) {
+                        console.error("Invalid document " + spineItem.href + ": viewport is not specified!");
+                    }
+
+                    Globals.logEvent("CONTENT_DOCUMENT_LOADED", "EMIT", "fixed_view.js [ " + spineItem.href + " ]");
+                    self.emit(Globals.Events.CONTENT_DOCUMENT_LOADED, $iframe, spineItem);
+                }
+
+                dfd.resolve();
+
+            }, context);
+        }
+
+        return dfd.promise();
+    }
+
+    this.getPaginationInfo = function() {
+
+        var paginationInfo = new CurrentPagesInfo(_spine, true);
+
+        var spreadItems = [_spread.leftItem, _spread.rightItem, _spread.centerItem];
+
+        for(var i = 0; i < spreadItems.length; i++) {
+
+            var spreadItem = spreadItems[i];
+
+            if(spreadItem) {
+                paginationInfo.addOpenPage(0, 1, spreadItem.idref, spreadItem.index);
+            }
+        }
+
+        return paginationInfo;
+    };
+
+    this.bookmarkCurrentPage = function() {
+
+        var views = getDisplayingViews();
+
+        if(views.length > 0) {
+
+            return views[0].getFirstVisibleCfi();
+        }
+
+        return undefined;
+    };
+
+    function getDisplayingViews() {
+
+        var viewsToCheck = [];
+
+        if( _spine.isLeftToRight() ) {
+            viewsToCheck = [_leftPageView, _centerPageView, _rightPageView];
+        }
+        else {
+            viewsToCheck = [_rightPageView, _centerPageView, _leftPageView];
+        }
+
+        var views = [];
+
+        for(var i = 0, count = viewsToCheck.length; i < count; i++) {
+            if(viewsToCheck[i].isDisplaying()) {
+                views.push(viewsToCheck[i]);
+            }
+        }
+
+        return views;
+    }
+
+    this.getLoadedSpineItems = function() {
+
+        return _spread.validItems();
+    };
+
+    function callOnPageView(spineItemIdref, fn) {
+        var views = getDisplayingViews();
+
+        for (var i = 0, count = views.length; i < count; i++) {
+
+            var view = views[i];
+            if (view.currentSpineItem().idref == spineItemIdref) {
+                return fn(view);
+            }
+        }
+
+        console.error("spine item is not loaded");
+        return undefined;
+    }
+
+    this.getElement = function (spineItemIdref, selector) {
+
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getElement(spineItemIdref, selector);
+        });
+    };
+
+    this.getElementById = function (spineItemIdref, id) {
+
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getElementById(spineItemIdref, id);
+        });
+    };
+
+
+    this.getElementByCfi = function(spineItemIdref, cfi, classBlacklist, elementBlacklist, idBlacklist) {
+
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getElementByCfi(spineItemIdref, cfi, classBlacklist, elementBlacklist, idBlacklist);
+        });
+    };
+    
+    this.getFirstVisibleMediaOverlayElement = function() {
+
+        var views = getDisplayingViews();
+
+        for(var i = 0, count = views.length; i < count; i++) {
+            var el = views[i].getFirstVisibleMediaOverlayElement();
+            if (el) return el;
+        }
+
+        return undefined;
+    };
+
+    this.insureElementVisibility = function(spineItemId, element, initiator) {
+
+        //TODO: during zoom+pan, playing element might not actually be visible
+
+    };
+    
+    this.getElements = function(spineItemIdref, selector) {
+
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getElements(spineItemIdref, selector);
+        });
+    };
+    
+    this.isElementVisible = function($element){
+
+        //for now we assume that for fixed layouts, elements are always visible
+        return true;
+    };
+    
+    this.getVisibleElementsWithFilter = function(filterFunction, includeSpineItems) {
+
+        var elements = [];
+
+        var views = getDisplayingViews();
+
+        for(var i = 0, count = views.length; i < count; i++) {
+            //for now we assume that for fixed layouts, elements are always visible
+            elements.push(views[i].getAllElementsWithFilter(filterFunction, includeSpineItems));
+        }
+
+        return elements;
+    };
+
+    this.getVisibleElements = function (selector, includeSpineItems) {
+
+        var elements = [];
+
+        var views = getDisplayingViews();
+
+        for (var i = 0, count = views.length; i < count; i++) {
+            //for now we assume that for fixed layouts, elements are always visible
+            if (includeSpineItems) {
+                elements.push({elements: views[i].getElements(views[i].currentSpineItem().idref, selector), spineItem: views[i].currentSpineItem()});
+            } else {
+                elements.push(views[i].getElements(views[i].currentSpineItem().idref, selector));
+            }
+        }
+
+        return elements;
+    };
+
+    this.isElementVisible = function($element){
+
+        //for now we assume that for fixed layouts, elements are always visible
+        return true;
+    };
+    
+    this.isVisibleSpineItemElementCfi = function (spineItemIdref, partialCfi) {
+
+        return callOnPageView(spineItemIdref, function (view) {
+            //for now we assume that for fixed layouts, everything is always visible
+            return true;
+        });
+    };
+
+    this.getNodeRangeInfoFromCfi = function (spineItemIdref, partialCfi) {
+
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getNodeRangeInfoFromCfi(spineItemIdref, partialCfi);
+        });
+    };
+
+
+    this.getFirstVisibleCfi = function () {
+        var views = getDisplayingViews();
+        if (views.length > 0) {
+            return views[0].getFirstVisibleCfi();
+        }
+        return undefined;
+    };
+
+    this.getLastVisibleCfi = function () {
+        var views = getDisplayingViews();
+        if (views.length > 0) {
+            return views[views.length - 1].getLastVisibleCfi();
+        }
+        return undefined;
+    };
+
+    this.getDomRangesFromRangeCfi = function (rangeCfi, rangeCfi2, inclusive) {
+        var views = getDisplayingViews();
+        if (rangeCfi2 && rangeCfi.idref !== rangeCfi2.idref) {
+            var ranges = [];
+            for (var i = 0, count = views.length; i < count; i++) {
+                var view = views[i];
+                if (view.currentSpineItem().idref === rangeCfi.idref) {
+                    var last = view.getLastVisibleCfi();
+                    ranges.push(view.getDomRangeFromRangeCfi(rangeCfi.contentCFI, last.contentCFI, inclusive));
+                } else if (view.currentSpineItem().idref === rangeCfi2.idref) {
+                    var first = view.getFirstVisibleCfi();
+                    ranges.push(view.getDomRangeFromRangeCfi(first.contentCFI, rangeCfi2.contentCFI, inclusive));
+                }
+            }
+            return ranges;
+        }
+
+        return [this.getDomRangeFromRangeCfi(rangeCfi, rangeCfi2, inclusive)];
+    },
+
+    this.getDomRangeFromRangeCfi = function (rangeCfi, rangeCfi2, inclusive) {
+        var views = getDisplayingViews();
+        if (rangeCfi2 && rangeCfi.idref !== rangeCfi2.idref) {
+            console.error("getDomRangeFromRangeCfi: both CFIs must be scoped under the same spineitem idref");
+            return undefined;
+        }
+        for (var i = 0, count = views.length; i < count; i++) {
+
+            var view = views[i];
+            if (view.currentSpineItem().idref === rangeCfi.idref) {
+                return view.getDomRangeFromRangeCfi(rangeCfi.contentCFI, rangeCfi2 ? rangeCfi2.contentCFI : null, inclusive);
+            }
+        }
+
+        return undefined;
+    };
+
+    this.getRangeCfiFromDomRange = function (domRange) {
+
+        var views = getDisplayingViews();
+
+        for (var i = 0, count = views.length; i < count; i++) {
+
+            var view = views[i];
+            if (view.getLoadedContentFrames()[0].$iframe[0].contentDocument === domRange.startContainer.ownerDocument) {
+                return view.getRangeCfiFromDomRange(domRange);
+            }
+        }
+
+        return undefined;
+    };
+
+    this.getVisibleCfiFromPoint = function (x, y, precisePoint, spineItemIdref) {
+        if (!spineItemIdref) {
+            throw new Error("getVisibleCfiFromPoint: Spine item idref must be specified for this fixed layout view.");
+        }
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getVisibleCfiFromPoint(x,y, precisePoint);
+        });
+    };
+
+    this.getRangeCfiFromPoints = function (startX, startY, endX, endY, spineItemIdref) {
+        if (!spineItemIdref) {
+            throw new Error("getRangeCfiFromPoints: Spine item idref must be specified for this fixed layout view.");
+        }
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getRangeCfiFromPoints(startX, startY, endX, endY);
+        });
+    };
+
+    this.getCfiForElement = function (element) {
+
+        var views = getDisplayingViews();
+
+        for (var i = 0, count = views.length; i < count; i++) {
+
+            var view = views[i];
+            if (view.getLoadedContentFrames()[0].$iframe[0].contentDocument === element.ownerDocument) {
+                return view.getCfiForElement(element);
+            }
+        }
+
+        return undefined;
+    };
+
+    this.getElementFromPoint = function (x, y, spineItemIdref) {
+        if (!spineItemIdref) {
+            throw new Error("getElementFromPoint: Spine item idref must be specified for this fixed layout view.");
+        }
+        return callOnPageView(spineItemIdref, function (view) {
+            return view.getElementFromPoint(x,y);
+        });
+    };
+
+};
+    return FixedView;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/views/iframe_loader',["jquery", "underscore"], function($, _) {
+/**
+ *
+ * @constructor
+ */
+var IFrameLoader = function() {
+
+    var self = this;
+    var eventListeners = {};
+
+
+    this.addIFrameEventListener = function (eventName, callback, context) {
+
+        if (eventListeners[eventName] == undefined) {
+            eventListeners[eventName] = [];
+        }
+
+        eventListeners[eventName].push({callback: callback, context: context});
+    };
+
+    this.updateIframeEvents = function (iframe) {
+
+        _.each(eventListeners, function (value, key) {
+            $(iframe.contentWindow).off(key);
+            for (var i = 0, count = value.length; i < count; i++) {
+                $(iframe.contentWindow).on(key, value[i].callback, value[i].context);
+            }
+        });
+    };
+
+    this.loadIframe = function (iframe, src, callback, context, attachedData) {
+
+        if (!iframe.baseURI) {
+            if (typeof location !== 'undefined') {
+                iframe.baseURI = location.href + "";
+            }
+            console.error("!iframe.baseURI => " + iframe.baseURI);
+        }
+    
+        console.log("EPUB doc iframe src:");
+        console.log(src);
+        console.log("EPUB doc iframe base URI:");
+        console.log(iframe.baseURI);
+        
+        iframe.setAttribute("data-baseUri", iframe.baseURI);
+        iframe.setAttribute("data-src", src);
+
+        var loadedDocumentUri = new URI(src).absoluteTo(iframe.baseURI).search('').hash('').toString();
+
+        self._loadIframeWithUri(iframe, attachedData, loadedDocumentUri, function () {
+            
+            callback.call(context, true, attachedData);
+        });
+    };
+
+    this._loadIframeWithUri = function (iframe, attachedData, contentUri, callback) {
+
+        iframe.onload = function () {
+
+            var doc = iframe.contentDocument || iframe.contentWindow.document;
+            $('svg', doc).load(function(){
+                console.log('SVG loaded');
+            });
+            
+            self.updateIframeEvents(iframe);
+
+            var mathJax = iframe.contentWindow.MathJax;
+            if (mathJax) {
+                
+                console.log("MathJax VERSION: " + mathJax.cdnVersion + " // " + mathJax.fileversion + " // " + mathJax.version);
+    
+                var useFontCache = true; // default in MathJax
+                
+                // Firefox fails to render SVG otherwise
+                if (mathJax.Hub.Browser.isFirefox) {
+                    useFontCache = false;
+                }
+                
+                // Chrome 49+ fails to render SVG otherwise
+                // https://github.com/readium/readium-js/issues/138
+                if (mathJax.Hub.Browser.isChrome) {
+                    useFontCache = false;
+                }
+                
+                // Edge fails to render SVG otherwise
+                // https://github.com/readium/readium-js-viewer/issues/394#issuecomment-185382196
+                if (window.navigator.userAgent.indexOf("Edge") > 0) {
+                    useFontCache = false;
+                }
+                
+                mathJax.Hub.Config({showMathMenu:false, messageStyle: "none", showProcessingMessages: true, SVG:{useFontCache:useFontCache}});
+                
+                // If MathJax is being used, delay the callback until it has completed rendering
+                var mathJaxCallback = _.once(callback);
+                try {
+                    mathJax.Hub.Queue(mathJaxCallback);
+                } catch (err) {
+                    console.error("MathJax fail!");
+                    callback();
+                }
+                // Or at an 8 second timeout, which ever comes first
+                //window.setTimeout(mathJaxCallback, 8000);
+            } else {
+                callback();
+            }
+        };
+
+        iframe.setAttribute("src", contentUri);
+    };
+
+};
+
+return IFrameLoader;
+});
+
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+// 
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/views/internal_links_support',['jquery', '../helpers', 'readium_cfi_js'], function($, Helpers, epubCfi) {
+/**
+ *
+ * @param reader
+ * @constructor
+ */
+var InternalLinksSupport = function(reader) {
+
+    var self = this;
+
+    function splitCfi(fullCfi) {
+
+        var startIx = fullCfi.indexOf("(");
+        var bungIx = fullCfi.indexOf("!");
+        var endIx = fullCfi.indexOf(")");
+
+        if(bungIx == -1) {
+            return undefined;
+        }
+
+        if(endIx == -1) {
+            endIx = fullCfi.length;
+        }
+
+        return {
+
+            spineItemCfi: fullCfi.substring(startIx + 1, bungIx),
+            elementCfi: fullCfi.substring(bungIx + 1, endIx)
+        }
+    }
+
+    function getAbsoluteUriRelativeToSpineItem(hrefUri, spineItem) {
+
+        var fullPath = reader.package().resolveRelativeUrl(spineItem.href);
+
+        var absUrl = hrefUri.absoluteTo(fullPath);
+
+        return absUrl;
+    }
+
+    function processDeepLink(hrefUri, spineItem) {
+
+        var absoluteOpfUri = getAbsoluteUriRelativeToSpineItem(hrefUri, spineItem);
+
+        if(!absoluteOpfUri) {
+            console.error("Unable to resolve " + hrefUri.href())
+            return;
+        }
+
+        var fullCfi = hrefUri.fragment();
+
+        var absPath = absoluteOpfUri.toString();
+
+        absPath = Helpers.RemoveFromString(absPath, "#" +  fullCfi);
+
+        readOpfFile(absPath, function(opfText) {
+
+            if(!opfText) {
+                return;
+            }
+
+            var parser = new window.DOMParser;
+            var packageDom = parser.parseFromString(opfText, 'text/xml');
+            var cfi = splitCfi(fullCfi);
+
+            if(!cfi) {
+                console.warn("Unable to split cfi:" + fullCfi);
+                return;
+            }
+
+            var contentDocRef = EPUBcfi.Interpreter.getContentDocHref("epubcfi(" + cfi.spineItemCfi + ")", packageDom);
+
+            if(contentDocRef) {
+
+                var newSpineItem = reader.spine().getItemByHref(contentDocRef);
+                if(newSpineItem) {
+
+                    reader.openSpineItemElementCfi(newSpineItem.idref, cfi.elementCfi, self);
+                }
+                else {
+                    console.warn("Unable to find spineItem with href=" + contentDocRef);
+                }
+
+            }
+            else {
+                console.warn("Unable to find document ref from " +  fullCfi +" cfi");
+            }
+
+        });
+
+    }
+
+    function readOpfFile(path, callback) {
+
+        //TODO: this should use readium-js resource fetcher (file / URI access abstraction layer), as right now this fails with packed EPUBs  
+        $.ajax({
+            // encoding: "UTF-8",
+            // mimeType: "text/plain; charset=UTF-8",
+            // beforeSend: function( xhr ) {
+            //     xhr.overrideMimeType("text/plain; charset=UTF-8");
+            // },
+            isLocal: path.indexOf("http") === 0 ? false : true,
+            url: path,
+            dataType: 'text',
+            async: true,
+            success: function (result) {
+                callback(result);
+            },
+            error: function (xhr, status, errorThrown) {
+                console.error('Error when AJAX fetching ' + path);
+                console.error(status);
+                console.error(errorThrown);
+                callback();
+            }
+        });
+    }
+
+    //checks if href includes path to opf file and full cfi
+    function isDeepLikHref(uri) {
+
+        var fileName = uri.filename();
+        return fileName && Helpers.EndsWith(fileName, ".opf");
+    }
+
+    function processLinkWithHash(hrefUri, spineItem) {
+
+        var fileName = hrefUri.filename();
+
+        var idref;
+
+        //reference to another file
+        if(fileName) {
+            var normalizedUri = new URI(hrefUri, spineItem.href);
+            
+            var pathname = decodeURIComponent(normalizedUri.pathname());
+            
+            var newSpineItem = reader.spine().getItemByHref(pathname);
+
+            if(!newSpineItem) {
+                console.error("spine item with href=" + pathname + " not found");
+                return;
+            }
+
+            idref = newSpineItem.idref;
+        }
+        else { //hush in the same file
+            idref = spineItem.idref;
+        }
+
+        var hashFrag = hrefUri.fragment();
+
+        reader.openSpineItemElementId(idref, hashFrag, self);
+
+    }
+
+    this.processLinkElements = function($iframe, spineItem) {
+
+        var epubContentDocument = $iframe[0].contentDocument;
+
+        $('a', epubContentDocument).click(function (clickEvent) {
+            // Check for both href and xlink:href attribute and get value
+            var href;
+            if (clickEvent.currentTarget.attributes["xlink:href"]) {
+                
+                href = clickEvent.currentTarget.attributes["xlink:href"].value;
+            }
+            else {
+                href = clickEvent.currentTarget.attributes["href"].value;
+            }
+
+            var overrideClickEvent = false;
+            var hrefUri = new URI(href);
+            var hrefIsRelative = hrefUri.is('relative');
+
+            if (hrefIsRelative) {
+
+                if(isDeepLikHref(hrefUri)) {
+                    processDeepLink(hrefUri, spineItem);
+                    overrideClickEvent = true;
+                }
+                else {
+                    processLinkWithHash(hrefUri, spineItem);
+                    overrideClickEvent = true;
+                }
+
+            } else {
+                // It's an absolute URL to a remote site - open it in a separate window outside the reader
+                window.open(href, '_blank');
+                overrideClickEvent = true;
+            }
+
+            if (overrideClickEvent) {
+                clickEvent.preventDefault();
+                clickEvent.stopPropagation();
+            }
+        });
+
+    }
+
+};
+
+return InternalLinksSupport;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+define ('readium_shared_js/models/smil_iterator',["jquery", "../helpers"], function($, Helpers) {
+/**
+ *
+ * @param smil
+ * @constructor
+ */
+var SmilIterator = function(smil) {
+
+    this.smil = smil;
+    this.currentPar = undefined;
+
+    this.reset = function() {
+        this.currentPar = findParNode(0, this.smil, false);
+    };
+
+    /*
+    this.firstDeep = function(container) {
+        var par = container.nodeType === "par" ? container : findParNode(0, container, false);
+
+        return par;
+    };
+    */
+//
+//    this.ensureNextValidTextElement = function()
+//    {
+//        if (!this.currentPar)
+//        {
+//            console.debug("Par iterator is out of range");
+//            return;
+//        }
+//
+//        while (this.currentPar && !this.currentPar.element)
+//        {
+//            this.next();
+//        }
+//    };
+
+    this.findTextId = function(id)
+    {
+        if (!this.currentPar)
+        {
+            console.debug("Par iterator is out of range");
+            return;
+        }
+
+        if (!id)
+        {
+            return false;
+        }
+
+        while (this.currentPar)
+        {
+            if (this.currentPar.element)
+            {
+                if (id === this.currentPar.text.srcFragmentId) //this.currentPar.element.id
+                {
+                    return true;
+                }
+
+                // OUTER match
+                var parent = this.currentPar.element.parentNode;
+                while(parent)
+                {
+                    if (parent.id && parent.id == id)
+                    {
+                        return true;
+                    }
+
+                    parent = parent.parentNode;
+                }
+
+                // INNER match
+                //var inside = this.currentPar.element.ownerDocument.getElementById(id);
+                var inside = $("#" + Helpers.escapeJQuerySelector(id), this.currentPar.element);
+                if (inside && inside.length && inside[0])
+                {
+                    return true;
+                }
+            }
+
+            this.next();
+        }
+
+        return false;
+    }
+
+    this.next = function() {
+
+        if(!this.currentPar) {
+            console.debug("Par iterator is out of range");
+            return;
+        }
+
+        this.currentPar = findParNode(this.currentPar.index + 1, this.currentPar.parent, false);
+    };
+
+    this.previous = function() {
+
+        if(!this.currentPar) {
+            console.debug("Par iterator is out of range");
+            return;
+        }
+
+        this.currentPar = findParNode(this.currentPar.index - 1, this.currentPar.parent, true);
+    };
+
+    this.isLast = function() {
+
+        if(!this.currentPar) {
+            console.debug("Par iterator is out of range");
+            return;
+        }
+
+        if (findParNode(this.currentPar.index + 1, this.currentPar.parent, false))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    this.goToPar =  function(par) {
+
+        while(this.currentPar) {
+            if(this.currentPar == par) {
+                break;
+            }
+
+            this.next();
+        }
+    };
+
+    function findParNode(startIndex, container, previous) {
+
+        for(var i = startIndex, count = container.children.length;
+            i >= 0 && i < count;
+            i += (previous ? -1 : 1)) {
+
+            var node = container.children[i];
+            if(node.nodeType == "par") {
+                return node;
+            }
+
+            // assert(node.nodeType == "seq")
+            node = findParNode(previous ? node.children.length - 1 : 0, node, previous);
+
+            if(node) {
+                return node;
+            }
+        }
+
+        if(container.parent) {
+            return findParNode(container.index + (previous ? -1 : 1), container.parent, previous);
+        }
+
+        return undefined;
+    }
+
+    this.reset();
+};
+
+return SmilIterator;
+});
+
+/**
+ * @license domReady 2.0.1 Copyright jQuery Foundation and other contributors.
+ * Released under MIT license, http://github.com/requirejs/domReady/LICENSE
+ */
+/*jslint */
+/*global require: false, define: false, requirejs: false,
+  window: false, clearInterval: false, document: false,
+  self: false, setInterval: false */
+
+
+define('domReady',[],function () {
+    'use strict';
+
+    var isTop, testDiv, scrollIntervalId,
+        isBrowser = typeof window !== "undefined" && window.document,
+        isPageLoaded = !isBrowser,
+        doc = isBrowser ? document : null,
+        readyCalls = [];
+
+    function runCallbacks(callbacks) {
+        var i;
+        for (i = 0; i < callbacks.length; i += 1) {
+            callbacks[i](doc);
+        }
+    }
+
+    function callReady() {
+        var callbacks = readyCalls;
+
+        if (isPageLoaded) {
+            //Call the DOM ready callbacks
+            if (callbacks.length) {
+                readyCalls = [];
+                runCallbacks(callbacks);
+            }
+        }
+    }
+
+    /**
+     * Sets the page as loaded.
+     */
+    function pageLoaded() {
+        if (!isPageLoaded) {
+            isPageLoaded = true;
+            if (scrollIntervalId) {
+                clearInterval(scrollIntervalId);
+            }
+
+            callReady();
+        }
+    }
+
+    if (isBrowser) {
+        if (document.addEventListener) {
+            //Standards. Hooray! Assumption here that if standards based,
+            //it knows about DOMContentLoaded.
+            document.addEventListener("DOMContentLoaded", pageLoaded, false);
+            window.addEventListener("load", pageLoaded, false);
+        } else if (window.attachEvent) {
+            window.attachEvent("onload", pageLoaded);
+
+            testDiv = document.createElement('div');
+            try {
+                isTop = window.frameElement === null;
+            } catch (e) {}
+
+            //DOMContentLoaded approximation that uses a doScroll, as found by
+            //Diego Perini: http://javascript.nwbox.com/IEContentLoaded/,
+            //but modified by other contributors, including jdalton
+            if (testDiv.doScroll && isTop && window.external) {
+                scrollIntervalId = setInterval(function () {
+                    try {
+                        testDiv.doScroll();
+                        pageLoaded();
+                    } catch (e) {}
+                }, 30);
+            }
+        }
+
+        //Check if document already complete, and if so, just trigger page load
+        //listeners. Latest webkit browsers also use "interactive", and
+        //will fire the onDOMContentLoaded before "interactive" but not after
+        //entering "interactive" or "complete". More details:
+        //http://dev.w3.org/html5/spec/the-end.html#the-end
+        //http://stackoverflow.com/questions/3665561/document-readystate-of-interactive-vs-ondomcontentloaded
+        //Hmm, this is more complicated on further use, see "firing too early"
+        //bug: https://github.com/requirejs/domReady/issues/1
+        //so removing the || document.readyState === "interactive" test.
+        //There is still a window.onload binding that should get fired if
+        //DOMContentLoaded is missed.
+        if (document.readyState === "complete") {
+            pageLoaded();
+        }
+    }
+
+    /** START OF PUBLIC API **/
+
+    /**
+     * Registers a callback for DOM ready. If DOM is already ready, the
+     * callback is called immediately.
+     * @param {Function} callback
+     */
+    function domReady(callback) {
+        if (isPageLoaded) {
+            callback(doc);
+        } else {
+            readyCalls.push(callback);
+        }
+        return domReady;
+    }
+
+    domReady.version = '2.0.1';
+
+    /**
+     * Loader Plugin API method
+     */
+    domReady.load = function (name, req, onLoad, config) {
+        if (config.isBuild) {
+            onLoad(null);
+        } else {
+            domReady(onLoad);
+        }
+    };
+
+    /** END OF PUBLIC API **/
+
+    return domReady;
+});
+
+/**
+ * Rangy, a cross-browser JavaScript range and selection library
+ * http://code.google.com/p/rangy/
+ *
+ * Copyright 2013, Tim Down
+ * Licensed under the MIT license.
+ * Version: 1.3alpha.804
+ * Build date: 8 December 2013
+ */
+
+(function(global) {
+    var amdSupported = (typeof global.define == "function" && global.define.amd);
+
+    var OBJECT = "object", FUNCTION = "function", UNDEFINED = "undefined";
+
+    // Minimal set of properties required for DOM Level 2 Range compliance. Comparison constants such as START_TO_START
+    // are omitted because ranges in KHTML do not have them but otherwise work perfectly well. See issue 113.
+    var domRangeProperties = ["startContainer", "startOffset", "endContainer", "endOffset", "collapsed",
+        "commonAncestorContainer"];
+
+    // Minimal set of methods required for DOM Level 2 Range compliance
+    var domRangeMethods = ["setStart", "setStartBefore", "setStartAfter", "setEnd", "setEndBefore",
+        "setEndAfter", "collapse", "selectNode", "selectNodeContents", "compareBoundaryPoints", "deleteContents",
+        "extractContents", "cloneContents", "insertNode", "surroundContents", "cloneRange", "toString", "detach"];
+
+    var textRangeProperties = ["boundingHeight", "boundingLeft", "boundingTop", "boundingWidth", "htmlText", "text"];
+
+    // Subset of TextRange's full set of methods that we're interested in
+    var textRangeMethods = ["collapse", "compareEndPoints", "duplicate", "moveToElementText", "parentElement", "select",
+        "setEndPoint", "getBoundingClientRect"];
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Trio of functions taken from Peter Michaux's article:
+    // http://peter.michaux.ca/articles/feature-detection-state-of-the-art-browser-scripting
+    function isHostMethod(o, p) {
+        var t = typeof o[p];
+        return t == FUNCTION || (!!(t == OBJECT && o[p])) || t == "unknown";
+    }
+
+    function isHostObject(o, p) {
+        return !!(typeof o[p] == OBJECT && o[p]);
+    }
+
+    function isHostProperty(o, p) {
+        return typeof o[p] != UNDEFINED;
+    }
+
+    // Creates a convenience function to save verbose repeated calls to tests functions
+    function createMultiplePropertyTest(testFunc) {
+        return function(o, props) {
+            var i = props.length;
+            while (i--) {
+                if (!testFunc(o, props[i])) {
+                    return false;
+                }
+            }
+            return true;
+        };
+    }
+
+    // Next trio of functions are a convenience to save verbose repeated calls to previous two functions
+    var areHostMethods = createMultiplePropertyTest(isHostMethod);
+    var areHostObjects = createMultiplePropertyTest(isHostObject);
+    var areHostProperties = createMultiplePropertyTest(isHostProperty);
+
+    function isTextRange(range) {
+        return range && areHostMethods(range, textRangeMethods) && areHostProperties(range, textRangeProperties);
+    }
+
+    function getBody(doc) {
+        return isHostObject(doc, "body") ? doc.body : doc.getElementsByTagName("body")[0];
+    }
+
+    var modules = {};
+
+    var api = {
+        version: "1.3alpha.804",
+        initialized: false,
+        supported: true,
+
+        util: {
+            isHostMethod: isHostMethod,
+            isHostObject: isHostObject,
+            isHostProperty: isHostProperty,
+            areHostMethods: areHostMethods,
+            areHostObjects: areHostObjects,
+            areHostProperties: areHostProperties,
+            isTextRange: isTextRange,
+            getBody: getBody
+        },
+
+        features: {},
+
+        modules: modules,
+        config: {
+            alertOnFail: true,
+            alertOnWarn: false,
+            preferTextRange: false
+        }
+    };
+
+    function consoleLog(msg) {
+        if (isHostObject(window, "console") && isHostMethod(window.console, "log")) {
+            window.console.log(msg);
+        }
+    }
+
+    function alertOrLog(msg, shouldAlert) {
+        if (shouldAlert) {
+            window.alert(msg);
+        } else  {
+            consoleLog(msg);
+        }
+    }
+
+    function fail(reason) {
+        api.initialized = true;
+        api.supported = false;
+        alertOrLog("Rangy is not supported on this page in your browser. Reason: " + reason, api.config.alertOnFail);
+    }
+
+    api.fail = fail;
+
+    function warn(msg) {
+        alertOrLog("Rangy warning: " + msg, api.config.alertOnWarn);
+    }
+
+    api.warn = warn;
+
+    // Add utility extend() method
+    if ({}.hasOwnProperty) {
+        api.util.extend = function(obj, props, deep) {
+            var o, p;
+            for (var i in props) {
+                if (props.hasOwnProperty(i)) {
+                    o = obj[i];
+                    p = props[i];
+                    //if (deep) alert([o !== null, typeof o == "object", p !== null, typeof p == "object"])
+                    if (deep && o !== null && typeof o == "object" && p !== null && typeof p == "object") {
+                        api.util.extend(o, p, true);
+                    }
+                    obj[i] = p;
+                }
+            }
+            return obj;
+        };
+    } else {
+        fail("hasOwnProperty not supported");
+    }
+
+    // Test whether Array.prototype.slice can be relied on for NodeLists and use an alternative toArray() if not
+    (function() {
+        var el = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+        el.appendChild(document.createElementNS("http://www.w3.org/1999/xhtml", "span"));
+        var slice = [].slice;
+        var toArray;
+        try {
+            if (slice.call(el.childNodes, 0)[0].nodeType == 1) {
+                toArray = function(arrayLike) {
+                    return slice.call(arrayLike, 0);
+                };
+            }
+        } catch (e) {}
+
+        if (!toArray) {
+            toArray = function(arrayLike) {
+                var arr = [];
+                for (var i = 0, len = arrayLike.length; i < len; ++i) {
+                    arr[i] = arrayLike[i];
+                }
+                return arr;
+            };
+        }
+
+        api.util.toArray = toArray;
+    })();
+
+
+    // Very simple event handler wrapper function that doesn't attempt to solve issues such as "this" handling or
+    // normalization of event properties
+    var addListener;
+    if (isHostMethod(document, "addEventListener")) {
+        addListener = function(obj, eventType, listener) {
+            obj.addEventListener(eventType, listener, false);
+        };
+    } else if (isHostMethod(document, "attachEvent")) {
+        addListener = function(obj, eventType, listener) {
+            obj.attachEvent("on" + eventType, listener);
+        };
+    } else {
+        fail("Document does not have required addEventListener or attachEvent method");
+    }
+
+    api.util.addListener = addListener;
+
+    var initListeners = [];
+
+    function getErrorDesc(ex) {
+        return ex.message || ex.description || String(ex);
+    }
+
+    // Initialization
+    function init() {
+        if (api.initialized) {
+            return;
+        }
+        var testRange;
+        var implementsDomRange = false, implementsTextRange = false;
+
+        // First, perform basic feature tests
+
+        if (isHostMethod(document, "createRange")) {
+            testRange = document.createRange();
+            if (areHostMethods(testRange, domRangeMethods) && areHostProperties(testRange, domRangeProperties)) {
+                implementsDomRange = true;
+            }
+            testRange.detach();
+        }
+
+        var body = getBody(document);
+        if (!body || body.nodeName.toLowerCase() != "body") {
+            fail("No body element found");
+            return;
+        }
+
+        if (body && isHostMethod(body, "createTextRange")) {
+            testRange = body.createTextRange();
+            if (isTextRange(testRange)) {
+                implementsTextRange = true;
+            }
+        }
+
+        if (!implementsDomRange && !implementsTextRange) {
+            fail("Neither Range nor TextRange are available");
+            return;
+        }
+
+        api.initialized = true;
+        api.features = {
+            implementsDomRange: implementsDomRange,
+            implementsTextRange: implementsTextRange
+        };
+
+        // Initialize modules
+        var module, errorMessage;
+        for (var moduleName in modules) {
+            if ( (module = modules[moduleName]) instanceof Module ) {
+                module.init(module, api);
+            }
+        }
+
+        // Call init listeners
+        for (var i = 0, len = initListeners.length; i < len; ++i) {
+            try {
+                initListeners[i](api);
+            } catch (ex) {
+                errorMessage = "Rangy init listener threw an exception. Continuing. Detail: " + getErrorDesc(ex);
+                consoleLog(errorMessage);
+            }
+        }
+    }
+
+    // Allow external scripts to initialize this library in case it's loaded after the document has loaded
+    api.init = init;
+
+    // Execute listener immediately if already initialized
+    api.addInitListener = function(listener) {
+        if (api.initialized) {
+            listener(api);
+        } else {
+            initListeners.push(listener);
+        }
+    };
+
+    var createMissingNativeApiListeners = [];
+
+    api.addCreateMissingNativeApiListener = function(listener) {
+        createMissingNativeApiListeners.push(listener);
+    };
+
+    function createMissingNativeApi(win) {
+        win = win || window;
+        init();
+
+        // Notify listeners
+        for (var i = 0, len = createMissingNativeApiListeners.length; i < len; ++i) {
+            createMissingNativeApiListeners[i](win);
+        }
+    }
+
+    api.createMissingNativeApi = createMissingNativeApi;
+
+    function Module(name, dependencies, initializer) {
+        this.name = name;
+        this.dependencies = dependencies;
+        this.initialized = false;
+        this.supported = false;
+        this.initializer = initializer;
+    }
+
+    Module.prototype = {
+        init: function(api) {
+            var requiredModuleNames = this.dependencies || [];
+            for (var i = 0, len = requiredModuleNames.length, requiredModule, moduleName; i < len; ++i) {
+                moduleName = requiredModuleNames[i];
+
+                requiredModule = modules[moduleName];
+                if (!requiredModule || !(requiredModule instanceof Module)) {
+                    throw new Error("required module '" + moduleName + "' not found");
+                }
+
+                requiredModule.init();
+
+                if (!requiredModule.supported) {
+                    throw new Error("required module '" + moduleName + "' not supported");
+                }
+            }
+            
+            // Now run initializer
+            this.initializer(this)
+        },
+        
+        fail: function(reason) {
+            this.initialized = true;
+            this.supported = false;
+            throw new Error("Module '" + this.name + "' failed to load: " + reason);
+        },
+
+        warn: function(msg) {
+            api.warn("Module " + this.name + ": " + msg);
+        },
+
+        deprecationNotice: function(deprecated, replacement) {
+            api.warn("DEPRECATED: " + deprecated + " in module " + this.name + "is deprecated. Please use "
+                + replacement + " instead");
+        },
+
+        createError: function(msg) {
+            return new Error("Error in Rangy " + this.name + " module: " + msg);
+        }
+    };
+    
+    function createModule(isCore, name, dependencies, initFunc) {
+        var newModule = new Module(name, dependencies, function(module) {
+            if (!module.initialized) {
+                module.initialized = true;
+                try {
+                    initFunc(api, module);
+                    module.supported = true;
+                } catch (ex) {
+                    var errorMessage = "Module '" + name + "' failed to load: " + getErrorDesc(ex);
+                    consoleLog(errorMessage);
+                }
+            }
+        });
+        modules[name] = newModule;
+        
+/*
+        // Add module AMD support
+        if (!isCore && amdSupported) {
+            global.define(["rangy-core"], function(rangy) {
+                
+            });
+        }
+*/
+    }
+
+    api.createModule = function(name) {
+        // Allow 2 or 3 arguments (second argument is an optional array of dependencies)
+        var initFunc, dependencies;
+        if (arguments.length == 2) {
+            initFunc = arguments[1];
+            dependencies = [];
+        } else {
+            initFunc = arguments[2];
+            dependencies = arguments[1];
+        }
+        createModule(false, name, dependencies, initFunc);
+    };
+
+    api.createCoreModule = function(name, dependencies, initFunc) {
+        createModule(true, name, dependencies, initFunc);
+    };
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Ensure rangy.rangePrototype and rangy.selectionPrototype are available immediately
+
+    function RangePrototype() {}
+    api.RangePrototype = RangePrototype;
+    api.rangePrototype = new RangePrototype();
+
+    function SelectionPrototype() {}
+    api.selectionPrototype = new SelectionPrototype();
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Wait for document to load before running tests
+
+    var docReady = false;
+
+    var loadHandler = function(e) {
+        if (!docReady) {
+            docReady = true;
+            if (!api.initialized) {
+                init();
+            }
+        }
+    };
+
+    // Test whether we have window and document objects that we will need
+    if (typeof window == UNDEFINED) {
+        fail("No window found");
+        return;
+    }
+    if (typeof document == UNDEFINED) {
+        fail("No document found");
+        return;
+    }
+
+    if (isHostMethod(document, "addEventListener")) {
+        document.addEventListener("DOMContentLoaded", loadHandler, false);
+    }
+
+    // Add a fallback in case the DOMContentLoaded event isn't supported
+    addListener(window, "load", loadHandler);
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+    
+    // AMD, for those who like this kind of thing
+
+    /*
+    if (amdSupported) {
+        // AMD. Register as an anonymous module.
+        global.define(function() {
+            api.amd = true;
+            return api;
+        });
+    }
+    */
+    // Create a "rangy" property of the global object in any case. Other Rangy modules (which use Rangy's own simple
+    // module system) rely on the existence of this global property
+    global.rangy = api;
+})(this);    
+
+rangy.createCoreModule("DomUtil", [], function(api, module) {
+    var UNDEF = "undefined";
+    var util = api.util;
+
+    // Perform feature tests
+    if (!util.areHostMethods(document, ["createDocumentFragment", "createElement", "createTextNode"])) {
+        module.fail("document missing a Node creation method");
+    }
+
+    if (!util.isHostMethod(document, "getElementsByTagName")) {
+        module.fail("document missing getElementsByTagName method");
+    }
+
+    var el = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+    if (!util.areHostMethods(el, ["insertBefore", "appendChild", "cloneNode"] ||
+            !util.areHostObjects(el, ["previousSibling", "nextSibling", "childNodes", "parentNode"]))) {
+        module.fail("Incomplete Element implementation");
+    }
+
+    // innerHTML is required for Range's createContextualFragment method
+    if (!util.isHostProperty(el, "innerHTML")) {
+        module.fail("Element is missing innerHTML property");
+    }
+
+    var textNode = document.createTextNode("test");
+    if (!util.areHostMethods(textNode, ["splitText", "deleteData", "insertData", "appendData", "cloneNode"] ||
+            !util.areHostObjects(el, ["previousSibling", "nextSibling", "childNodes", "parentNode"]) ||
+            !util.areHostProperties(textNode, ["data"]))) {
+        module.fail("Incomplete Text Node implementation");
+    }
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Removed use of indexOf because of a bizarre bug in Opera that is thrown in one of the Acid3 tests. I haven't been
+    // able to replicate it outside of the test. The bug is that indexOf returns -1 when called on an Array that
+    // contains just the document as a single element and the value searched for is the document.
+    var arrayContains = /*Array.prototype.indexOf ?
+        function(arr, val) {
+            return arr.indexOf(val) > -1;
+        }:*/
+
+        function(arr, val) {
+            var i = arr.length;
+            while (i--) {
+                if (arr[i] === val) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+    // Opera 11 puts HTML elements in the null namespace, it seems, and IE 7 has undefined namespaceURI
+    function isHtmlNamespace(node) {
+        var ns;
+        return typeof node.namespaceURI == UNDEF || ((ns = node.namespaceURI) === null || ns == "http://www.w3.org/1999/xhtml");
+    }
+
+    function parentElement(node) {
+        var parent = node.parentNode;
+        return (parent.nodeType == 1) ? parent : null;
+    }
+
+    function getNodeIndex(node) {
+        var i = 0;
+        while( (node = node.previousSibling) ) {
+            ++i;
+        }
+        return i;
+    }
+
+    function getNodeLength(node) {
+        switch (node.nodeType) {
+            case 7:
+            case 10:
+                return 0;
+            case 3:
+            case 8:
+                return node.length;
+            default:
+                return node.childNodes.length;
+        }
+    }
+
+    function getCommonAncestor(node1, node2) {
+        var ancestors = [], n;
+        for (n = node1; n; n = n.parentNode) {
+            ancestors.push(n);
+        }
+
+        for (n = node2; n; n = n.parentNode) {
+            if (arrayContains(ancestors, n)) {
+                return n;
+            }
+        }
+
+        return null;
+    }
+
+    function isAncestorOf(ancestor, descendant, selfIsAncestor) {
+        var n = selfIsAncestor ? descendant : descendant.parentNode;
+        while (n) {
+            if (n === ancestor) {
+                return true;
+            } else {
+                n = n.parentNode;
+            }
+        }
+        return false;
+    }
+
+    function isOrIsAncestorOf(ancestor, descendant) {
+        return isAncestorOf(ancestor, descendant, true);
+    }
+
+    function getClosestAncestorIn(node, ancestor, selfIsAncestor) {
+        var p, n = selfIsAncestor ? node : node.parentNode;
+        while (n) {
+            p = n.parentNode;
+            if (p === ancestor) {
+                return n;
+            }
+            n = p;
+        }
+        return null;
+    }
+
+    function isCharacterDataNode(node) {
+        var t = node.nodeType;
+        return t == 3 || t == 4 || t == 8 ; // Text, CDataSection or Comment
+    }
+
+    function isTextOrCommentNode(node) {
+        if (!node) {
+            return false;
+        }
+        var t = node.nodeType;
+        return t == 3 || t == 8 ; // Text or Comment
+    }
+
+    function insertAfter(node, precedingNode) {
+        var nextNode = precedingNode.nextSibling, parent = precedingNode.parentNode;
+        if (nextNode) {
+            parent.insertBefore(node, nextNode);
+        } else {
+            parent.appendChild(node);
+        }
+        return node;
+    }
+
+    // Note that we cannot use splitText() because it is bugridden in IE 9.
+    function splitDataNode(node, index, positionsToPreserve) {
+        var newNode = node.cloneNode(false);
+        newNode.deleteData(0, index);
+        node.deleteData(index, node.length - index);
+        insertAfter(newNode, node);
+
+        // Preserve positions
+        if (positionsToPreserve) {
+            for (var i = 0, position; position = positionsToPreserve[i++]; ) {
+                // Handle case where position was inside the portion of node after the split point
+                if (position.node == node && position.offset > index) {
+                    position.node = newNode;
+                    position.offset -= index;
+                }
+                // Handle the case where the position is a node offset within node's parent
+                else if (position.node == node.parentNode && position.offset > getNodeIndex(node)) {
+                    ++position.offset;
+                }
+            }
+        }
+        return newNode;
+    }
+
+    function getDocument(node) {
+        if (node.nodeType == 9) {
+            return node;
+        } else if (typeof node.ownerDocument != UNDEF) {
+            return node.ownerDocument;
+        } else if (typeof node.document != UNDEF) {
+            return node.document;
+        } else if (node.parentNode) {
+            return getDocument(node.parentNode);
+        } else {
+            throw module.createError("getDocument: no document found for node");
+        }
+    }
+
+    function getWindow(node) {
+        var doc = getDocument(node);
+        if (typeof doc.defaultView != UNDEF) {
+            return doc.defaultView;
+        } else if (typeof doc.parentWindow != UNDEF) {
+            return doc.parentWindow;
+        } else {
+            throw module.createError("Cannot get a window object for node");
+        }
+    }
+
+    function getIframeDocument(iframeEl) {
+        if (typeof iframeEl.contentDocument != UNDEF) {
+            return iframeEl.contentDocument;
+        } else if (typeof iframeEl.contentWindow != UNDEF) {
+            return iframeEl.contentWindow.document;
+        } else {
+            throw module.createError("getIframeDocument: No Document object found for iframe element");
+        }
+    }
+
+    function getIframeWindow(iframeEl) {
+        if (typeof iframeEl.contentWindow != UNDEF) {
+            return iframeEl.contentWindow;
+        } else if (typeof iframeEl.contentDocument != UNDEF) {
+            return iframeEl.contentDocument.defaultView;
+        } else {
+            throw module.createError("getIframeWindow: No Window object found for iframe element");
+        }
+    }
+
+    // This looks bad. Is it worth it?
+    function isWindow(obj) {
+        return obj && util.isHostMethod(obj, "setTimeout") && util.isHostObject(obj, "document");
+    }
+
+    function getContentDocument(obj, module, methodName) {
+        var doc;
+
+        if (!obj) {
+            doc = document;
+        }
+
+        // Test if a DOM node has been passed and obtain a document object for it if so
+        else if (util.isHostProperty(obj, "nodeType")) {
+            doc = (obj.nodeType == 1 && obj.tagName.toLowerCase() == "iframe")
+                ? getIframeDocument(obj) : getDocument(obj);
+        }
+
+        // Test if the doc parameter appears to be a Window object
+        else if (isWindow(obj)) {
+            doc = obj.document;
+        }
+
+        if (!doc) {
+            throw module.createError(methodName + "(): Parameter must be a Window object or DOM node");
+        }
+
+        return doc;
+    }
+
+    function getRootContainer(node) {
+        var parent;
+        while ( (parent = node.parentNode) ) {
+            node = parent;
+        }
+        return node;
+    }
+
+    function comparePoints(nodeA, offsetA, nodeB, offsetB) {
+        // See http://www.w3.org/TR/DOM-Level-2-Traversal-Range/ranges.html#Level-2-Range-Comparing
+        var nodeC, root, childA, childB, n;
+        if (nodeA == nodeB) {
+            // Case 1: nodes are the same
+            return offsetA === offsetB ? 0 : (offsetA < offsetB) ? -1 : 1;
+        } else if ( (nodeC = getClosestAncestorIn(nodeB, nodeA, true)) ) {
+            // Case 2: node C (container B or an ancestor) is a child node of A
+            return offsetA <= getNodeIndex(nodeC) ? -1 : 1;
+        } else if ( (nodeC = getClosestAncestorIn(nodeA, nodeB, true)) ) {
+            // Case 3: node C (container A or an ancestor) is a child node of B
+            return getNodeIndex(nodeC) < offsetB  ? -1 : 1;
+        } else {
+            root = getCommonAncestor(nodeA, nodeB);
+            if (!root) {
+                throw new Error("comparePoints error: nodes have no common ancestor");
+            }
+
+            // Case 4: containers are siblings or descendants of siblings
+            childA = (nodeA === root) ? root : getClosestAncestorIn(nodeA, root, true);
+            childB = (nodeB === root) ? root : getClosestAncestorIn(nodeB, root, true);
+
+            if (childA === childB) {
+                // This shouldn't be possible
+                throw module.createError("comparePoints got to case 4 and childA and childB are the same!");
+            } else {
+                n = root.firstChild;
+                while (n) {
+                    if (n === childA) {
+                        return -1;
+                    } else if (n === childB) {
+                        return 1;
+                    }
+                    n = n.nextSibling;
+                }
+            }
+        }
+    }
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Test for IE's crash (IE 6/7) or exception (IE >= 8) when a reference to garbage-collected text node is queried
+    var crashyTextNodes = false;
+
+    function isBrokenNode(node) {
+        try {
+            node.parentNode;
+            return false;
+        } catch (e) {
+            return true;
+        }
+    }
+
+    (function() {
+        var el = document.createElementNS("http://www.w3.org/1999/xhtml", "b");
+        el.innerHTML = "1";
+        var textNode = el.firstChild;
+        el.innerHTML = "<br>";
+        crashyTextNodes = isBrokenNode(textNode);
+
+        api.features.crashyTextNodes = crashyTextNodes;
+    })();
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    function inspectNode(node) {
+        if (!node) {
+            return "[No node]";
+        }
+        if (crashyTextNodes && isBrokenNode(node)) {
+            return "[Broken node]";
+        }
+        if (isCharacterDataNode(node)) {
+            return '"' + node.data + '"';
+        }
+        if (node.nodeType == 1) {
+            var idAttr = node.id ? ' id="' + node.id + '"' : "";
+            return "<" + node.nodeName + idAttr + ">[" + getNodeIndex(node) + "][" + node.childNodes.length + "][" + (node.innerHTML || "[innerHTML not supported]").slice(0, 25) + "]";
+        }
+        return node.nodeName;
+    }
+
+    function fragmentFromNodeChildren(node) {
+        var fragment = getDocument(node).createDocumentFragment(), child;
+        while ( (child = node.firstChild) ) {
+            fragment.appendChild(child);
+        }
+        return fragment;
+    }
+
+    var getComputedStyleProperty;
+    if (typeof window.getComputedStyle != UNDEF) {
+        getComputedStyleProperty = function(el, propName) {
+            return getWindow(el).getComputedStyle(el, null)[propName];
+        };
+    } else if (typeof document.documentElement.currentStyle != UNDEF) {
+        getComputedStyleProperty = function(el, propName) {
+            return el.currentStyle[propName];
+        };
+    } else {
+        module.fail("No means of obtaining computed style properties found");
+    }
+
+    function NodeIterator(root) {
+        this.root = root;
+        this._next = root;
+    }
+
+    NodeIterator.prototype = {
+        _current: null,
+
+        hasNext: function() {
+            return !!this._next;
+        },
+
+        next: function() {
+            var n = this._current = this._next;
+            var child, next;
+            if (this._current) {
+                child = n.firstChild;
+                if (child) {
+                    this._next = child;
+                } else {
+                    next = null;
+                    while ((n !== this.root) && !(next = n.nextSibling)) {
+                        n = n.parentNode;
+                    }
+                    this._next = next;
+                }
+            }
+            return this._current;
+        },
+
+        detach: function() {
+            this._current = this._next = this.root = null;
+        }
+    };
+
+    function createIterator(root) {
+        return new NodeIterator(root);
+    }
+
+    function DomPosition(node, offset) {
+        this.node = node;
+        this.offset = offset;
+    }
+
+    DomPosition.prototype = {
+        equals: function(pos) {
+            return !!pos && this.node === pos.node && this.offset == pos.offset;
+        },
+
+        inspect: function() {
+            return "[DomPosition(" + inspectNode(this.node) + ":" + this.offset + ")]";
+        },
+
+        toString: function() {
+            return this.inspect();
+        }
+    };
+
+    function DOMException(codeName) {
+        this.code = this[codeName];
+        this.codeName = codeName;
+        this.message = "DOMException: " + this.codeName;
+    }
+
+    DOMException.prototype = {
+        INDEX_SIZE_ERR: 1,
+        HIERARCHY_REQUEST_ERR: 3,
+        WRONG_DOCUMENT_ERR: 4,
+        NO_MODIFICATION_ALLOWED_ERR: 7,
+        NOT_FOUND_ERR: 8,
+        NOT_SUPPORTED_ERR: 9,
+        INVALID_STATE_ERR: 11
+    };
+
+    DOMException.prototype.toString = function() {
+        return this.message;
+    };
+
+    api.dom = {
+        arrayContains: arrayContains,
+        isHtmlNamespace: isHtmlNamespace,
+        parentElement: parentElement,
+        getNodeIndex: getNodeIndex,
+        getNodeLength: getNodeLength,
+        getCommonAncestor: getCommonAncestor,
+        isAncestorOf: isAncestorOf,
+        isOrIsAncestorOf: isOrIsAncestorOf,
+        getClosestAncestorIn: getClosestAncestorIn,
+        isCharacterDataNode: isCharacterDataNode,
+        isTextOrCommentNode: isTextOrCommentNode,
+        insertAfter: insertAfter,
+        splitDataNode: splitDataNode,
+        getDocument: getDocument,
+        getWindow: getWindow,
+        getIframeWindow: getIframeWindow,
+        getIframeDocument: getIframeDocument,
+        getBody: util.getBody,
+        isWindow: isWindow,
+        getContentDocument: getContentDocument,
+        getRootContainer: getRootContainer,
+        comparePoints: comparePoints,
+        isBrokenNode: isBrokenNode,
+        inspectNode: inspectNode,
+        getComputedStyleProperty: getComputedStyleProperty,
+        fragmentFromNodeChildren: fragmentFromNodeChildren,
+        createIterator: createIterator,
+        DomPosition: DomPosition
+    };
+
+    api.DOMException = DOMException;
+});
+rangy.createCoreModule("DomRange", ["DomUtil"], function(api, module) {
+    var dom = api.dom;
+    var util = api.util;
+    var DomPosition = dom.DomPosition;
+    var DOMException = api.DOMException;
+
+    var isCharacterDataNode = dom.isCharacterDataNode;
+    var getNodeIndex = dom.getNodeIndex;
+    var isOrIsAncestorOf = dom.isOrIsAncestorOf;
+    var getDocument = dom.getDocument;
+    var comparePoints = dom.comparePoints;
+    var splitDataNode = dom.splitDataNode;
+    var getClosestAncestorIn = dom.getClosestAncestorIn;
+    var getNodeLength = dom.getNodeLength;
+    var arrayContains = dom.arrayContains;
+    var getRootContainer = dom.getRootContainer;
+    var crashyTextNodes = api.features.crashyTextNodes;
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Utility functions
+
+    function isNonTextPartiallySelected(node, range) {
+        return (node.nodeType != 3) &&
+               (isOrIsAncestorOf(node, range.startContainer) || isOrIsAncestorOf(node, range.endContainer));
+    }
+
+    function getRangeDocument(range) {
+        return range.document || getDocument(range.startContainer);
+    }
+
+    function getBoundaryBeforeNode(node) {
+        return new DomPosition(node.parentNode, getNodeIndex(node));
+    }
+
+    function getBoundaryAfterNode(node) {
+        return new DomPosition(node.parentNode, getNodeIndex(node) + 1);
+    }
+
+    function insertNodeAtPosition(node, n, o) {
+        var firstNodeInserted = node.nodeType == 11 ? node.firstChild : node;
+        if (isCharacterDataNode(n)) {
+            if (o == n.length) {
+                dom.insertAfter(node, n);
+            } else {
+                n.parentNode.insertBefore(node, o == 0 ? n : splitDataNode(n, o));
+            }
+        } else if (o >= n.childNodes.length) {
+            n.appendChild(node);
+        } else {
+            n.insertBefore(node, n.childNodes[o]);
+        }
+        return firstNodeInserted;
+    }
+
+    function rangesIntersect(rangeA, rangeB, touchingIsIntersecting) {
+        assertRangeValid(rangeA);
+        assertRangeValid(rangeB);
+
+        if (getRangeDocument(rangeB) != getRangeDocument(rangeA)) {
+            throw new DOMException("WRONG_DOCUMENT_ERR");
+        }
+
+        var startComparison = comparePoints(rangeA.startContainer, rangeA.startOffset, rangeB.endContainer, rangeB.endOffset),
+            endComparison = comparePoints(rangeA.endContainer, rangeA.endOffset, rangeB.startContainer, rangeB.startOffset);
+
+        return touchingIsIntersecting ? startComparison <= 0 && endComparison >= 0 : startComparison < 0 && endComparison > 0;
+    }
+
+    function cloneSubtree(iterator) {
+        var partiallySelected;
+        for (var node, frag = getRangeDocument(iterator.range).createDocumentFragment(), subIterator; node = iterator.next(); ) {
+            partiallySelected = iterator.isPartiallySelectedSubtree();
+            node = node.cloneNode(!partiallySelected);
+            if (partiallySelected) {
+                subIterator = iterator.getSubtreeIterator();
+                node.appendChild(cloneSubtree(subIterator));
+                subIterator.detach(true);
+            }
+
+            if (node.nodeType == 10) { // DocumentType
+                throw new DOMException("HIERARCHY_REQUEST_ERR");
+            }
+            frag.appendChild(node);
+        }
+        return frag;
+    }
+
+    function iterateSubtree(rangeIterator, func, iteratorState) {
+        var it, n;
+        iteratorState = iteratorState || { stop: false };
+        for (var node, subRangeIterator; node = rangeIterator.next(); ) {
+            if (rangeIterator.isPartiallySelectedSubtree()) {
+                if (func(node) === false) {
+                    iteratorState.stop = true;
+                    return;
+                } else {
+                    // The node is partially selected by the Range, so we can use a new RangeIterator on the portion of
+                    // the node selected by the Range.
+                    subRangeIterator = rangeIterator.getSubtreeIterator();
+                    iterateSubtree(subRangeIterator, func, iteratorState);
+                    subRangeIterator.detach(true);
+                    if (iteratorState.stop) {
+                        return;
+                    }
+                }
+            } else {
+                // The whole node is selected, so we can use efficient DOM iteration to iterate over the node and its
+                // descendants
+                it = dom.createIterator(node);
+                while ( (n = it.next()) ) {
+                    if (func(n) === false) {
+                        iteratorState.stop = true;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    function deleteSubtree(iterator) {
+        var subIterator;
+        while (iterator.next()) {
+            if (iterator.isPartiallySelectedSubtree()) {
+                subIterator = iterator.getSubtreeIterator();
+                deleteSubtree(subIterator);
+                subIterator.detach(true);
+            } else {
+                iterator.remove();
+            }
+        }
+    }
+
+    function extractSubtree(iterator) {
+        for (var node, frag = getRangeDocument(iterator.range).createDocumentFragment(), subIterator; node = iterator.next(); ) {
+
+            if (iterator.isPartiallySelectedSubtree()) {
+                node = node.cloneNode(false);
+                subIterator = iterator.getSubtreeIterator();
+                node.appendChild(extractSubtree(subIterator));
+                subIterator.detach(true);
+            } else {
+                iterator.remove();
+            }
+            if (node.nodeType == 10) { // DocumentType
+                throw new DOMException("HIERARCHY_REQUEST_ERR");
+            }
+            frag.appendChild(node);
+        }
+        return frag;
+    }
+
+    function getNodesInRange(range, nodeTypes, filter) {
+        var filterNodeTypes = !!(nodeTypes && nodeTypes.length), regex;
+        var filterExists = !!filter;
+        if (filterNodeTypes) {
+            regex = new RegExp("^(" + nodeTypes.join("|") + ")$");
+        }
+
+        var nodes = [];
+        iterateSubtree(new RangeIterator(range, false), function(node) {
+            if (filterNodeTypes && !regex.test(node.nodeType)) {
+                return;
+            }
+            if (filterExists && !filter(node)) {
+                return;
+            }
+            // Don't include a boundary container if it is a character data node and the range does not contain any
+            // of its character data. See issue 190.
+            var sc = range.startContainer;
+            if (node == sc && isCharacterDataNode(sc) && range.startOffset == sc.length) {
+                return;
+            }
+
+            var ec = range.endContainer;
+            if (node == ec && isCharacterDataNode(ec) && range.endOffset == 0) {
+                return;
+            }
+
+            nodes.push(node);
+        });
+        return nodes;
+    }
+
+    function inspect(range) {
+        var name = (typeof range.getName == "undefined") ? "Range" : range.getName();
+        return "[" + name + "(" + dom.inspectNode(range.startContainer) + ":" + range.startOffset + ", " +
+                dom.inspectNode(range.endContainer) + ":" + range.endOffset + ")]";
+    }
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // RangeIterator code partially borrows from IERange by Tim Ryan (http://github.com/timcameronryan/IERange)
+
+    function RangeIterator(range, clonePartiallySelectedTextNodes) {
+        this.range = range;
+        this.clonePartiallySelectedTextNodes = clonePartiallySelectedTextNodes;
+
+
+        if (!range.collapsed) {
+            this.sc = range.startContainer;
+            this.so = range.startOffset;
+            this.ec = range.endContainer;
+            this.eo = range.endOffset;
+            var root = range.commonAncestorContainer;
+
+            if (this.sc === this.ec && isCharacterDataNode(this.sc)) {
+                this.isSingleCharacterDataNode = true;
+                this._first = this._last = this._next = this.sc;
+            } else {
+                this._first = this._next = (this.sc === root && !isCharacterDataNode(this.sc)) ?
+                    this.sc.childNodes[this.so] : getClosestAncestorIn(this.sc, root, true);
+                this._last = (this.ec === root && !isCharacterDataNode(this.ec)) ?
+                    this.ec.childNodes[this.eo - 1] : getClosestAncestorIn(this.ec, root, true);
+            }
+        }
+    }
+
+    RangeIterator.prototype = {
+        _current: null,
+        _next: null,
+        _first: null,
+        _last: null,
+        isSingleCharacterDataNode: false,
+
+        reset: function() {
+            this._current = null;
+            this._next = this._first;
+        },
+
+        hasNext: function() {
+            return !!this._next;
+        },
+
+        next: function() {
+            // Move to next node
+            var current = this._current = this._next;
+            if (current) {
+                this._next = (current !== this._last) ? current.nextSibling : null;
+
+                // Check for partially selected text nodes
+                if (isCharacterDataNode(current) && this.clonePartiallySelectedTextNodes) {
+                    if (current === this.ec) {
+                        (current = current.cloneNode(true)).deleteData(this.eo, current.length - this.eo);
+                    }
+                    if (this._current === this.sc) {
+                        (current = current.cloneNode(true)).deleteData(0, this.so);
+                    }
+                }
+            }
+
+            return current;
+        },
+
+        remove: function() {
+            var current = this._current, start, end;
+
+            if (isCharacterDataNode(current) && (current === this.sc || current === this.ec)) {
+                start = (current === this.sc) ? this.so : 0;
+                end = (current === this.ec) ? this.eo : current.length;
+                if (start != end) {
+                    current.deleteData(start, end - start);
+                }
+            } else {
+                if (current.parentNode) {
+                    current.parentNode.removeChild(current);
+                } else {
+                }
+            }
+        },
+
+        // Checks if the current node is partially selected
+        isPartiallySelectedSubtree: function() {
+            var current = this._current;
+            return isNonTextPartiallySelected(current, this.range);
+        },
+
+        getSubtreeIterator: function() {
+            var subRange;
+            if (this.isSingleCharacterDataNode) {
+                subRange = this.range.cloneRange();
+                subRange.collapse(false);
+            } else {
+                subRange = new Range(getRangeDocument(this.range));
+                var current = this._current;
+                var startContainer = current, startOffset = 0, endContainer = current, endOffset = getNodeLength(current);
+
+                if (isOrIsAncestorOf(current, this.sc)) {
+                    startContainer = this.sc;
+                    startOffset = this.so;
+                }
+                if (isOrIsAncestorOf(current, this.ec)) {
+                    endContainer = this.ec;
+                    endOffset = this.eo;
+                }
+
+                updateBoundaries(subRange, startContainer, startOffset, endContainer, endOffset);
+            }
+            return new RangeIterator(subRange, this.clonePartiallySelectedTextNodes);
+        },
+
+        detach: function(detachRange) {
+            if (detachRange) {
+                this.range.detach();
+            }
+            this.range = this._current = this._next = this._first = this._last = this.sc = this.so = this.ec = this.eo = null;
+        }
+    };
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Exceptions
+
+    function RangeException(codeName) {
+        this.code = this[codeName];
+        this.codeName = codeName;
+        this.message = "RangeException: " + this.codeName;
+    }
+
+    RangeException.prototype = {
+        BAD_BOUNDARYPOINTS_ERR: 1,
+        INVALID_NODE_TYPE_ERR: 2
+    };
+
+    RangeException.prototype.toString = function() {
+        return this.message;
+    };
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    var beforeAfterNodeTypes = [1, 3, 4, 5, 7, 8, 10];
+    var rootContainerNodeTypes = [2, 9, 11];
+    var readonlyNodeTypes = [5, 6, 10, 12];
+    var insertableNodeTypes = [1, 3, 4, 5, 7, 8, 10, 11];
+    var surroundNodeTypes = [1, 3, 4, 5, 7, 8];
+
+    function createAncestorFinder(nodeTypes) {
+        return function(node, selfIsAncestor) {
+            var t, n = selfIsAncestor ? node : node.parentNode;
+            while (n) {
+                t = n.nodeType;
+                if (arrayContains(nodeTypes, t)) {
+                    return n;
+                }
+                n = n.parentNode;
+            }
+            return null;
+        };
+    }
+
+    var getDocumentOrFragmentContainer = createAncestorFinder( [9, 11] );
+    var getReadonlyAncestor = createAncestorFinder(readonlyNodeTypes);
+    var getDocTypeNotationEntityAncestor = createAncestorFinder( [6, 10, 12] );
+
+    function assertNoDocTypeNotationEntityAncestor(node, allowSelf) {
+        if (getDocTypeNotationEntityAncestor(node, allowSelf)) {
+            throw new RangeException("INVALID_NODE_TYPE_ERR");
+        }
+    }
+
+    function assertNotDetached(range) {
+        if (!range.startContainer) {
+            throw new DOMException("INVALID_STATE_ERR");
+        }
+    }
+
+    function assertValidNodeType(node, invalidTypes) {
+        if (!arrayContains(invalidTypes, node.nodeType)) {
+            throw new RangeException("INVALID_NODE_TYPE_ERR");
+        }
+    }
+
+    function assertValidOffset(node, offset) {
+        if (offset < 0 || offset > (isCharacterDataNode(node) ? node.length : node.childNodes.length)) {
+            throw new DOMException("INDEX_SIZE_ERR");
+        }
+    }
+
+    function assertSameDocumentOrFragment(node1, node2) {
+        if (getDocumentOrFragmentContainer(node1, true) !== getDocumentOrFragmentContainer(node2, true)) {
+            throw new DOMException("WRONG_DOCUMENT_ERR");
+        }
+    }
+
+    function assertNodeNotReadOnly(node) {
+        if (getReadonlyAncestor(node, true)) {
+            throw new DOMException("NO_MODIFICATION_ALLOWED_ERR");
+        }
+    }
+
+    function assertNode(node, codeName) {
+        if (!node) {
+            throw new DOMException(codeName);
+        }
+    }
+
+    function isOrphan(node) {
+        return (crashyTextNodes && dom.isBrokenNode(node)) ||
+            !arrayContains(rootContainerNodeTypes, node.nodeType) && !getDocumentOrFragmentContainer(node, true);
+    }
+
+    function isValidOffset(node, offset) {
+        return offset <= (isCharacterDataNode(node) ? node.length : node.childNodes.length);
+    }
+
+    function isRangeValid(range) {
+        return (!!range.startContainer && !!range.endContainer
+                && !isOrphan(range.startContainer)
+                && !isOrphan(range.endContainer)
+                && isValidOffset(range.startContainer, range.startOffset)
+                && isValidOffset(range.endContainer, range.endOffset));
+    }
+
+    function assertRangeValid(range) {
+        assertNotDetached(range);
+        if (!isRangeValid(range)) {
+            throw new Error("Range error: Range is no longer valid after DOM mutation (" + range.inspect() + ")");
+        }
+    }
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Test the browser's innerHTML support to decide how to implement createContextualFragment
+    var styleEl = document.createElementNS("http://www.w3.org/1999/xhtml", "style");
+    var htmlParsingConforms = false;
+    try {
+        styleEl.innerHTML = "<b>x</b>";
+        htmlParsingConforms = (styleEl.firstChild.nodeType == 3); // Opera incorrectly creates an element node
+    } catch (e) {
+        // IE 6 and 7 throw
+    }
+
+    api.features.htmlParsingConforms = htmlParsingConforms;
+
+    var createContextualFragment = htmlParsingConforms ?
+
+        // Implementation as per HTML parsing spec, trusting in the browser's implementation of innerHTML. See
+        // discussion and base code for this implementation at issue 67.
+        // Spec: http://html5.org/specs/dom-parsing.html#extensions-to-the-range-interface
+        // Thanks to Aleks Williams.
+        function(fragmentStr) {
+            // "Let node the context object's start's node."
+            var node = this.startContainer;
+            var doc = getDocument(node);
+
+            // "If the context object's start's node is null, raise an INVALID_STATE_ERR
+            // exception and abort these steps."
+            if (!node) {
+                throw new DOMException("INVALID_STATE_ERR");
+            }
+
+            // "Let element be as follows, depending on node's interface:"
+            // Document, Document Fragment: null
+            var el = null;
+
+            // "Element: node"
+            if (node.nodeType == 1) {
+                el = node;
+
+            // "Text, Comment: node's parentElement"
+            } else if (isCharacterDataNode(node)) {
+                el = dom.parentElement(node);
+            }
+
+            // "If either element is null or element's ownerDocument is an HTML document
+            // and element's local name is "html" and element's namespace is the HTML
+            // namespace"
+            if (el === null || (
+                el.nodeName == "HTML"
+                && dom.isHtmlNamespace(getDocument(el).documentElement)
+                && dom.isHtmlNamespace(el)
+            )) {
+
+            // "let element be a new Element with "body" as its local name and the HTML
+            // namespace as its namespace.""
+                el = doc.createElementNS("http://www.w3.org/1999/xhtml", "body");
+            } else {
+                el = el.cloneNode(false);
+            }
+
+            // "If the node's document is an HTML document: Invoke the HTML fragment parsing algorithm."
+            // "If the node's document is an XML document: Invoke the XML fragment parsing algorithm."
+            // "In either case, the algorithm must be invoked with fragment as the input
+            // and element as the context element."
+            el.innerHTML = fragmentStr;
+
+            // "If this raises an exception, then abort these steps. Otherwise, let new
+            // children be the nodes returned."
+
+            // "Let fragment be a new DocumentFragment."
+            // "Append all new children to fragment."
+            // "Return fragment."
+            return dom.fragmentFromNodeChildren(el);
+        } :
+
+        // In this case, innerHTML cannot be trusted, so fall back to a simpler, non-conformant implementation that
+        // previous versions of Rangy used (with the exception of using a body element rather than a div)
+        function(fragmentStr) {
+            assertNotDetached(this);
+            var doc = getRangeDocument(this);
+            var el = doc.createElementNS("http://www.w3.org/1999/xhtml", "body");
+            el.innerHTML = fragmentStr;
+
+            return dom.fragmentFromNodeChildren(el);
+        };
+
+    function splitRangeBoundaries(range, positionsToPreserve) {
+        assertRangeValid(range);
+
+        var sc = range.startContainer, so = range.startOffset, ec = range.endContainer, eo = range.endOffset;
+        var startEndSame = (sc === ec);
+
+        if (isCharacterDataNode(ec) && eo > 0 && eo < ec.length) {
+            splitDataNode(ec, eo, positionsToPreserve);
+        }
+
+        if (isCharacterDataNode(sc) && so > 0 && so < sc.length) {
+            sc = splitDataNode(sc, so, positionsToPreserve);
+            if (startEndSame) {
+                eo -= so;
+                ec = sc;
+            } else if (ec == sc.parentNode && eo >= getNodeIndex(sc)) {
+                eo++;
+            }
+            so = 0;
+        }
+        range.setStartAndEnd(sc, so, ec, eo);
+    }
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    var rangeProperties = ["startContainer", "startOffset", "endContainer", "endOffset", "collapsed",
+        "commonAncestorContainer"];
+
+    var s2s = 0, s2e = 1, e2e = 2, e2s = 3;
+    var n_b = 0, n_a = 1, n_b_a = 2, n_i = 3;
+
+    util.extend(api.rangePrototype, {
+        compareBoundaryPoints: function(how, range) {
+            assertRangeValid(this);
+            assertSameDocumentOrFragment(this.startContainer, range.startContainer);
+
+            var nodeA, offsetA, nodeB, offsetB;
+            var prefixA = (how == e2s || how == s2s) ? "start" : "end";
+            var prefixB = (how == s2e || how == s2s) ? "start" : "end";
+            nodeA = this[prefixA + "Container"];
+            offsetA = this[prefixA + "Offset"];
+            nodeB = range[prefixB + "Container"];
+            offsetB = range[prefixB + "Offset"];
+            return comparePoints(nodeA, offsetA, nodeB, offsetB);
+        },
+
+        insertNode: function(node) {
+            assertRangeValid(this);
+            assertValidNodeType(node, insertableNodeTypes);
+            assertNodeNotReadOnly(this.startContainer);
+
+            if (isOrIsAncestorOf(node, this.startContainer)) {
+                throw new DOMException("HIERARCHY_REQUEST_ERR");
+            }
+
+            // No check for whether the container of the start of the Range is of a type that does not allow
+            // children of the type of node: the browser's DOM implementation should do this for us when we attempt
+            // to add the node
+
+            var firstNodeInserted = insertNodeAtPosition(node, this.startContainer, this.startOffset);
+            this.setStartBefore(firstNodeInserted);
+        },
+
+        cloneContents: function() {
+            assertRangeValid(this);
+
+            var clone, frag;
+            if (this.collapsed) {
+                return getRangeDocument(this).createDocumentFragment();
+            } else {
+                if (this.startContainer === this.endContainer && isCharacterDataNode(this.startContainer)) {
+                    clone = this.startContainer.cloneNode(true);
+                    clone.data = clone.data.slice(this.startOffset, this.endOffset);
+                    frag = getRangeDocument(this).createDocumentFragment();
+                    frag.appendChild(clone);
+                    return frag;
+                } else {
+                    var iterator = new RangeIterator(this, true);
+                    clone = cloneSubtree(iterator);
+                    iterator.detach();
+                }
+                return clone;
+            }
+        },
+
+        canSurroundContents: function() {
+            assertRangeValid(this);
+            assertNodeNotReadOnly(this.startContainer);
+            assertNodeNotReadOnly(this.endContainer);
+
+            // Check if the contents can be surrounded. Specifically, this means whether the range partially selects
+            // no non-text nodes.
+            var iterator = new RangeIterator(this, true);
+            var boundariesInvalid = (iterator._first && (isNonTextPartiallySelected(iterator._first, this)) ||
+                    (iterator._last && isNonTextPartiallySelected(iterator._last, this)));
+            iterator.detach();
+            return !boundariesInvalid;
+        },
+
+        surroundContents: function(node) {
+            assertValidNodeType(node, surroundNodeTypes);
+
+            if (!this.canSurroundContents()) {
+                throw new RangeException("BAD_BOUNDARYPOINTS_ERR");
+            }
+
+            // Extract the contents
+            var content = this.extractContents();
+
+            // Clear the children of the node
+            if (node.hasChildNodes()) {
+                while (node.lastChild) {
+                    node.removeChild(node.lastChild);
+                }
+            }
+
+            // Insert the new node and add the extracted contents
+            insertNodeAtPosition(node, this.startContainer, this.startOffset);
+            node.appendChild(content);
+
+            this.selectNode(node);
+        },
+
+        cloneRange: function() {
+            assertRangeValid(this);
+            var range = new Range(getRangeDocument(this));
+            var i = rangeProperties.length, prop;
+            while (i--) {
+                prop = rangeProperties[i];
+                range[prop] = this[prop];
+            }
+            return range;
+        },
+
+        toString: function() {
+            assertRangeValid(this);
+            var sc = this.startContainer;
+            if (sc === this.endContainer && isCharacterDataNode(sc)) {
+                return (sc.nodeType == 3 || sc.nodeType == 4) ? sc.data.slice(this.startOffset, this.endOffset) : "";
+            } else {
+                var textParts = [], iterator = new RangeIterator(this, true);
+                iterateSubtree(iterator, function(node) {
+                    // Accept only text or CDATA nodes, not comments
+                    if (node.nodeType == 3 || node.nodeType == 4) {
+                        textParts.push(node.data);
+                    }
+                });
+                iterator.detach();
+                return textParts.join("");
+            }
+        },
+
+        // The methods below are all non-standard. The following batch were introduced by Mozilla but have since
+        // been removed from Mozilla.
+
+        compareNode: function(node) {
+            assertRangeValid(this);
+
+            var parent = node.parentNode;
+            var nodeIndex = getNodeIndex(node);
+
+            if (!parent) {
+                throw new DOMException("NOT_FOUND_ERR");
+            }
+
+            var startComparison = this.comparePoint(parent, nodeIndex),
+                endComparison = this.comparePoint(parent, nodeIndex + 1);
+
+            if (startComparison < 0) { // Node starts before
+                return (endComparison > 0) ? n_b_a : n_b;
+            } else {
+                return (endComparison > 0) ? n_a : n_i;
+            }
+        },
+
+        comparePoint: function(node, offset) {
+            assertRangeValid(this);
+            assertNode(node, "HIERARCHY_REQUEST_ERR");
+            assertSameDocumentOrFragment(node, this.startContainer);
+
+            if (comparePoints(node, offset, this.startContainer, this.startOffset) < 0) {
+                return -1;
+            } else if (comparePoints(node, offset, this.endContainer, this.endOffset) > 0) {
+                return 1;
+            }
+            return 0;
+        },
+
+        createContextualFragment: createContextualFragment,
+
+        toHtml: function() {
+            assertRangeValid(this);
+            var container = this.commonAncestorContainer.parentNode.cloneNode(false);
+            container.appendChild(this.cloneContents());
+            return container.innerHTML;
+        },
+
+        // touchingIsIntersecting determines whether this method considers a node that borders a range intersects
+        // with it (as in WebKit) or not (as in Gecko pre-1.9, and the default)
+        intersectsNode: function(node, touchingIsIntersecting) {
+            assertRangeValid(this);
+            assertNode(node, "NOT_FOUND_ERR");
+            if (getDocument(node) !== getRangeDocument(this)) {
+                return false;
+            }
+
+            var parent = node.parentNode, offset = getNodeIndex(node);
+            assertNode(parent, "NOT_FOUND_ERR");
+
+            var startComparison = comparePoints(parent, offset, this.endContainer, this.endOffset),
+                endComparison = comparePoints(parent, offset + 1, this.startContainer, this.startOffset);
+
+            return touchingIsIntersecting ? startComparison <= 0 && endComparison >= 0 : startComparison < 0 && endComparison > 0;
+        },
+
+        isPointInRange: function(node, offset) {
+            assertRangeValid(this);
+            assertNode(node, "HIERARCHY_REQUEST_ERR");
+            assertSameDocumentOrFragment(node, this.startContainer);
+
+            return (comparePoints(node, offset, this.startContainer, this.startOffset) >= 0) &&
+                   (comparePoints(node, offset, this.endContainer, this.endOffset) <= 0);
+        },
+
+        // The methods below are non-standard and invented by me.
+
+        // Sharing a boundary start-to-end or end-to-start does not count as intersection.
+        intersectsRange: function(range) {
+            return rangesIntersect(this, range, false);
+        },
+
+        // Sharing a boundary start-to-end or end-to-start does count as intersection.
+        intersectsOrTouchesRange: function(range) {
+            return rangesIntersect(this, range, true);
+        },
+
+        intersection: function(range) {
+            if (this.intersectsRange(range)) {
+                var startComparison = comparePoints(this.startContainer, this.startOffset, range.startContainer, range.startOffset),
+                    endComparison = comparePoints(this.endContainer, this.endOffset, range.endContainer, range.endOffset);
+
+                var intersectionRange = this.cloneRange();
+                if (startComparison == -1) {
+                    intersectionRange.setStart(range.startContainer, range.startOffset);
+                }
+                if (endComparison == 1) {
+                    intersectionRange.setEnd(range.endContainer, range.endOffset);
+                }
+                return intersectionRange;
+            }
+            return null;
+        },
+
+        union: function(range) {
+            if (this.intersectsOrTouchesRange(range)) {
+                var unionRange = this.cloneRange();
+                if (comparePoints(range.startContainer, range.startOffset, this.startContainer, this.startOffset) == -1) {
+                    unionRange.setStart(range.startContainer, range.startOffset);
+                }
+                if (comparePoints(range.endContainer, range.endOffset, this.endContainer, this.endOffset) == 1) {
+                    unionRange.setEnd(range.endContainer, range.endOffset);
+                }
+                return unionRange;
+            } else {
+                throw new RangeException("Ranges do not intersect");
+            }
+        },
+
+        containsNode: function(node, allowPartial) {
+            if (allowPartial) {
+                return this.intersectsNode(node, false);
+            } else {
+                return this.compareNode(node) == n_i;
+            }
+        },
+
+        containsNodeContents: function(node) {
+            return this.comparePoint(node, 0) >= 0 && this.comparePoint(node, getNodeLength(node)) <= 0;
+        },
+
+        containsRange: function(range) {
+            var intersection = this.intersection(range);
+            return intersection !== null && range.equals(intersection);
+        },
+
+        containsNodeText: function(node) {
+            var nodeRange = this.cloneRange();
+            nodeRange.selectNode(node);
+            var textNodes = nodeRange.getNodes([3]);
+            if (textNodes.length > 0) {
+                nodeRange.setStart(textNodes[0], 0);
+                var lastTextNode = textNodes.pop();
+                nodeRange.setEnd(lastTextNode, lastTextNode.length);
+                var contains = this.containsRange(nodeRange);
+                nodeRange.detach();
+                return contains;
+            } else {
+                return this.containsNodeContents(node);
+            }
+        },
+
+        getNodes: function(nodeTypes, filter) {
+            assertRangeValid(this);
+            return getNodesInRange(this, nodeTypes, filter);
+        },
+
+        getDocument: function() {
+            return getRangeDocument(this);
+        },
+
+        collapseBefore: function(node) {
+            assertNotDetached(this);
+
+            this.setEndBefore(node);
+            this.collapse(false);
+        },
+
+        collapseAfter: function(node) {
+            assertNotDetached(this);
+
+            this.setStartAfter(node);
+            this.collapse(true);
+        },
+        
+        getBookmark: function(containerNode) {
+            var doc = getRangeDocument(this);
+            var preSelectionRange = api.createRange(doc);
+            containerNode = containerNode || dom.getBody(doc);
+            preSelectionRange.selectNodeContents(containerNode);
+            var range = this.intersection(preSelectionRange);
+            var start = 0, end = 0;
+            if (range) {
+                preSelectionRange.setEnd(range.startContainer, range.startOffset);
+                start = preSelectionRange.toString().length;
+                end = start + range.toString().length;
+                preSelectionRange.detach();
+            }
+
+            return {
+                start: start,
+                end: end,
+                containerNode: containerNode
+            };
+        },
+        
+        moveToBookmark: function(bookmark) {
+            var containerNode = bookmark.containerNode;
+            var charIndex = 0;
+            this.setStart(containerNode, 0);
+            this.collapse(true);
+            var nodeStack = [containerNode], node, foundStart = false, stop = false;
+            var nextCharIndex, i, childNodes;
+
+            while (!stop && (node = nodeStack.pop())) {
+                if (node.nodeType == 3) {
+                    nextCharIndex = charIndex + node.length;
+                    if (!foundStart && bookmark.start >= charIndex && bookmark.start <= nextCharIndex) {
+                        this.setStart(node, bookmark.start - charIndex);
+                        foundStart = true;
+                    }
+                    if (foundStart && bookmark.end >= charIndex && bookmark.end <= nextCharIndex) {
+                        this.setEnd(node, bookmark.end - charIndex);
+                        stop = true;
+                    }
+                    charIndex = nextCharIndex;
+                } else {
+                    childNodes = node.childNodes;
+                    i = childNodes.length;
+                    while (i--) {
+                        nodeStack.push(childNodes[i]);
+                    }
+                }
+            }
+        },
+
+        getName: function() {
+            return "DomRange";
+        },
+
+        equals: function(range) {
+            return Range.rangesEqual(this, range);
+        },
+
+        isValid: function() {
+            return isRangeValid(this);
+        },
+        
+        inspect: function() {
+            return inspect(this);
+        }
+    });
+
+    function copyComparisonConstantsToObject(obj) {
+        obj.START_TO_START = s2s;
+        obj.START_TO_END = s2e;
+        obj.END_TO_END = e2e;
+        obj.END_TO_START = e2s;
+
+        obj.NODE_BEFORE = n_b;
+        obj.NODE_AFTER = n_a;
+        obj.NODE_BEFORE_AND_AFTER = n_b_a;
+        obj.NODE_INSIDE = n_i;
+    }
+
+    function copyComparisonConstants(constructor) {
+        copyComparisonConstantsToObject(constructor);
+        copyComparisonConstantsToObject(constructor.prototype);
+    }
+
+    function createRangeContentRemover(remover, boundaryUpdater) {
+        return function() {
+            assertRangeValid(this);
+
+            var sc = this.startContainer, so = this.startOffset, root = this.commonAncestorContainer;
+
+            var iterator = new RangeIterator(this, true);
+
+            // Work out where to position the range after content removal
+            var node, boundary;
+            if (sc !== root) {
+                node = getClosestAncestorIn(sc, root, true);
+                boundary = getBoundaryAfterNode(node);
+                sc = boundary.node;
+                so = boundary.offset;
+            }
+
+            // Check none of the range is read-only
+            iterateSubtree(iterator, assertNodeNotReadOnly);
+
+            iterator.reset();
+
+            // Remove the content
+            var returnValue = remover(iterator);
+            iterator.detach();
+
+            // Move to the new position
+            boundaryUpdater(this, sc, so, sc, so);
+
+            return returnValue;
+        };
+    }
+
+    function createPrototypeRange(constructor, boundaryUpdater, detacher) {
+        function createBeforeAfterNodeSetter(isBefore, isStart) {
+            return function(node) {
+                assertNotDetached(this);
+                assertValidNodeType(node, beforeAfterNodeTypes);
+                assertValidNodeType(getRootContainer(node), rootContainerNodeTypes);
+
+                var boundary = (isBefore ? getBoundaryBeforeNode : getBoundaryAfterNode)(node);
+                (isStart ? setRangeStart : setRangeEnd)(this, boundary.node, boundary.offset);
+            };
+        }
+
+        function setRangeStart(range, node, offset) {
+            var ec = range.endContainer, eo = range.endOffset;
+            if (node !== range.startContainer || offset !== range.startOffset) {
+                // Check the root containers of the range and the new boundary, and also check whether the new boundary
+                // is after the current end. In either case, collapse the range to the new position
+                if (getRootContainer(node) != getRootContainer(ec) || comparePoints(node, offset, ec, eo) == 1) {
+                    ec = node;
+                    eo = offset;
+                }
+                boundaryUpdater(range, node, offset, ec, eo);
+            }
+        }
+
+        function setRangeEnd(range, node, offset) {
+            var sc = range.startContainer, so = range.startOffset;
+            if (node !== range.endContainer || offset !== range.endOffset) {
+                // Check the root containers of the range and the new boundary, and also check whether the new boundary
+                // is after the current end. In either case, collapse the range to the new position
+                if (getRootContainer(node) != getRootContainer(sc) || comparePoints(node, offset, sc, so) == -1) {
+                    sc = node;
+                    so = offset;
+                }
+                boundaryUpdater(range, sc, so, node, offset);
+            }
+        }
+
+        // Set up inheritance
+        var F = function() {};
+        F.prototype = api.rangePrototype;
+        constructor.prototype = new F();
+
+        util.extend(constructor.prototype, {
+            setStart: function(node, offset) {
+                assertNotDetached(this);
+                assertNoDocTypeNotationEntityAncestor(node, true);
+                assertValidOffset(node, offset);
+
+                setRangeStart(this, node, offset);
+            },
+
+            setEnd: function(node, offset) {
+                assertNotDetached(this);
+                assertNoDocTypeNotationEntityAncestor(node, true);
+                assertValidOffset(node, offset);
+
+                setRangeEnd(this, node, offset);
+            },
+
+            /**
+             * Convenience method to set a range's start and end boundaries. Overloaded as follows:
+             * - Two parameters (node, offset) creates a collapsed range at that position
+             * - Three parameters (node, startOffset, endOffset) creates a range contained with node starting at
+             *   startOffset and ending at endOffset
+             * - Four parameters (startNode, startOffset, endNode, endOffset) creates a range starting at startOffset in
+             *   startNode and ending at endOffset in endNode
+             */
+            setStartAndEnd: function() {
+                assertNotDetached(this);
+
+                var args = arguments;
+                var sc = args[0], so = args[1], ec = sc, eo = so;
+
+                switch (args.length) {
+                    case 3:
+                        eo = args[2];
+                        break;
+                    case 4:
+                        ec = args[2];
+                        eo = args[3];
+                        break;
+                }
+
+                boundaryUpdater(this, sc, so, ec, eo);
+            },
+            
+            setBoundary: function(node, offset, isStart) {
+                this["set" + (isStart ? "Start" : "End")](node, offset);
+            },
+
+            setStartBefore: createBeforeAfterNodeSetter(true, true),
+            setStartAfter: createBeforeAfterNodeSetter(false, true),
+            setEndBefore: createBeforeAfterNodeSetter(true, false),
+            setEndAfter: createBeforeAfterNodeSetter(false, false),
+
+            collapse: function(isStart) {
+                assertRangeValid(this);
+                if (isStart) {
+                    boundaryUpdater(this, this.startContainer, this.startOffset, this.startContainer, this.startOffset);
+                } else {
+                    boundaryUpdater(this, this.endContainer, this.endOffset, this.endContainer, this.endOffset);
+                }
+            },
+
+            selectNodeContents: function(node) {
+                assertNotDetached(this);
+                assertNoDocTypeNotationEntityAncestor(node, true);
+
+                boundaryUpdater(this, node, 0, node, getNodeLength(node));
+            },
+
+            selectNode: function(node) {
+                assertNotDetached(this);
+                assertNoDocTypeNotationEntityAncestor(node, false);
+                assertValidNodeType(node, beforeAfterNodeTypes);
+
+                var start = getBoundaryBeforeNode(node), end = getBoundaryAfterNode(node);
+                boundaryUpdater(this, start.node, start.offset, end.node, end.offset);
+            },
+
+            extractContents: createRangeContentRemover(extractSubtree, boundaryUpdater),
+
+            deleteContents: createRangeContentRemover(deleteSubtree, boundaryUpdater),
+
+            canSurroundContents: function() {
+                assertRangeValid(this);
+                assertNodeNotReadOnly(this.startContainer);
+                assertNodeNotReadOnly(this.endContainer);
+
+                // Check if the contents can be surrounded. Specifically, this means whether the range partially selects
+                // no non-text nodes.
+                var iterator = new RangeIterator(this, true);
+                var boundariesInvalid = (iterator._first && (isNonTextPartiallySelected(iterator._first, this)) ||
+                        (iterator._last && isNonTextPartiallySelected(iterator._last, this)));
+                iterator.detach();
+                return !boundariesInvalid;
+            },
+
+            detach: function() {
+                detacher(this);
+            },
+
+            splitBoundaries: function() {
+                splitRangeBoundaries(this);
+            },
+
+            splitBoundariesPreservingPositions: function(positionsToPreserve) {
+                splitRangeBoundaries(this, positionsToPreserve);
+            },
+
+            normalizeBoundaries: function() {
+                assertRangeValid(this);
+
+                var sc = this.startContainer, so = this.startOffset, ec = this.endContainer, eo = this.endOffset;
+
+                var mergeForward = function(node) {
+                    var sibling = node.nextSibling;
+                    if (sibling && sibling.nodeType == node.nodeType) {
+                        ec = node;
+                        eo = node.length;
+                        node.appendData(sibling.data);
+                        sibling.parentNode.removeChild(sibling);
+                    }
+                };
+
+                var mergeBackward = function(node) {
+                    var sibling = node.previousSibling;
+                    if (sibling && sibling.nodeType == node.nodeType) {
+                        sc = node;
+                        var nodeLength = node.length;
+                        so = sibling.length;
+                        node.insertData(0, sibling.data);
+                        sibling.parentNode.removeChild(sibling);
+                        if (sc == ec) {
+                            eo += so;
+                            ec = sc;
+                        } else if (ec == node.parentNode) {
+                            var nodeIndex = getNodeIndex(node);
+                            if (eo == nodeIndex) {
+                                ec = node;
+                                eo = nodeLength;
+                            } else if (eo > nodeIndex) {
+                                eo--;
+                            }
+                        }
+                    }
+                };
+
+                var normalizeStart = true;
+
+                if (isCharacterDataNode(ec)) {
+                    if (ec.length == eo) {
+                        mergeForward(ec);
+                    }
+                } else {
+                    if (eo > 0) {
+                        var endNode = ec.childNodes[eo - 1];
+                        if (endNode && isCharacterDataNode(endNode)) {
+                            mergeForward(endNode);
+                        }
+                    }
+                    normalizeStart = !this.collapsed;
+                }
+
+                if (normalizeStart) {
+                    if (isCharacterDataNode(sc)) {
+                        if (so == 0) {
+                            mergeBackward(sc);
+                        }
+                    } else {
+                        if (so < sc.childNodes.length) {
+                            var startNode = sc.childNodes[so];
+                            if (startNode && isCharacterDataNode(startNode)) {
+                                mergeBackward(startNode);
+                            }
+                        }
+                    }
+                } else {
+                    sc = ec;
+                    so = eo;
+                }
+
+                boundaryUpdater(this, sc, so, ec, eo);
+            },
+
+            collapseToPoint: function(node, offset) {
+                assertNotDetached(this);
+                assertNoDocTypeNotationEntityAncestor(node, true);
+                assertValidOffset(node, offset);
+                this.setStartAndEnd(node, offset);
+            }
+        });
+
+        copyComparisonConstants(constructor);
+    }
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    // Updates commonAncestorContainer and collapsed after boundary change
+    function updateCollapsedAndCommonAncestor(range) {
+        range.collapsed = (range.startContainer === range.endContainer && range.startOffset === range.endOffset);
+        range.commonAncestorContainer = range.collapsed ?
+            range.startContainer : dom.getCommonAncestor(range.startContainer, range.endContainer);
+    }
+
+    function updateBoundaries(range, startContainer, startOffset, endContainer, endOffset) {
+        range.startContainer = startContainer;
+        range.startOffset = startOffset;
+        range.endContainer = endContainer;
+        range.endOffset = endOffset;
+        range.document = dom.getDocument(startContainer);
+
+        updateCollapsedAndCommonAncestor(range);
+    }
+
+    function detach(range) {
+        assertNotDetached(range);
+        range.startContainer = range.startOffset = range.endContainer = range.endOffset = range.document = null;
+        range.collapsed = range.commonAncestorContainer = null;
+    }
+
+    function Range(doc) {
+        this.startContainer = doc;
+        this.startOffset = 0;
+        this.endContainer = doc;
+        this.endOffset = 0;
+        this.document = doc;
+        updateCollapsedAndCommonAncestor(this);
+    }
+
+    createPrototypeRange(Range, updateBoundaries, detach);
+
+    util.extend(Range, {
+        rangeProperties: rangeProperties,
+        RangeIterator: RangeIterator,
+        copyComparisonConstants: copyComparisonConstants,
+        createPrototypeRange: createPrototypeRange,
+        inspect: inspect,
+        getRangeDocument: getRangeDocument,
+        rangesEqual: function(r1, r2) {
+            return r1.startContainer === r2.startContainer &&
+                r1.startOffset === r2.startOffset &&
+                r1.endContainer === r2.endContainer &&
+                r1.endOffset === r2.endOffset;
+        }
+    });
+
+    api.DomRange = Range;
+    api.RangeException = RangeException;
+});
+rangy.createCoreModule("WrappedRange", ["DomRange"], function(api, module) {
+    var WrappedRange, WrappedTextRange;
+    var dom = api.dom;
+    var util = api.util;
+    var DomPosition = dom.DomPosition;
+    var DomRange = api.DomRange;
+    var getBody = dom.getBody;
+    var getContentDocument = dom.getContentDocument;
+    var isCharacterDataNode = dom.isCharacterDataNode;
+
+
+    /*----------------------------------------------------------------------------------------------------------------*/
+
+    if (api.features.implementsDomRange) {
+        // This is a wrapper around the browser's native DOM Range. It has two aims:
+        // - Provide workarounds for specific browser bugs
+        // - provide convenient extensions, which are inherited from Rangy's DomRange
+
+        (function() {
+            var rangeProto;
+            var rangeProperties = DomRange.rangeProperties;
+
+            function updateRangeProperties(range) {
+                var i = rangeProperties.length, prop;
+                while (i--) {
+                    prop = rangeProperties[i];
+                    range[prop] = range.nativeRange[prop];
+                }
+                // Fix for broken collapsed property in IE 9.
+                range.collapsed = (range.startContainer === range.endContainer && range.startOffset === range.endOffset);
+            }
+
+            function updateNativeRange(range, startContainer, startOffset, endContainer, endOffset) {
+                var startMoved = (range.startContainer !== startContainer || range.startOffset != startOffset);
+                var endMoved = (range.endContainer !== endContainer || range.endOffset != endOffset);
+                var nativeRangeDifferent = !range.equals(range.nativeRange);
+
+                // Always set both boundaries for the benefit of IE9 (see issue 35)
+                if (startMoved || endMoved || nativeRangeDifferent) {
+                    range.setEnd(endContainer, endOffset);
+                    range.setStart(startContainer, startOffset);
+                }
+            }
+
+            function detach(range) {
+                range.nativeRange.detach();
+                range.detached = true;
+                var i = rangeProperties.length;
+                while (i--) {
+                    range[ rangeProperties[i] ] = null;
+                }
+            }
+
+            var createBeforeAfterNodeSetter;
+
+            WrappedRange = function(range) {
+                if (!range) {
+                    throw module.createError("WrappedRange: Range must be specified");
+                }
+                this.nativeRange = range;
+                updateRangeProperties(this);
+            };
+
+            DomRange.createPrototypeRange(WrappedRange, updateNativeRange, detach);
+
+            rangeProto = WrappedRange.prototype;
+
+            rangeProto.selectNode = function(node) {
+                this.nativeRange.selectNode(node);
+                updateRangeProperties(this);
+            };
+
+            rangeProto.cloneContents = function() {
+                return this.nativeRange.cloneContents();
+            };
+
+            // Due to a long-standing Firefox bug that I have not been able to find a reliable way to detect,
+            // insertNode() is never delegated to the native range.
+
+            rangeProto.surroundContents = function(node) {
+                this.nativeRange.surroundContents(node);
+                updateRangeProperties(this);
+            };
+
+            rangeProto.collapse = function(isStart) {
+                this.nativeRange.collapse(isStart);
+                updateRangeProperties(this);
+            };
+
+            rangeProto.cloneRange = function() {
+                return new WrappedRange(this.nativeRange.cloneRange());
+            };
+
+            rangeProto.refresh = function() {
+                updateRangeProperties(this);
+            };
+
+            rangeProto.toString = function() {
+                return this.nativeRange.toString();
+            };
+
+            // Create test range and node for feature detection
+
+            var testTextNode = document.createTextNode("test");
+            getBody(document).appendChild(testTextNode);
+            var range = document.createRange();
+
+            /*--------------------------------------------------------------------------------------------------------*/
+
+            // Test for Firefox 2 bug that prevents moving the start of a Range to a point after its current end and
+            // correct for it
+
+            range.setStart(testTextNode, 0);
+            range.setEnd(testTextNode, 0);
+
+            try {
+                range.setStart(testTextNode, 1);
+
+                rangeProto.setStart = function(node, offset) {
+                    this.nativeRange.setStart(node, offset);
+                    updateRangeProperties(this);
+                };
+
+                rangeProto.setEnd = function(node, offset) {
+                    this.nativeRange.setEnd(node, offset);
+                    updateRangeProperties(this);
+                };
+
+                createBeforeAfterNodeSetter = function(name) {
+                    return function(node) {
+                        this.nativeRange[name](node);
+                        updateRangeProperties(this);
+                    };
+                };
+
+            } catch(ex) {
+
+                rangeProto.setStart = function(node, offset) {
+                    try {
+                        this.nativeRange.setStart(node, offset);
+                    } catch (ex) {
+                        this.nativeRange.setEnd(node, offset);
+                        this.nativeRange.setStart(node, offset);
+                    }
+                    updateRangeProperties(this);
+                };
+
+                rangeProto.setEnd = function(node, offset) {
+                    try {
+                        this.nativeRange.setEnd(node, offset);
+                    } catch (ex) {
+                        this.nativeRange.setStart(node, offset);
+                        this.nativeRange.setEnd(node, offset);
+                    }
+                    updateRangeProperties(this);
+                };
+
+                createBeforeAfterNodeSetter = function(name, oppositeName) {
+                    return function(node) {
+                        try {
+                            this.nativeRange[name](node);
+                        } catch (ex) {
+                            this.nativeRange[oppositeName](node);
+                            this.nativeRange[name](node);
+                        }
+                        updateRangeProperties(this);
+                    };
+                };
+            }
+
+            rangeProto.setStartBefore = createBeforeAfterNodeSetter("setStartBefore", "setEndBefore");
+            rangeProto.setStartAfter = createBeforeAfterNodeSetter("setStartAfter", "setEndAfter");
+            rangeProto.setEndBefore = createBeforeAfterNodeSetter("setEndBefore", "setStartBefore");
+            rangeProto.setEndAfter = createBeforeAfterNodeSetter("setEndAfter", "setStartAfter");
+
+            /*--------------------------------------------------------------------------------------------------------*/
+
+            // Always use DOM4-compliant selectNodeContents implementation: it's simpler and less code than testing
+            // whether the native implementation can be trusted
+            rangeProto.selectNodeContents = function(node) {
+                this.setStartAndEnd(node, 0, dom.getNodeLength(node));
+            };
+
+            /*--------------------------------------------------------------------------------------------------------*/
+
+            // Test for and correct WebKit bug that has the behaviour of compareBoundaryPoints round the wrong way for
+            // constants START_TO_END and END_TO_START: https://bugs.webkit.org/show_bug.cgi?id=20738
+
+            range.selectNodeContents(testTextNode);
+            range.setEnd(testTextNode, 3);
+
+            var range2 = document.createRange();
+            range2.selectNodeContents(testTextNode);
+            range2.setEnd(testTextNode, 4);
+            range2.setStart(testTextNode, 2);
+
+            if (range.compareBoundaryPoints(range.START_TO_END, range2) == -1 &&
+                    range.compareBoundaryPoints(range.END_TO_START, range2) == 1) {
+                // This is the wrong way round, so correct for it
+
+                rangeProto.compareBoundaryPoints = function(type, range) {
+                    range = range.nativeRange || range;
+                    if (type == range.START_TO_END) {
+                        type = range.END_TO_START;
+                    } else if (type == range.END_TO_START) {
+                        type = range.START_TO_END;
+                    }
+                    return this.nativeRange.compareBoundaryPoints(type, range);
+                };
+            } else {
+                rangeProto.compareBoundaryPoints = function(type, range) {
+                    return this.nativeRange.compareBoundaryPoints(type, range.nativeRange || range);
+                };
+            }
+
+            /*--------------------------------------------------------------------------------------------------------*/
+
+            // Test for IE 9 deleteContents() and extractContents() bug and correct it. See issue 107.
+
+            var el = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
+            el.innerHTML = "123";
+            var textNode = el.firstChild;
+            var body = getBody(document);
+            body.appendChild(el);
+
+            range.setStart(textNode, 1);
+            range.setEnd(textNode, 2);
+            range.deleteContents();
+
+            if (textNode.data == "13") {
+                // Behaviour is correct per DOM4 Range so wrap the browser's implementation of deleteContents() and
+                // extractContents()
+                rangeProto.deleteContents = function() {
+                    this.nativeRange.deleteContents();
+                    updateRangeProperties(this);
+                };
+
+                rangeProto.extractContents = function() {
+                    var frag = this.nativeRange.extractContents();
+                    updateRangeProperties(this);
+                    return frag;
+                };
+            } else {
+            }
+
+            body.removeChild(el);
+            body = null;
+
+            /*--------------------------------------------------------------------------------------------------------*/
+
+            // Test for existence of createContextualFragment and delegate to it if it exists
+            if (util.isHostMethod(range, "createContextualFragment")) {
+                rangeProto.createContextualFragment = function(fragmentStr) {
+                    return this.nativeRange.createContextualFragment(fragmentStr);
+                };
+            }
+
+            /*--------------------------------------------------------------------------------------------------------*/
+
+            // Clean up
+            getBody(document).removeChild(testTextNode);
+            range.detach();
+            range2.detach();
+
+            rangeProto.getName = function() {
+                return "WrappedRange";
+            };
+
+            api.WrappedRange = WrappedRange;
+
+            api.createNativeRange = function(doc) {
+                doc = getContentDocument(doc, module, "createNativeRange");
+                return doc.createRange();
+            };
+        })();
+    }
+    
+    if (api.features.implementsTextRange) {
+        /*
+        This is a workaround for a bug where IE returns the wrong container element from the TextRange's parentElement()
+        method. For example, in the following (where pipes denote the selection boundaries):
+
+        <ul id="ul"><li id="a">| a </li><li id="b"> b |</li></ul>
+
+        var range = document.selection.createRange();
+        alert(range.parentElement().id); // Should alert "ul" but alerts "b"
+
+        This method returns the common ancestor node of the following:
+        - the parentElement() of the textRange
+        - the parentElement() of the textRange after calling collapse(true)
+        - the parentElement() of the textRange after calling collapse(false)
+        */
+        var getTextRangeContainerElement = function(textRange) {
+            var parentEl = textRange.parentElement();
+            var range = textRange.duplicate();
+            range.collapse(true);
+            var startEl = range.parentElement();
+            range = textRange.duplicate();
+            range.collapse(false);
+            var endEl = range.parentElement();
+            var startEndContainer = (startEl == endEl) ? startEl : dom.getCommonAncestor(startEl, endEl);
+
+            return startEndContainer == parentEl ? startEndContainer : dom.getCommonAncestor(parentEl, startEndContainer);
+        };
+
+        var textRangeIsCollapsed = function(textRange) {
+            return textRange.compareEndPoints("StartToEnd", textRange) == 0;
+        };
+
+        // Gets the boundary of a TextRange expressed as a node and an offset within that node. This function started out as
+        // an improved version of code found in Tim Cameron Ryan's IERange (http://code.google.com/p/ierange/) but has
+        // grown, fixing problems with line breaks in preformatted text, adding workaround for IE TextRange bugs, handling
+        // for inputs and images, plus optimizations.
+        var getTextRangeBoundaryPosition = function(textRange, wholeRangeContainerElement, isStart, isCollapsed, startInfo) {
+            var workingRange = textRange.duplicate();
+            workingRange.collapse(isStart);
+            var containerElement = workingRange.parentElement();
+
+            // Sometimes collapsing a TextRange that's at the start of a text node can move it into the previous node, so
+            // check for that
+            if (!dom.isOrIsAncestorOf(wholeRangeContainerElement, containerElement)) {
+                containerElement = wholeRangeContainerElement;
+            }
+
+
+            // Deal with nodes that cannot "contain rich HTML markup". In practice, this means form inputs, images and
+            // similar. See http://msdn.microsoft.com/en-us/library/aa703950%28VS.85%29.aspx
+            if (!containerElement.canHaveHTML) {
+                var pos = new DomPosition(containerElement.parentNode, dom.getNodeIndex(containerElement));
+                return {
+                    boundaryPosition: pos,
+                    nodeInfo: {
+                        nodeIndex: pos.offset,
+                        containerElement: pos.node
+                    }
+                };
+            }
+
+            var workingNode = dom.getDocument(containerElement).createElementNS("http://www.w3.org/1999/xhtml", "span");
+
+            // Workaround for HTML5 Shiv's insane violation of document.createElementNS("http://www.w3.org/1999/xhtml", ). See Rangy issue 104 and HTML5
+            // Shiv issue 64: https://github.com/aFarkas/html5shiv/issues/64
+            if (workingNode.parentNode) {
+                workingNode.parentNode.removeChild(workingNode);
+            }
+
+            var comparison, workingComparisonType = isStart ? "StartToStart" : "StartToEnd";
+            var previousNode, nextNode, boundaryPosition, boundaryNode;
+            var start = (startInfo && startInfo.containerElement == containerElement) ? startInfo.nodeIndex : 0;
+            var childNodeCount = containerElement.childNodes.length;
+            var end = childNodeCount;
+
+            // Check end first. Code within the loop assumes that the endth child node of the container is definitely
+            // after the range boundary.
+            var nodeIndex = end;
+
+            while (true) {
+                if (nodeIndex == childNodeCount) {
+                    containerElement.appendChild(workingNode);
+                } else {
+                    containerElement.insertBefore(workingNode, containerElement.childNodes[nodeIndex]);
+                }
+                workingRange.moveToElementText(workingNode);
+                comparison = workingRange.compareEndPoints(workingComparisonType, textRange);
+                if (comparison == 0 || start == end) {
+                    break;
+                } else if (comparison == -1) {
+                    if (end == start + 1) {
+                        // We know the endth child node is after the range boundary, so we must be done.
+                        break;
+                    } else {
+                        start = nodeIndex;
+                    }
+                } else {
+                    end = (end == start + 1) ? start : nodeIndex;
+                }
+                nodeIndex = Math.floor((start + end) / 2);
+                containerElement.removeChild(workingNode);
+            }
+
+
+            // We've now reached or gone past the boundary of the text range we're interested in
+            // so have identified the node we want
+            boundaryNode = workingNode.nextSibling;
+
+            if (comparison == -1 && boundaryNode && isCharacterDataNode(boundaryNode)) {
+                // This is a character data node (text, comment, cdata). The working range is collapsed at the start of the
+                // node containing the text range's boundary, so we move the end of the working range to the boundary point
+                // and measure the length of its text to get the boundary's offset within the node.
+                workingRange.setEndPoint(isStart ? "EndToStart" : "EndToEnd", textRange);
+
+                var offset;
+
+                if (/[\r\n]/.test(boundaryNode.data)) {
+                    /*
+                    For the particular case of a boundary within a text node containing rendered line breaks (within a <pre>
+                    element, for example), we need a slightly complicated approach to get the boundary's offset in IE. The
+                    facts:
+                    
+                    - Each line break is represented as \r in the text node's data/nodeValue properties
+                    - Each line break is represented as \r\n in the TextRange's 'text' property
+                    - The 'text' property of the TextRange does not contain trailing line breaks
+                    
+                    To get round the problem presented by the final fact above, we can use the fact that TextRange's
+                    moveStart() and moveEnd() methods return the actual number of characters moved, which is not necessarily
+                    the same as the number of characters it was instructed to move. The simplest approach is to use this to
+                    store the characters moved when moving both the start and end of the range to the start of the document
+                    body and subtracting the start offset from the end offset (the "move-negative-gazillion" method).
+                    However, this is extremely slow when the document is large and the range is near the end of it. Clearly
+                    doing the mirror image (i.e. moving the range boundaries to the end of the document) has the same
+                    problem.
+                    
+                    Another approach that works is to use moveStart() to move the start boundary of the range up to the end
+                    boundary one character at a time and incrementing a counter with the value returned by the moveStart()
+                    call. However, the check for whether the start boundary has reached the end boundary is expensive, so
+                    this method is slow (although unlike "move-negative-gazillion" is largely unaffected by the location of
+                    the range within the document).
+                    
+                    The method below is a hybrid of the two methods above. It uses the fact that a string containing the
+                    TextRange's 'text' property with each \r\n converted to a single \r character cannot be longer than the
+                    text of the TextRange, so the start of the range is moved that length initially and then a character at
+                    a time to make up for any trailing line breaks not contained in the 'text' property. This has good
+                    performance in most situations compared to the previous two methods.
+                    */
+                    var tempRange = workingRange.duplicate();
+                    var rangeLength = tempRange.text.replace(/\r\n/g, "\r").length;
+
+                    offset = tempRange.moveStart("character", rangeLength);
+                    while ( (comparison = tempRange.compareEndPoints("StartToEnd", tempRange)) == -1) {
+                        offset++;
+                        tempRange.moveStart("character", 1);
+                    }
+                } else {
+                    offset = workingRange.text.length;
+                }
+                boundaryPosition = new DomPosition(boundaryNode, offset);
+            } else {
+
+                // If the boundary immediately follows a character data node and this is the end boundary, we should favour
+                // a position within that, and likewise for a start boundary preceding a character data node
+                previousNode = (isCollapsed || !isStart) && workingNode.previousSibling;
+                nextNode = (isCollapsed || isStart) && workingNode.nextSibling;
+                if (nextNode && isCharacterDataNode(nextNode)) {
+                    boundaryPosition = new DomPosition(nextNode, 0);
+                } else if (previousNode && isCharacterDataNode(previousNode)) {
+                    boundaryPosition = new DomPosition(previousNode, previousNode.data.length);
+                } else {
+                    boundaryPosition = new DomPosition(containerElement, dom.getNodeIndex(workingNode));
+                }
+            }
+
+            // Clean up
+            workingNode.parentNode.removeChild(workingNode);
+
+            return {
+                boundaryPosition: boundaryPosition,
+                nodeInfo: {
+                    nodeIndex: nodeIndex,
+                    containerElement: containerElement
+                }
+            };
+        };
+
+        // Returns a TextRange representing the boundary of a TextRange expressed as a node and an offset within that node.
+        // This function started out as an optimized version of code found in Tim Cameron Ryan's IERange
+        // (http://code.google.com/p/ierange/)
+        var createBoundaryTextRange = function(boundaryPosition, isStart) {
+            var boundaryNode, boundaryParent, boundaryOffset = boundaryPosition.offset;
+            var doc = dom.getDocument(boundaryPosition.node);
+            var workingNode, childNodes, workingRange = getBody(doc).createTextRange();
+            var nodeIsDataNode = isCharacterDataNode(boundaryPosition.node);
+
+            if (nodeIsDataNode) {
+                boundaryNode = boundaryPosition.node;
+                boundaryParent = boundaryNode.parentNode;
+            } else {
+                childNodes = boundaryPosition.node.childNodes;
+                boundaryNode = (boundaryOffset < childNodes.length) ? childNodes[boundaryOffset] : null;
+                boundaryParent = boundaryPosition.node;
+            }
+
+            // Position the range immediately before the node containing the boundary
+            workingNode = doc.createElementNS("http://www.w3.org/1999/xhtml", "span");
+
+            // Making the working element non-empty element persuades IE to consider the TextRange boundary to be within the
+            // element rather than immediately before or after it
+            workingNode.innerHTML = "&#feff;";
+
+            // insertBefore is supposed to work like appendChild if the second parameter is null. However, a bug report
+            // for IERange suggests that it can crash the browser: http://code.google.com/p/ierange/issues/detail?id=12
+            if (boundaryNode) {
+                boundaryParent.insertBefore(workingNode, boundaryNode);
+            } else {
+                boundaryParent.appendChild(workingNode);
+            }
+
+            workingRange.moveToElementText(workingNode);
+            workingRange.collapse(!isStart);
+
+            // Clean up
+            boundaryParent.removeChild(workingNode);
+
+            // Move the working range to the text offset, if required
+            if (nodeIsDataNode) {
+                workingRange[isStart ? "moveStart" : "moveEnd"]("character", boundaryOffset);
+            }
+
+            return workingRange;
+        };
+
+        /*------------------------------------------------------------------------------------------------------------*/
+
+        // This is a wrapper around a TextRange, providing full DOM Range functionality using rangy's DomRange as a
+        // prototype
+
+        WrappedTextRange = function(textRange) {
+            this.textRange = textRange;
+            this.refresh();
+        };
+
+        WrappedTextRange.prototype = new DomRange(document);
+
+        WrappedTextRange.prototype.refresh = function() {
+            var start, end, startBoundary;
+
+            // TextRange's parentElement() method cannot be trusted. getTextRangeContainerElement() works around that.
+            var rangeContainerElement = getTextRangeContainerElement(this.textRange);
+
+            if (textRangeIsCollapsed(this.textRange)) {
+                end = start = getTextRangeBoundaryPosition(this.textRange, rangeContainerElement, true,
+                    true).boundaryPosition;
+            } else {
+                startBoundary = getTextRangeBoundaryPosition(this.textRange, rangeContainerElement, true, false);
+                start = startBoundary.boundaryPosition;
+
+                // An optimization used here is that if the start and end boundaries have the same parent element, the
+                // search scope for the end boundary can be limited to exclude the portion of the element that precedes
+                // the start boundary
+                end = getTextRangeBoundaryPosition(this.textRange, rangeContainerElement, false, false,
+                    startBoundary.nodeInfo).boundaryPosition;
+            }
+
+            this.setStart(start.node, start.offset);
+            this.setEnd(end.node, end.offset);
+        };
+
+        WrappedTextRange.prototype.getName = function() {
+            return "WrappedTextRange";
+        };
+
+        DomRange.copyComparisonConstants(WrappedTextRange);
+
+        WrappedTextRange.rangeToTextRange = function(range) {
+            if (range.collapsed) {
+                return createBoundaryTextRange(new DomPosition(range.startContainer, range.startOffset), true);
+            } else {
+                var startRange = createBoundaryTextRange(new DomPosition(range.startContainer, range.startOffset), true);
+                var endRange = createBoundaryTextRange(new DomPosition(range.endContainer, range.endOffset), false);
+                var textRange = getBody( DomRange.getRangeDocument(range) ).createTextRange();
+                textRange.setEndPoint("StartToStart", startRange);
+                textRange.setEndPoint("EndToEnd", endRange);
+                return textRange;
+            }
+        };
+
+        api.WrappedTextRange = WrappedTextRange;
+
+        // IE 9 and above have both implementations and Rangy makes both available. The next few lines sets which
+        // implementation to use by default.
+        if (!api.features.implementsDomRange || api.config.preferTextRange) {
+            // Add WrappedTextRange as the Range property of the global object to allow expression like Range.END_TO_END to work
+            var globalObj = (function() { return this; })();
+            if (typeof globalObj.Range == "undefined") {
+                globalObj.Range = WrappedTextRange;
+            }
+
+            api.createNativeRange = function(doc) {
+                doc = getContentDocument(doc, module, "createNativeRange");
+                return getBody(doc).createTextRange();
+            };
+
+            api.WrappedRange = WrappedTextRange;
+        }
+    }
+
+    api.createRange = function(doc) {
+        doc = getContentDocument(doc, module, "createRange");
+        return new api.WrappedRange(api.createNativeRange(doc));
+    };
+
+    api.createRangyRange = function(doc) {
+        doc = getContentDocument(doc, module, "createRangyRange");
+        return new DomRange(doc);
+    };
+
+    api.createIframeRange = function(iframeEl) {
+        module.deprecationNotice("createIframeRange()", "createRange(iframeEl)");
+        return api.createRange(iframeEl);
+    };
+
+    api.createIframeRangyRange = function(iframeEl) {
+        module.deprecationNotice("createIframeRangyRange()", "createRangyRange(iframeEl)");
+        return api.createRangyRange(iframeEl);
+    };
+
+    api.addCreateMissingNativeApiListener(function(win) {
+        var doc = win.document;
+        if (typeof doc.createRange == "undefined") {
+            doc.createRange = function() {
+                return api.createRange(doc);
+            };
+        }
+        doc = win = null;
+    });
+});
+// This module creates a selection object wrapper that conforms as closely as possible to the Selection specification
+// in the HTML Editing spec (http://dvcs.w3.org/hg/editing/raw-file/tip/editing.html#selections)
+rangy.createCoreModule("WrappedSelection", ["DomRange", "WrappedRange"], function(api, module) {
+    api.config.checkSelectionRanges = true;
+
+    var BOOLEAN = "boolean";
+    var NUMBER = "number";
+    var dom = api.dom;
+    var util = api.util;
+    var isHostMethod = util.isHostMethod;
+    var DomRange = api.DomRange;
+    var WrappedRange = api.WrappedRange;
+    var DOMException = api.DOMException;
+    var DomPosition = dom.DomPosition;
+    var getNativeSelection;
+    var selectionIsCollapsed;
+    var features = api.features;
+    var CONTROL = "Control";
+    var getDocument = dom.getDocument;
+    var getBody = dom.getBody;
+    var rangesEqual = DomRange.rangesEqual;
+
+
+    // Utility function to support direction parameters in the API that may be a string ("backward" or "forward") or a
+    // Boolean (true for backwards).
+    function isDirectionBackward(dir) {
+        return (typeof dir == "string") ? /^backward(s)?$/i.test(dir) : !!dir;
+    }
+
+    function getWindow(win, methodName) {
+        if (!win) {
+            return window;
+        } else if (dom.isWindow(win)) {
+            return win;
+        } else if (win instanceof WrappedSelection) {
+            return win.win;
+        } else {
+            var doc = dom.getContentDocument(win, module, methodName);
+            return dom.getWindow(doc);
+        }
+    }
+
+    function getWinSelection(winParam) {
+        return getWindow(winParam, "getWinSelection").getSelection();
+    }
+
+    function getDocSelection(winParam) {
+        return getWindow(winParam, "getDocSelection").document.selection;
+    }
+    
+    function winSelectionIsBackward(sel) {
+        var backward = false;
+        if (sel.anchorNode) {
+            backward = (dom.comparePoints(sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset) == 1);
+        }
+        return backward;
+    }
+
+    // Test for the Range/TextRange and Selection features required
+    // Test for ability to retrieve selection
+    var implementsWinGetSelection = isHostMethod(window, "getSelection"),
+        implementsDocSelection = util.isHostObject(document, "selection");
+
+    features.implementsWinGetSelection = implementsWinGetSelection;
+    features.implementsDocSelection = implementsDocSelection;
+
+    var useDocumentSelection = implementsDocSelection && (!implementsWinGetSelection || api.config.preferTextRange);
+
+    if (useDocumentSelection) {
+        getNativeSelection = getDocSelection;
+        api.isSelectionValid = function(winParam) {
+            var doc = getWindow(winParam, "isSelectionValid").document, nativeSel = doc.selection;
+
+            // Check whether the selection TextRange is actually contained within the correct document
+            return (nativeSel.type != "None" || getDocument(nativeSel.createRange().parentElement()) == doc);
+        };
+    } else if (implementsWinGetSelection) {
+        getNativeSelection = getWinSelection;
+        api.isSelectionValid = function() {
+            return true;
+        };
+    } else {
+        module.fail("Neither document.selection or window.getSelection() detected.");
+    }
+
+    api.getNativeSelection = getNativeSelection;
+
+    var testSelection = getNativeSelection();
+    var testRange = api.createNativeRange(document);
+    var body = getBody(document);
+
+    // Obtaining a range from a selection
+    var selectionHasAnchorAndFocus = util.areHostProperties(testSelection,
+        ["anchorNode", "focusNode", "anchorOffset", "focusOffset"]);
+
+    features.selectionHasAnchorAndFocus = selectionHasAnchorAndFocus;
+
+    // Test for existence of native selection extend() method
+    var selectionHasExtend = isHostMethod(testSelection, "extend");
+    features.selectionHasExtend = selectionHasExtend;
+    
+    // Test if rangeCount exists
+    var selectionHasRangeCount = (typeof testSelection.rangeCount == NUMBER);
+    features.selectionHasRangeCount = selectionHasRangeCount;
+
+    var selectionSupportsMultipleRanges = false;
+    var collapsedNonEditableSelectionsSupported = true;
+
+    var addRangeBackwardToNative = selectionHasExtend ?
+        function(nativeSelection, range) {
+            var doc = DomRange.getRangeDocument(range);
+            var endRange = api.createRange(doc);
+            endRange.collapseToPoint(range.endContainer, range.endOffset);
+            nativeSelection.addRange(getNativeRange(endRange));
+            nativeSelection.extend(range.startContainer, range.startOffset);
+        } : null;
+
+    if (util.areHostMethods(testSelection, ["addRange", "getRangeAt", "removeAllRanges"]) &&
+            typeof testSelection.rangeCount == NUMBER && features.implementsDomRange) {
+
+        (function() {
+            // Previously an iframe was used but this caused problems in some circumstances in IE, so tests are
+            // performed on the current document's selection. See issue 109.
+
+            // Note also that if a selection previously existed, it is wiped by these tests. This should usually be fine
+            // because initialization usually happens when the document loads, but could be a problem for a script that
+            // loads and initializes Rangy later. If anyone complains, code could be added to save and restore the
+            // selection.
+            var sel = window.getSelection();
+            if (sel) {
+                // Store the current selection
+                var originalSelectionRangeCount = sel.rangeCount;
+                var selectionHasMultipleRanges = (originalSelectionRangeCount > 1);
+                var originalSelectionRanges = [];
+                var originalSelectionBackward = winSelectionIsBackward(sel); 
+                for (var i = 0; i < originalSelectionRangeCount; ++i) {
+                    originalSelectionRanges[i] = sel.getRangeAt(i);
+                }
+                
+                // Create some test elements
+                var body = getBody(document);
+                var testEl = body.appendChild( document.createElementNS("http://www.w3.org/1999/xhtml", "div") );
+                testEl.contentEditable = "false";
+                var textNode = testEl.appendChild( document.createTextNode("\u00a0\u00a0\u00a0") );
+
+                // Test whether the native selection will allow a collapsed selection within a non-editable element
+                var r1 = document.createRange();
+
+                r1.setStart(textNode, 1);
+                r1.collapse(true);
+                sel.addRange(r1);
+                collapsedNonEditableSelectionsSupported = (sel.rangeCount == 1);
+                sel.removeAllRanges();
+
+                // Test whether the native selection is capable of supporting multiple ranges
+                if (!selectionHasMultipleRanges) {
+                    var r2 = r1.cloneRange();
+                    r1.setStart(textNode, 0);
+                    r2.setEnd(textNode, 3);
+                    r2.setStart(textNode, 2);
+                    sel.addRange(r1);
+                    sel.addRange(r2);
+
+                    selectionSupportsMultipleRanges = (sel.rangeCount == 2);
+                    r2.detach();
+                }
+
+                // Clean up
+                body.removeChild(testEl);
+                sel.removeAllRanges();
+                r1.detach();
+
+                for (i = 0; i < originalSelectionRangeCount; ++i) {
+                    if (i == 0 && originalSelectionBackward) {
+                        if (addRangeBackwardToNative) {
+                            addRangeBackwardToNative(sel, originalSelectionRanges[i]);
+                        } else {
+                            api.warn("Rangy initialization: original selection was backwards but selection has been restored forwards because browser does not support Selection.extend");
+                            sel.addRange(originalSelectionRanges[i])
+                        }
+                    } else {
+                        sel.addRange(originalSelectionRanges[i])
+                    }
+                }
+            }
+        })();
+    }
+
+    features.selectionSupportsMultipleRanges = selectionSupportsMultipleRanges;
+    features.collapsedNonEditableSelectionsSupported = collapsedNonEditableSelectionsSupported;
+
+    // ControlRanges
+    var implementsControlRange = false, testControlRange;
+
+    if (body && isHostMethod(body, "createControlRange")) {
+        testControlRange = body.createControlRange();
+        if (util.areHostProperties(testControlRange, ["item", "add"])) {
+            implementsControlRange = true;
+        }
+    }
+    features.implementsControlRange = implementsControlRange;
+
+    // Selection collapsedness
+    if (selectionHasAnchorAndFocus) {
+        selectionIsCollapsed = function(sel) {
+            return sel.anchorNode === sel.focusNode && sel.anchorOffset === sel.focusOffset;
+        };
+    } else {
+        selectionIsCollapsed = function(sel) {
+            return sel.rangeCount ? sel.getRangeAt(sel.rangeCount - 1).collapsed : false;
+        };
+    }
+
+    function updateAnchorAndFocusFromRange(sel, range, backward) {
+        var anchorPrefix = backward ? "end" : "start", focusPrefix = backward ? "start" : "end";
+        sel.anchorNode = range[anchorPrefix + "Container"];
+        sel.anchorOffset = range[anchorPrefix + "Offset"];
+        sel.focusNode = range[focusPrefix + "Container"];
+        sel.focusOffset = range[focusPrefix + "Offset"];
+    }
+
+    function updateAnchorAndFocusFromNativeSelection(sel) {
+        var nativeSel = sel.nativeSelection;
+        sel.anchorNode = nativeSel.anchorNode;
+        sel.anchorOffset = nativeSel.anchorOffset;
+        sel.focusNode = nativeSel.focusNode;
+        sel.focusOffset = nativeSel.focusOffset;
+    }
+
+    function updateEmptySelection(sel) {
+        sel.anchorNode = sel.focusNode = null;
+        sel.anchorOffset = sel.focusOffset = 0;
+        sel.rangeCount = 0;
+        sel.isCollapsed = true;
+        sel._ranges.length = 0;
+    }
+
+    function getNativeRange(range) {
+        var nativeRange;
+        if (range instanceof DomRange) {
+            nativeRange = api.createNativeRange(range.getDocument());
+            nativeRange.setEnd(range.endContainer, range.endOffset);
+            nativeRange.setStart(range.startContainer, range.startOffset);
+        } else if (range instanceof WrappedRange) {
+            nativeRange = range.nativeRange;
+        } else if (features.implementsDomRange && (range instanceof dom.getWindow(range.startContainer).Range)) {
+            nativeRange = range;
+        }
+        return nativeRange;
+    }
+
+    function rangeContainsSingleElement(rangeNodes) {
+        if (!rangeNodes.length || rangeNodes[0].nodeType != 1) {
+            return false;
+        }
+        for (var i = 1, len = rangeNodes.length; i < len; ++i) {
+            if (!dom.isAncestorOf(rangeNodes[0], rangeNodes[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function getSingleElementFromRange(range) {
+        var nodes = range.getNodes();
+        if (!rangeContainsSingleElement(nodes)) {
+            throw module.createError("getSingleElementFromRange: range " + range.inspect() + " did not consist of a single element");
+        }
+        return nodes[0];
+    }
+
+    // Simple, quick test which only needs to distinguish between a TextRange and a ControlRange
+    function isTextRange(range) {
+        return !!range && typeof range.text != "undefined";
+    }
+
+    function updateFromTextRange(sel, range) {
+        // Create a Range from the selected TextRange
+        var wrappedRange = new WrappedRange(range);
+        sel._ranges = [wrappedRange];
+
+        updateAnchorAndFocusFromRange(sel, wrappedRange, false);
+        sel.rangeCount = 1;
+        sel.isCollapsed = wrappedRange.collapsed;
+    }
+
+    function updateControlSelection(sel) {
+        // Update the wrapped selection based on what's now in the native selection
+        sel._ranges.length = 0;
+        if (sel.docSelection.type == "None") {
+            updateEmptySelection(sel);
+        } else {
+            var controlRange = sel.docSelection.createRange();
+            if (isTextRange(controlRange)) {
+                // This case (where the selection type is "Control" and calling createRange() on the selection returns
+                // a TextRange) can happen in IE 9. It happens, for example, when all elements in the selected
+                // ControlRange have been removed from the ControlRange and removed from the document.
+                updateFromTextRange(sel, controlRange);
+            } else {
+                sel.rangeCount = controlRange.length;
+                var range, doc = getDocument(controlRange.item(0));
+                for (var i = 0; i < sel.rangeCount; ++i) {
+                    range = api.createRange(doc);
+                    range.selectNode(controlRange.item(i));
+                    sel._ranges.push(range);
+                }
+                sel.isCollapsed = sel.rangeCount == 1 && sel._ranges[0].collapsed;
+                updateAnchorAndFocusFromRange(sel, sel._ranges[sel.rangeCount - 1], false);
+            }
+        }
+    }
+
+    function addRangeToControlSelection(sel, range) {
+        var controlRange = sel.docSelection.createRange();
+        var rangeElement = getSingleElementFromRange(range);
+
+        // Create a new ControlRange containing all the elements in the selected ControlRange plus the element
+        // contained by the supplied range
+        var doc = getDocument(controlRange.item(0));
+        var newControlRange = getBody(doc).createControlRange();
+        for (var i = 0, len = controlRange.length; i < len; ++i) {
+            newControlRange.add(controlRange.item(i));
+        }
+        try {
+            newControlRange.add(rangeElement);
+        } catch (ex) {
+            throw module.createError("addRange(): Element within the specified Range could not be added to control selection (does it have layout?)");
+        }
+        newControlRange.select();
+
+        // Update the wrapped selection based on what's now in the native selection
+        updateControlSelection(sel);
+    }
+
+    var getSelectionRangeAt;
+
+    if (isHostMethod(testSelection, "getRangeAt")) {
+        // try/catch is present because getRangeAt() must have thrown an error in some browser and some situation.
+        // Unfortunately, I didn't write a comment about the specifics and am now scared to take it out. Let that be a
+        // lesson to us all, especially me.
+        getSelectionRangeAt = function(sel, index) {
+            try {
+                return sel.getRangeAt(index);
+            } catch (ex) {
+                return null;
+            }
+        };
+    } else if (selectionHasAnchorAndFocus) {
+        getSelectionRangeAt = function(sel) {
+            var doc = getDocument(sel.anchorNode);
+            var range = api.createRange(doc);
+            range.setStartAndEnd(sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset);
+
+            // Handle the case when the selection was selected backwards (from the end to the start in the
+            // document)
+            if (range.collapsed !== this.isCollapsed) {
+                range.setStartAndEnd(sel.focusNode, sel.focusOffset, sel.anchorNode, sel.anchorOffset);
+            }
+
+            return range;
+        };
+    }
+
+    function WrappedSelection(selection, docSelection, win) {
+        this.nativeSelection = selection;
+        this.docSelection = docSelection;
+        this._ranges = [];
+        this.win = win;
+        this.refresh();
+    }
+
+    WrappedSelection.prototype = api.selectionPrototype;
+
+    function deleteProperties(sel) {
+        sel.win = sel.anchorNode = sel.focusNode = sel._ranges = null;
+        sel.rangeCount = sel.anchorOffset = sel.focusOffset = 0;
+        sel.detached = true;
+    }
+
+    var cachedRangySelections = [];
+
+    function actOnCachedSelection(win, action) {
+        var i = cachedRangySelections.length, cached, sel;
+        while (i--) {
+            cached = cachedRangySelections[i];
+            sel = cached.selection;
+            if (action == "deleteAll") {
+                deleteProperties(sel);
+            } else if (cached.win == win) {
+                if (action == "delete") {
+                    cachedRangySelections.splice(i, 1);
+                    return true;
+                } else {
+                    return sel;
+                }
+            }
+        }
+        if (action == "deleteAll") {
+            cachedRangySelections.length = 0;
+        }
+        return null;
+    }
+
+    var getSelection = function(win) {
+        // Check if the parameter is a Rangy Selection object
+        if (win && win instanceof WrappedSelection) {
+            win.refresh();
+            return win;
+        }
+
+        win = getWindow(win, "getNativeSelection");
+
+        var sel = actOnCachedSelection(win);
+        var nativeSel = getNativeSelection(win), docSel = implementsDocSelection ? getDocSelection(win) : null;
+        if (sel) {
+            sel.nativeSelection = nativeSel;
+            sel.docSelection = docSel;
+            sel.refresh();
+        } else {
+            sel = new WrappedSelection(nativeSel, docSel, win);
+            cachedRangySelections.push( { win: win, selection: sel } );
+        }
+        return sel;
+    };
+
+    api.getSelection = getSelection;
+
+    api.getIframeSelection = function(iframeEl) {
+        module.deprecationNotice("getIframeSelection()", "getSelection(iframeEl)");
+        return api.getSelection(dom.getIframeWindow(iframeEl));
+    };
+
+    var selProto = WrappedSelection.prototype;
+
+    function createControlSelection(sel, ranges) {
+        // Ensure that the selection becomes of type "Control"
+        var doc = getDocument(ranges[0].startContainer);
+        var controlRange = getBody(doc).createControlRange();
+        for (var i = 0, el, len = ranges.length; i < len; ++i) {
+            el = getSingleElementFromRange(ranges[i]);
+            try {
+                controlRange.add(el);
+            } catch (ex) {
+                throw module.createError("setRanges(): Element within one of the specified Ranges could not be added to control selection (does it have layout?)");
+            }
+        }
+        controlRange.select();
+
+        // Update the wrapped selection based on what's now in the native selection
+        updateControlSelection(sel);
+    }
+
+    // Selecting a range
+    if (!useDocumentSelection && selectionHasAnchorAndFocus && util.areHostMethods(testSelection, ["removeAllRanges", "addRange"])) {
+        selProto.removeAllRanges = function() {
+            this.nativeSelection.removeAllRanges();
+            updateEmptySelection(this);
+        };
+
+        var addRangeBackward = function(sel, range) {
+            addRangeBackwardToNative(sel.nativeSelection, range);
+            sel.refresh();
+        };
+
+        if (selectionHasRangeCount) {
+            selProto.addRange = function(range, direction) {
+                if (implementsControlRange && implementsDocSelection && this.docSelection.type == CONTROL) {
+                    addRangeToControlSelection(this, range);
+                } else {
+                    if (isDirectionBackward(direction) && selectionHasExtend) {
+                        addRangeBackward(this, range);
+                    } else {
+                        var previousRangeCount;
+                        if (selectionSupportsMultipleRanges) {
+                            previousRangeCount = this.rangeCount;
+                        } else {
+                            this.removeAllRanges();
+                            previousRangeCount = 0;
+                        }
+                        // Clone the native range so that changing the selected range does not affect the selection.
+                        // This is contrary to the spec but is the only way to achieve consistency between browsers. See
+                        // issue 80.
+                        this.nativeSelection.addRange(getNativeRange(range).cloneRange());
+
+                        // Check whether adding the range was successful
+                        this.rangeCount = this.nativeSelection.rangeCount;
+
+                        if (this.rangeCount == previousRangeCount + 1) {
+                            // The range was added successfully
+
+                            // Check whether the range that we added to the selection is reflected in the last range extracted from
+                            // the selection
+                            if (api.config.checkSelectionRanges) {
+                                var nativeRange = getSelectionRangeAt(this.nativeSelection, this.rangeCount - 1);
+                                if (nativeRange && !rangesEqual(nativeRange, range)) {
+                                    // Happens in WebKit with, for example, a selection placed at the start of a text node
+                                    range = new WrappedRange(nativeRange);
+                                }
+                            }
+                            this._ranges[this.rangeCount - 1] = range;
+                            updateAnchorAndFocusFromRange(this, range, selectionIsBackward(this.nativeSelection));
+                            this.isCollapsed = selectionIsCollapsed(this);
+                        } else {
+                            // The range was not added successfully. The simplest thing is to refresh
+                            this.refresh();
+                        }
+                    }
+                }
+            };
+        } else {
+            selProto.addRange = function(range, direction) {
+                if (isDirectionBackward(direction) && selectionHasExtend) {
+                    addRangeBackward(this, range);
+                } else {
+                    this.nativeSelection.addRange(getNativeRange(range));
+                    this.refresh();
+                }
+            };
+        }
+
+        selProto.setRanges = function(ranges) {
+            if (implementsControlRange && ranges.length > 1) {
+                createControlSelection(this, ranges);
+            } else {
+                this.removeAllRanges();
+                for (var i = 0, len = ranges.length; i < len; ++i) {
+                    this.addRange(ranges[i]);
+                }
+            }
+        };
+    } else if (isHostMethod(testSelection, "empty") && isHostMethod(testRange, "select") &&
+               implementsControlRange && useDocumentSelection) {
+
+        selProto.removeAllRanges = function() {
+            // Added try/catch as fix for issue #21
+            try {
+                this.docSelection.empty();
+
+                // Check for empty() not working (issue #24)
+                if (this.docSelection.type != "None") {
+                    // Work around failure to empty a control selection by instead selecting a TextRange and then
+                    // calling empty()
+                    var doc;
+                    if (this.anchorNode) {
+                        doc = getDocument(this.anchorNode);
+                    } else if (this.docSelection.type == CONTROL) {
+                        var controlRange = this.docSelection.createRange();
+                        if (controlRange.length) {
+                            doc = getDocument( controlRange.item(0) );
+                        }
+                    }
+                    if (doc) {
+                        var textRange = getBody(doc).createTextRange();
+                        textRange.select();
+                        this.docSelection.empty();
+                    }
+                }
+            } catch(ex) {}
+            updateEmptySelection(this);
+        };
+
+        selProto.addRange = function(range) {
+            if (this.docSelection.type == CONTROL) {
+                addRangeToControlSelection(this, range);
+            } else {
+                api.WrappedTextRange.rangeToTextRange(range).select();
+                this._ranges[0] = range;
+                this.rangeCount = 1;
+                this.isCollapsed = this._ranges[0].collapsed;
+                updateAnchorAndFocusFromRange(this, range, false);
+            }
+        };
+
+        selProto.setRanges = function(ranges) {
+            this.removeAllRanges();
+            var rangeCount = ranges.length;
+            if (rangeCount > 1) {
+                createControlSelection(this, ranges);
+            } else if (rangeCount) {
+                this.addRange(ranges[0]);
+            }
+        };
+    } else {
+        module.fail("No means of selecting a Range or TextRange was found");
+        return false;
+    }
+
+    selProto.getRangeAt = function(index) {
+        if (index < 0 || index >= this.rangeCount) {
+            throw new DOMException("INDEX_SIZE_ERR");
+        } else {
+            // Clone the range to preserve selection-range independence. See issue 80.
+            return this._ranges[index].cloneRange();
+        }
+    };
+
+    var refreshSelection;
+
+    if (useDocumentSelection) {
+        refreshSelection = function(sel) {
+            var range;
+            if (api.isSelectionValid(sel.win)) {
+                range = sel.docSelection.createRange();
+            } else {
+                range = getBody(sel.win.document).createTextRange();
+                range.collapse(true);
+            }
+
+            if (sel.docSelection.type == CONTROL) {
+                updateControlSelection(sel);
+            } else if (isTextRange(range)) {
+                updateFromTextRange(sel, range);
+            } else {
+                updateEmptySelection(sel);
+            }
+        };
+    } else if (isHostMethod(testSelection, "getRangeAt") && typeof testSelection.rangeCount == NUMBER) {
+        refreshSelection = function(sel) {
+            if (implementsControlRange && implementsDocSelection && sel.docSelection.type == CONTROL) {
+                updateControlSelection(sel);
+            } else {
+                sel._ranges.length = sel.rangeCount = sel.nativeSelection.rangeCount;
+                if (sel.rangeCount) {
+                    for (var i = 0, len = sel.rangeCount; i < len; ++i) {
+                        sel._ranges[i] = new api.WrappedRange(sel.nativeSelection.getRangeAt(i));
+                    }
+                    updateAnchorAndFocusFromRange(sel, sel._ranges[sel.rangeCount - 1], selectionIsBackward(sel.nativeSelection));
+                    sel.isCollapsed = selectionIsCollapsed(sel);
+                } else {
+                    updateEmptySelection(sel);
+                }
+            }
+        };
+    } else if (selectionHasAnchorAndFocus && typeof testSelection.isCollapsed == BOOLEAN && typeof testRange.collapsed == BOOLEAN && features.implementsDomRange) {
+        refreshSelection = function(sel) {
+            var range, nativeSel = sel.nativeSelection;
+            if (nativeSel.anchorNode) {
+                range = getSelectionRangeAt(nativeSel, 0);
+                sel._ranges = [range];
+                sel.rangeCount = 1;
+                updateAnchorAndFocusFromNativeSelection(sel);
+                sel.isCollapsed = selectionIsCollapsed(sel);
+            } else {
+                updateEmptySelection(sel);
+            }
+        };
+    } else {
+        module.fail("No means of obtaining a Range or TextRange from the user's selection was found");
+        return false;
+    }
+
+    selProto.refresh = function(checkForChanges) {
+        var oldRanges = checkForChanges ? this._ranges.slice(0) : null;
+        var oldAnchorNode = this.anchorNode, oldAnchorOffset = this.anchorOffset;
+
+        refreshSelection(this);
+        if (checkForChanges) {
+            // Check the range count first
+            var i = oldRanges.length;
+            if (i != this._ranges.length) {
+                return true;
+            }
+
+            // Now check the direction. Checking the anchor position is the same is enough since we're checking all the
+            // ranges after this
+            if (this.anchorNode != oldAnchorNode || this.anchorOffset != oldAnchorOffset) {
+                return true;
+            }
+
+            // Finally, compare each range in turn
+            while (i--) {
+                if (!rangesEqual(oldRanges[i], this._ranges[i])) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
+
+    // Removal of a single range
+    var removeRangeManually = function(sel, range) {
+        var ranges = sel.getAllRanges();
+        sel.removeAllRanges();
+        for (var i = 0, len = ranges.length; i < len; ++i) {
+            if (!rangesEqual(range, ranges[i])) {
+                sel.addRange(ranges[i]);
+            }
+        }
+        if (!sel.rangeCount) {
+            updateEmptySelection(sel);
+        }
+    };
+
+    if (implementsControlRange) {
+        selProto.removeRange = function(range) {
+            if (this.docSelection.type == CONTROL) {
+                var controlRange = this.docSelection.createRange();
+                var rangeElement = getSingleElementFromRange(range);
+
+                // Create a new ControlRange containing all the elements in the selected ControlRange minus the
+                // element contained by the supplied range
+                var doc = getDocument(controlRange.item(0));
+                var newControlRange = getBody(doc).createControlRange();
+                var el, removed = false;
+                for (var i = 0, len = controlRange.length; i < len; ++i) {
+                    el = controlRange.item(i);
+                    if (el !== rangeElement || removed) {
+                        newControlRange.add(controlRange.item(i));
+                    } else {
+                        removed = true;
+                    }
+                }
+                newControlRange.select();
+
+                // Update the wrapped selection based on what's now in the native selection
+                updateControlSelection(this);
+            } else {
+                removeRangeManually(this, range);
+            }
+        };
+    } else {
+        selProto.removeRange = function(range) {
+            removeRangeManually(this, range);
+        };
+    }
+
+    // Detecting if a selection is backward
+    var selectionIsBackward;
+    if (!useDocumentSelection && selectionHasAnchorAndFocus && features.implementsDomRange) {
+        selectionIsBackward = winSelectionIsBackward;
+
+        selProto.isBackward = function() {
+            return selectionIsBackward(this);
+        };
+    } else {
+        selectionIsBackward = selProto.isBackward = function() {
+            return false;
+        };
+    }
+
+    // Create an alias for backwards compatibility. From 1.3, everything is "backward" rather than "backwards"
+    selProto.isBackwards = selProto.isBackward;
+
+    // Selection stringifier
+    // This is conformant to the old HTML5 selections draft spec but differs from WebKit and Mozilla's implementation.
+    // The current spec does not yet define this method.
+    selProto.toString = function() {
+        var rangeTexts = [];
+        for (var i = 0, len = this.rangeCount; i < len; ++i) {
+            rangeTexts[i] = "" + this._ranges[i];
+        }
+        return rangeTexts.join("");
+    };
+
+    function assertNodeInSameDocument(sel, node) {
+        if (sel.win.document != getDocument(node)) {
+            throw new DOMException("WRONG_DOCUMENT_ERR");
+        }
+    }
+
+    // No current browser conforms fully to the spec for this method, so Rangy's own method is always used
+    selProto.collapse = function(node, offset) {
+        assertNodeInSameDocument(this, node);
+        var range = api.createRange(node);
+        range.collapseToPoint(node, offset);
+        this.setSingleRange(range);
+        this.isCollapsed = true;
+    };
+
+    selProto.collapseToStart = function() {
+        if (this.rangeCount) {
+            var range = this._ranges[0];
+            this.collapse(range.startContainer, range.startOffset);
+        } else {
+            throw new DOMException("INVALID_STATE_ERR");
+        }
+    };
+
+    selProto.collapseToEnd = function() {
+        if (this.rangeCount) {
+            var range = this._ranges[this.rangeCount - 1];
+            this.collapse(range.endContainer, range.endOffset);
+        } else {
+            throw new DOMException("INVALID_STATE_ERR");
+        }
+    };
+
+    // The spec is very specific on how selectAllChildren should be implemented so the native implementation is
+    // never used by Rangy.
+    selProto.selectAllChildren = function(node) {
+        assertNodeInSameDocument(this, node);
+        var range = api.createRange(node);
+        range.selectNodeContents(node);
+        this.setSingleRange(range);
+    };
+
+    selProto.deleteFromDocument = function() {
+        // Sepcial behaviour required for IE's control selections
+        if (implementsControlRange && implementsDocSelection && this.docSelection.type == CONTROL) {
+            var controlRange = this.docSelection.createRange();
+            var element;
+            while (controlRange.length) {
+                element = controlRange.item(0);
+                controlRange.remove(element);
+                element.parentNode.removeChild(element);
+            }
+            this.refresh();
+        } else if (this.rangeCount) {
+            var ranges = this.getAllRanges();
+            if (ranges.length) {
+                this.removeAllRanges();
+                for (var i = 0, len = ranges.length; i < len; ++i) {
+                    ranges[i].deleteContents();
+                }
+                // The spec says nothing about what the selection should contain after calling deleteContents on each
+                // range. Firefox moves the selection to where the final selected range was, so we emulate that
+                this.addRange(ranges[len - 1]);
+            }
+        }
+    };
+
+    // The following are non-standard extensions
+    selProto.eachRange = function(func, returnValue) {
+        for (var i = 0, len = this._ranges.length; i < len; ++i) {
+            if ( func( this.getRangeAt(i) ) ) {
+                return returnValue;
+            }
+        }
+    };
+
+    selProto.getAllRanges = function() {
+        var ranges = [];
+        this.eachRange(function(range) {
+            ranges.push(range);
+        });
+        return ranges;
+    };
+
+    selProto.setSingleRange = function(range, direction) {
+        this.removeAllRanges();
+        this.addRange(range, direction);
+    };
+
+    selProto.callMethodOnEachRange = function(methodName, params) {
+        var results = [];
+        this.eachRange( function(range) {
+            results.push( range[methodName].apply(range, params) );
+        } );
+        return results;
+    };
+    
+    function createStartOrEndSetter(isStart) {
+        return function(node, offset) {
+            var range;
+            if (this.rangeCount) {
+                range = this.getRangeAt(0);
+                range["set" + (isStart ? "Start" : "End")](node, offset);
+            } else {
+                range = api.createRange(this.win.document);
+                range.setStartAndEnd(node, offset);
+            }
+            this.setSingleRange(range, this.isBackward());
+        };
+    }
+
+    selProto.setStart = createStartOrEndSetter(true);
+    selProto.setEnd = createStartOrEndSetter(false);
+    
+    // Add select() method to Range prototype. Any existing selection will be removed.
+    api.rangePrototype.select = function(direction) {
+        getSelection( this.getDocument() ).setSingleRange(this, direction);
+    };
+
+    selProto.changeEachRange = function(func) {
+        var ranges = [];
+        var backward = this.isBackward();
+
+        this.eachRange(function(range) {
+            func(range);
+            ranges.push(range);
+        });
+
+        this.removeAllRanges();
+        if (backward && ranges.length == 1) {
+            this.addRange(ranges[0], "backward");
+        } else {
+            this.setRanges(ranges);
+        }
+    };
+
+    selProto.containsNode = function(node, allowPartial) {
+        return this.eachRange( function(range) {
+            return range.containsNode(node, allowPartial);
+        }, true );
+    };
+
+    selProto.getBookmark = function(containerNode) {
+        return {
+            backward: this.isBackward(),
+            rangeBookmarks: this.callMethodOnEachRange("getBookmark", [containerNode])
+        };
+    };
+
+    selProto.moveToBookmark = function(bookmark) {
+        var selRanges = [];
+        for (var i = 0, rangeBookmark, range; rangeBookmark = bookmark.rangeBookmarks[i++]; ) {
+            range = api.createRange(this.win);
+            range.moveToBookmark(rangeBookmark);
+            selRanges.push(range);
+        }
+        if (bookmark.backward) {
+            this.setSingleRange(selRanges[0], "backward");
+        } else {
+            this.setRanges(selRanges);
+        }
+    };
+
+    selProto.toHtml = function() {
+        return this.callMethodOnEachRange("toHtml").join("");
+    };
+
+    function inspect(sel) {
+        var rangeInspects = [];
+        var anchor = new DomPosition(sel.anchorNode, sel.anchorOffset);
+        var focus = new DomPosition(sel.focusNode, sel.focusOffset);
+        var name = (typeof sel.getName == "function") ? sel.getName() : "Selection";
+
+        if (typeof sel.rangeCount != "undefined") {
+            for (var i = 0, len = sel.rangeCount; i < len; ++i) {
+                rangeInspects[i] = DomRange.inspect(sel.getRangeAt(i));
+            }
+        }
+        return "[" + name + "(Ranges: " + rangeInspects.join(", ") +
+                ")(anchor: " + anchor.inspect() + ", focus: " + focus.inspect() + "]";
+    }
+
+    selProto.getName = function() {
+        return "WrappedSelection";
+    };
+
+    selProto.inspect = function() {
+        return inspect(this);
+    };
+
+    selProto.detach = function() {
+        actOnCachedSelection(this.win, "delete");
+        deleteProperties(this);
+    };
+
+    WrappedSelection.detachAll = function() {
+        actOnCachedSelection(null, "deleteAll");
+    };
+
+    WrappedSelection.inspect = inspect;
+    WrappedSelection.isDirectionBackward = isDirectionBackward;
+
+    api.Selection = WrappedSelection;
+
+    api.selectionPrototype = selProto;
+
+    api.addCreateMissingNativeApiListener(function(win) {
+        if (typeof win.getSelection == "undefined") {
+            win.getSelection = function() {
+                return getSelection(win);
+            };
+        }
+        win = null;
+    });
+});
+>>>>>>> upstream/develop
 
         if(_currentView) {
             return _currentView.getElements(spineItemIdref, selector);
@@ -48200,6 +60899,7 @@ console.trace(JSON.stringify(settingsData));
         return undefined;
     };
 
+<<<<<<< HEAD
     /**
      * Generate range CFI from DOM range
      * @param {DOM Range} https://developer.mozilla.org/en-US/docs/Web/API/Range
@@ -48240,8 +60940,9702 @@ console.trace(JSON.stringify(settingsData));
             return _currentView.getRangeCfiFromPoints(startX, startY, endX, endY, spineItemIdref);
         }
         return undefined;
+=======
+define('rangy',["rangy-core", 
+        "rangy-highlighter", 
+        "rangy-cssclassapplier", 
+        "rangy-textrange", 
+        "rangy-position",
+
+        //"domReady" //"domReady!" forces wait for DOM doc
+
+        /*
+        "rangy-serializer",
+        "rangy-selectionsaverestore"
+        */
+        ],
+function (core, textrange, highlighter, cssclassapplier, position
+//, domReady
+/* serializer, selectionsaverestore */
+) {
+
+// domReady(function(){
+//     core.init();
+// });
+
+
+return core;
+
+});
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define ('readium_shared_js/views/media_overlay_data_injector',["jquery", "underscore", "../helpers", "../models/smil_iterator", "rangy", 'readium_cfi_js'], function($, _, Helpers, SmilIterator, rangy, epubCfi) {
+/**
+ *
+ * @param mediaOverlay
+ * @param mediaOverlayPlayer
+ * @constructor
+ */
+var MediaOverlayDataInjector = function (mediaOverlay, mediaOverlayPlayer) {
+
+    this.attachMediaOverlayData = function ($iframe, spineItem, mediaOverlaySettings) {
+
+        var contentDocElement = $iframe[0].contentDocument.documentElement;
+
+        if (!spineItem.media_overlay_id && mediaOverlay.smil_models.length === 0) {
+            return;
+        }
+
+        var $body = $("body", contentDocElement);
+        if ($body.length == 0) {
+            console.error("! BODY ???");
+        }
+        else {
+            var click = $body.data("mediaOverlayClick");
+            if (click) {
+                console.error("[WARN] already mediaOverlayClick");
+            }
+            else {
+                $body.data("mediaOverlayClick", {ping: "pong"});
+
+                var touchClickMOEventHandler = function (event)
+                {
+                    //console.debug("MO TOUCH-DOWN: "+event.type);
+                    
+                    var elem = $(this)[0]; // body
+                    elem = event.target; // body descendant
+
+                    if (!elem)
+                    {
+                        mediaOverlayPlayer.touchInit();
+                        return true;
+                    }
+
+//console.debug("MO CLICK: " + elem.id);
+
+                    var data = undefined;
+                    var el = elem;
+
+                    var inLink = false;
+                    if (el.nodeName.toLowerCase() === "a")
+                    {
+                        inLink = true;
+                    }
+
+                    while (!(data = $(el).data("mediaOverlayData")))
+                    {
+                        if (el.nodeName.toLowerCase() === "a")
+                        {
+                            inLink = true;
+                        }
+                        el = el.parentNode;
+                        if (!el)
+                        {
+                            break;
+                        }
+                    }
+                    
+                    if (data && (data.par || data.pars))
+                    {
+                        if (el !== elem)
+                        {
+//console.log("MO CLICK REDIRECT: " + el.id);
+                        }
+
+                        if (!mediaOverlaySettings.mediaOverlaysEnableClick)
+                        {
+console.log("MO CLICK DISABLED");
+                            mediaOverlayPlayer.touchInit();
+                            return true;
+                        }
+
+                        if (inLink)
+                        {
+console.log("MO CLICKED LINK");
+                            mediaOverlayPlayer.touchInit();
+                            return true;
+                        }
+
+                        var par = data.par ? data.par : data.pars[0];
+
+                        if (data.pars && (typeof rangy !== "undefined"))
+                        {
+                            var wasPaused = false;
+                            
+                            // To remove highlight which may have altered DOM (and break CFI expressions)
+                            if (mediaOverlayPlayer.isPlayingCfi())
+                            {
+                                wasPaused = true;
+                                mediaOverlayPlayer.pause();
+                            }
+                         
+                            // /////////////////////
+                            // 
+                            // var p = {x: event.pageX, y: event.pageY};
+                            // if (webkitConvertPointFromPageToNode)
+                            // {
+                            //     p = webkitConvertPointFromPageToNode(elem.ownerDocument.body, new WebKitPoint(event.pageX, event.pageY));
+                            // }
+                            // 
+                            // var div = elem.ownerDocument.getElementById("CLICKED");
+                            // if (div)
+                            // {
+                            //     div.parentNode.removeChild(div);
+                            // }
+                            // 
+                            // div = elem.ownerDocument.createElementNS("http://www.w3.org/1999/xhtml", 'div');
+                            // div.setAttribute("style", "background-color: red; position: absolute; z-index: 999; width: 50px; height: 50px; left: " + p.x + "px; top: " + p.y + "px;");
+                            // div.id = "CLICKED";
+                            // div.setAttribute("id", div.id);
+                            // var divTxt = elem.ownerDocument.createTextNode(" ");
+                            // div.appendChild(divTxt);
+                            // elem.ownerDocument.body.appendChild(div);
+                            //                          
+                            // /////////////////////
+
+
+                            //rangy.init();
+                            try
+                            {
+// THIS WORKS (same as Rangy's method below)
+//                                 var r;
+//                                 if (elem.ownerDocument.caretRangeFromPoint)
+//                                 {
+//                                     r = elem.ownerDocument.caretRangeFromPoint(event.pageX, event.pageY);
+//                                 }
+//                                 else if (event.rangeParent)
+//                                 {
+//                                     r = elem.ownerDocument.createRange();
+//                                     range.setStart(event.rangeParent, event.rangeOffset);
+//                                 }
+//                                 
+// console.log("------ 1");
+// console.log(elem.ownerDocument);
+// console.log(event.pageX);
+// console.log(event.pageY);
+// console.log(r.startContainer);
+// console.log(r.startOffset);
+// console.log("------");
+
+                                var pos = rangy.positionFromPoint(event.pageX, event.pageY, elem.ownerDocument);
+// console.log("------ 2");
+// console.log(pos.node.textContent);
+// console.log(pos.offset);
+// console.log("------");
+
+                                par = undefined;
+                                
+                                for (var iPar = 0; iPar < data.pars.length; iPar++)
+                                {
+                                    var p = data.pars[iPar];
+
+                                    var startCFI = "epubcfi(" + p.cfi.partialStartCfi + ")";
+                                    var infoStart = EPUBcfi.getTextTerminusInfoWithPartialCFI(startCFI, elem.ownerDocument,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoStart);
+
+                                    var endCFI = "epubcfi(" + p.cfi.partialEndCfi + ")";
+                                    var infoEnd = EPUBcfi.getTextTerminusInfoWithPartialCFI(endCFI, elem.ownerDocument,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoEnd);
+
+                                    var range = rangy.createRange(elem.ownerDocument); //createNativeRange
+                                    range.setStartAndEnd(
+                                        infoStart.textNode[0], infoStart.textOffset,
+                                        infoEnd.textNode[0], infoEnd.textOffset
+                                    );
+        
+                                    if (range.isPointInRange(pos.node, pos.offset))
+                                    {
+// console.log(p.cfi.partialStartCfi);
+// console.log(p.cfi.partialEndCfi);
+                                        // DOUBLE CHECK WITH getClientRects ??
+                                        
+                                        par = p;
+                                        break;
+                                    }
+                                }
+                            }
+                            catch (e)
+                            {
+                                console.error(e);
+                            }
+                            
+                            if (!par)
+                            {
+                                if (wasPaused)
+                                {
+                                    mediaOverlayPlayer.toggleMediaOverlay();
+                                }
+                                return true;
+                            }
+                        }
+
+
+                        if (el && el != elem && el.nodeName.toLowerCase() === "body" && par && !par.getSmil().id)
+                        {
+//console.debug("MO CLICKED BLANK BODY");
+                            mediaOverlayPlayer.touchInit();
+                            return true;
+                        }
+
+                        mediaOverlayPlayer.playUserPar(par);
+                        return true;
+                    }
+                    else
+                    {
+                        var readaloud = $(elem).attr("ibooks:readaloud");
+                        if (!readaloud)
+                        {
+                            readaloud = $(elem).attr("epub:readaloud");
+                        }
+                        if (readaloud)
+                        {
+console.debug("MO readaloud attr: " + readaloud);
+
+                            var isPlaying = mediaOverlayPlayer.isPlaying();
+                            if (readaloud === "start" && !isPlaying ||
+                                readaloud === "stop" && isPlaying ||
+                                readaloud === "startstop")
+                            {
+                                mediaOverlayPlayer.toggleMediaOverlay();
+                                return true;
+                            }
+                        }
+                    }
+
+                    mediaOverlayPlayer.touchInit();
+                    return true;
+                };
+
+                var touchClickMOEventHandler_ = _.debounce(touchClickMOEventHandler, 200);
+                
+                if ('ontouchstart' in document.documentElement)
+                {
+                  $body[0].addEventListener("touchstart", touchClickMOEventHandler_, false);
+                }
+                $body[0].addEventListener("mousedown", touchClickMOEventHandler_, false);
+
+                //var clickEvent = 'ontouchstart' in document.documentElement ? 'touchstart' : 'click';
+                //$body.bind(clickEvent, touchClickMOEventHandler);
+            }
+        }
+
+        var smil = mediaOverlay.getSmilBySpineItem(spineItem);
+        if (!smil)
+        {
+            console.error("NO SMIL?? " + spineItem.idref + " /// " + spineItem.media_overlay_id);
+            return;
+        }
+
+        var traverseSmilSeqs = function(root)
+        {
+            if (!root) return;
+            
+            if (root.nodeType && root.nodeType === "seq")
+            {
+               // if (root.element)
+               // {
+               //     console.error("WARN: seq.element already set: " + root.textref);
+               // }
+                   
+               if (root.textref)
+               {
+                   var parts = root.textref.split('#');
+                   var file = parts[0];
+                   var fragmentId = (parts.length === 2) ? parts[1] : "";
+                   // 
+                   // console.debug(root.textref);
+                   // console.debug(fragmentId);
+                   // console.log("---- SHOULD BE EQUAL:");
+                   // console.debug(file);
+                   // console.debug(par.text.srcFile);
+                   // 
+                   // if (file !== par.text.srcFile)
+                   // {
+                   //     console.error("adjustParToSeqSyncGranularity textref.file !== par.text.srcFile ???");
+                   //     return par;
+                   // }
+                   // 
+                   // if (!fragmentId)
+                   // {
+                   //     console.error("adjustParToSeqSyncGranularity !fragmentId ???");
+                   //     return par;
+                   // }
+
+                   if (file && fragmentId)
+                   {
+                       var textRelativeRef = Helpers.ResolveContentRef(file, smil.href);
+                       var same = textRelativeRef === spineItem.href;
+                       if (same)
+                       {                       
+                           root.element = $iframe[0].contentDocument.getElementById(fragmentId);
+                   
+                           if (!root.element)
+                           {
+                               console.error("seq.textref !element? " + root.textref);
+                           }
+
+                           // var selector = "#" + Helpers.escapeJQuerySelector(fragmentId);
+                           // var $element = $(selector, element.ownerDocument.documentElement);
+                           // if ($element)
+                           // {
+                           //     seq.element = $element[0];
+                           // }
+                       }
+                   }
+               }
+            }
+            
+            if (root.children && root.children.length)
+            {
+                for (var i = 0; i < root.children.length; i++)
+                {
+                    var child = root.children[i];
+                    traverseSmilSeqs(child);
+                }
+            }
+        };
+        traverseSmilSeqs(smil);
+
+//console.debug("[[MO ATTACH]] " + spineItem.idref + " /// " + spineItem.media_overlay_id + " === " + smil.id);
+
+        var iter = new SmilIterator(smil);
+        
+        var fakeOpfRoot = "/99!";
+        var epubCfiPrefix = "epubcfi";
+        
+        while (iter.currentPar) {
+            iter.currentPar.element = undefined;
+            iter.currentPar.cfi = undefined;
+
+            if (true) { //iter.currentPar.text.srcFragmentId (includes empty frag ID)
+
+                var textRelativeRef = Helpers.ResolveContentRef(iter.currentPar.text.srcFile, iter.smil.href);
+
+                var same = textRelativeRef === spineItem.href;
+                if (same) {
+                    var selectBody = !iter.currentPar.text.srcFragmentId || iter.currentPar.text.srcFragmentId.length == 0;
+                    var selectId = iter.currentPar.text.srcFragmentId.indexOf(epubCfiPrefix) == 0 ? undefined : iter.currentPar.text.srcFragmentId;
+
+                    var $element = undefined;
+                    var isCfiTextRange = false;
+                    if (!selectBody && !selectId)
+                    {
+                        if (iter.currentPar.text.srcFragmentId.indexOf(epubCfiPrefix) === 0)
+                        {
+                            var partial = iter.currentPar.text.srcFragmentId.substr(epubCfiPrefix.length + 1, iter.currentPar.text.srcFragmentId.length - epubCfiPrefix.length - 2);
+                            
+                            if (partial.indexOf(fakeOpfRoot) === 0)
+                            {
+                                partial = partial.substr(fakeOpfRoot.length, partial.length - fakeOpfRoot.length);
+                            }
+//console.log(partial);
+                            var parts = partial.split(",");
+                            if (parts && parts.length === 3)
+                            {
+                                try
+                                {
+                                    var partialStartCfi = parts[0] + parts[1];
+                                    var startCFI = "epubcfi(" + partialStartCfi + ")";
+                                    var infoStart = EPUBcfi.getTextTerminusInfoWithPartialCFI(startCFI, $iframe[0].contentDocument,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoStart);
+
+                                    var partialEndCfi = parts[0] + parts[2];
+                                    var endCFI = "epubcfi(" + partialEndCfi + ")";
+                                    var infoEnd = EPUBcfi.getTextTerminusInfoWithPartialCFI(endCFI, $iframe[0].contentDocument,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoEnd);
+
+                                    var cfiTextParent = infoStart.textNode[0].parentNode;
+
+                                    iter.currentPar.cfi = {
+                                        smilTextSrcCfi: iter.currentPar.text.srcFragmentId,
+                                        partialRangeCfi: partial,
+                                        partialStartCfi: partialStartCfi,
+                                        partialEndCfi: partialEndCfi,
+                                        
+                                        cfiTextParent: cfiTextParent
+                                        
+                                        // textNode becomes invalid after highlighting! (dynamic span insertion/removal changes DOM)
+                                        // cfiRangeStart: infoStart,
+                                        // cfiRangeEnd: infoEnd
+                                    };
+                                    
+                                    // TODO: not just start textNode, but all of them between start and end...
+                                    // ...that being said, CFI text ranges likely to be used only within a single common parent,
+                                    // so this is an acceptable implementation shortcut for this CFI experimentation (word-level text/audio synchronisation).
+                                    isCfiTextRange = true;
+                                    $element = $(cfiTextParent);
+                                    var modata = $element.data("mediaOverlayData");
+                                    if (!modata)
+                                    {
+                                        modata = {pars: [iter.currentPar]};
+                                        $element.data("mediaOverlayData", modata);
+                                    }
+                                    else
+                                    {
+                                        if (modata.par)
+                                        {
+                                            console.error("[WARN] non-CFI MO DATA already exists!");
+                                            modata.par = undefined;
+                                        }
+
+                                        var found = false;
+                                        if (modata.pars)
+                                        {
+                                            for (var iPars = 0; iPars < modata.pars.length; iPars++)
+                                            {
+                                                var par = modata.pars[iPars];
+
+                                                if (par === iter.currentPar)
+                                                {
+                                                    found = true;
+                                                    console.error("[WARN] mediaOverlayData CFI PAR already registered!");
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            modata.pars = [];
+                                        }
+
+                                        if (!found)
+                                        {
+                                            modata.pars.push(iter.currentPar);
+                                        }
+                                    }
+
+                                }
+                                catch (error)
+                                {
+                                    console.error(error);
+                                }
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    var cfi = "epubcfi(" + partial + ")";
+                                    $element = EPUBcfi.getTargetElementWithPartialCFI(cfi, $iframe[0].contentDocument,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+                                }
+                                catch (error)
+                                {
+                                    console.error(error);
+                                }
+                            }
+                        }
+                        else 
+                        {
+                            console.error("SMIL text@src CFI fragment identifier scheme not supported: " + iter.currentPar.text.srcFragmentId);
+                        }
+                    }
+                    else
+                    {
+                        if (selectBody)
+                        {
+                            $element = $body; //$("body", contentDocElement);
+                        }
+                        else
+                        {
+                            $element = $($iframe[0].contentDocument.getElementById(selectId));
+                            //$element = $("#" + Helpers.escapeJQuerySelector(iter.currentPar.text.srcFragmentId), contentDocElement);
+                        }
+                    }
+
+                    if ($element && $element.length > 0) {
+
+                        if (!isCfiTextRange)
+                        {
+                            if (iter.currentPar.element && iter.currentPar.element !== $element[0]) {
+                                console.error("DIFFERENT ELEMENTS??! " + iter.currentPar.text.srcFragmentId + " /// " + iter.currentPar.element.id);
+                            }
+
+                            var name = $element[0].nodeName ? $element[0].nodeName.toLowerCase() : undefined;
+                            if (name === "audio" || name === "video") {
+                                $element.attr("preload", "auto");
+                            }
+
+                            iter.currentPar.element = $element[0];
+
+                            var modata = $element.data("mediaOverlayData");
+                            if (modata) {
+                                console.error("[WARN] MO DATA already exists.");
+
+                                if (modata.par && modata.par !== iter.currentPar) {
+                                    console.error("DIFFERENT PARS??!");
+                                }
+                            }
+
+                            $element.data("mediaOverlayData", {par: iter.currentPar});
+
+                            /*
+                             $element.click(function() {
+                             var elem = $(this)[0];
+                             console.debug("MO CLICK (ELEM): " + elem.id);
+
+                             var par = $(this).data("mediaOverlayData").par;
+                             mediaOverlayPlayer.playUserPar(par);
+                             });
+                             */
+                        }
+                    }
+                    else {
+                        console.error("!! CANNOT FIND ELEMENT: " + iter.currentPar.text.srcFragmentId + " == " + iter.currentPar.text.srcFile + " /// " + spineItem.href);
+                    }
+                }
+                else {
+//console.debug("[INFO] " + spineItem.href + " != " + textRelativeRef + " # " + iter.currentPar.text.srcFragmentId);
+                }
+            }
+
+            iter.next();
+        }
+    }
+};
+
+return MediaOverlayDataInjector;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck, Andrey Kavarma
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+define('readium_shared_js/views/audio_player',['jquery'],function($) {
+
+    /**
+     *
+     * @param onStatusChanged
+     * @param onPositionChanged
+     * @param onAudioEnded
+     * @param onAudioPlay
+     * @param onAudioPause
+     * @constructor
+     */
+    var AudioPlayer = function(onStatusChanged, onPositionChanged, onAudioEnded, onAudioPlay, onAudioPause)
+    {
+        var _iOS = navigator.userAgent.match(/(iPad|iPhone|iPod)/g) ? true : false;
+        var _Android = navigator.userAgent.toLowerCase().indexOf('android') > -1;
+        var _isMobile = _iOS || _Android;
+
+        //var _isReadiumJS = typeof window.requirejs !== "undefined";
+
+        var DEBUG = false;
+
+        var _audioElement = new Audio();
+        
+        if (DEBUG)
+        {
+            _audioElement.addEventListener("load", function()
+                {
+                    console.debug("0) load");
+                }
+            );
+
+            _audioElement.addEventListener("loadstart", function()
+                {
+                    console.debug("1) loadstart");
+                }
+            );
+
+            _audioElement.addEventListener("durationchange", function()
+                {
+                    console.debug("2) durationchange");
+                }
+            );
+
+            _audioElement.addEventListener("loadedmetadata", function()
+                {
+                    console.debug("3) loadedmetadata");
+                }
+            );
+
+            _audioElement.addEventListener("loadeddata", function()
+                {
+                    console.debug("4) loadeddata");
+                }
+            );
+
+            _audioElement.addEventListener("progress", function()
+                {
+                    console.debug("5) progress");
+                }
+            );
+
+            _audioElement.addEventListener("canplay", function()
+                {
+                    console.debug("6) canplay");
+                }
+            );
+
+            _audioElement.addEventListener("canplaythrough", function()
+                {
+                    console.debug("7) canplaythrough");
+                }
+            );
+
+            _audioElement.addEventListener("play", function()
+                {
+                    console.debug("8) play");
+                }
+            );
+
+            _audioElement.addEventListener("pause", function()
+                {
+                    console.debug("9) pause");
+                }
+            );
+
+            _audioElement.addEventListener("ended", function()
+                {
+                    console.debug("10) ended");
+                }
+            );
+
+            _audioElement.addEventListener("seeked", function()
+                {
+                    console.debug("X) seeked");
+                }
+            );
+
+            _audioElement.addEventListener("timeupdate", function()
+                {
+                    console.debug("Y) timeupdate");
+                }
+            );
+
+            _audioElement.addEventListener("seeking", function()
+                {
+                    console.debug("Z) seeking");
+                }
+            );
+        }
+
+        var self = this;
+     
+        //_audioElement.setAttribute("preload", "auto");
+    
+        var _currentEpubSrc = undefined;
+    
+        var _currentSmilSrc = undefined;
+        this.currentSmilSrc = function() {
+            return _currentSmilSrc;
+        };
+
+        var _rate = 1.0;
+        this.setRate = function(rate)
+        {
+            _rate = rate;
+            if (_rate < 0.5)
+            {
+                _rate = 0.5;
+            }
+            if (_rate > 4.0)
+            {
+                _rate = 4.0;
+            }
+    
+            _audioElement.playbackRate = _rate;
+        }
+        self.setRate(_rate);
+        this.getRate = function()
+        {
+            return _rate;
+        }
+    
+    
+        var _volume = 1.0;
+        this.setVolume = function(volume)
+        {
+            _volume = volume;
+            if (_volume < 0.0)
+            {
+                _volume = 0.0;
+            }
+            if (_volume > 1.0)
+            {
+                _volume = 1.0;
+            }
+            _audioElement.volume = _volume;
+        }
+        self.setVolume(_volume);
+        this.getVolume = function()
+        {
+            return _volume;
+        }
+    
+        this.play = function()
+        {
+            if (DEBUG)
+            {
+                console.error("this.play()");
+            }
+    
+            if(!_currentEpubSrc)
+            {
+                return false;
+            }
+    
+            startTimer();
+    
+            self.setVolume(_volume);
+            self.setRate(_rate);
+    
+            _audioElement.play();
+    
+            return true;
+        };
+    
+        this.pause = function()
+        {
+            if (DEBUG)
+            {
+                console.error("this.pause()");
+            }
+    
+            stopTimer();
+    
+            _audioElement.pause();
+        };
+    
+        _audioElement.addEventListener('play', onPlay, false);
+        _audioElement.addEventListener('pause', onPause, false);
+        _audioElement.addEventListener('ended', onEnded, false);
+    
+        function onPlay()
+        {
+            onStatusChanged({isPlaying: true});
+            onAudioPlay();
+        }
+    
+        function onPause()
+        {
+            onAudioPause();
+            onStatusChanged({isPlaying: false});
+        }
+    
+        function onEnded()
+        {
+            if (_audioElement.moSeeking)
+            {
+                if (DEBUG)
+                {
+                    console.debug("onEnded() skipped (still seeking...)");
+                }
+    
+                return;
+            }
+    
+            stopTimer();
+    
+            onAudioEnded();
+            onStatusChanged({isPlaying: false});
+        }
+        
+        var _intervalTimerSkips = 0;
+        
+        var _intervalTimer = undefined;
+        function startTimer()
+        {
+            if(_intervalTimer)
+            {
+                return;
+            }
+    
+            _intervalTimer = setInterval(
+                function()
+                {
+                    if (_audioElement.moSeeking)
+                    {
+                        if (DEBUG)
+                        {
+//console.debug("interval timer skipped (still seeking...)");
+                        }
+                                         
+                        _intervalTimerSkips++;
+                        if (_intervalTimerSkips > 1000)
+                        {
+                            _intervalTimerSkips = 0;
+                            stopTimer();
+                        }
+                        return;
+                    }
+                    
+                    var currentTime = undefined;
+                    try
+                    {
+                        currentTime = _audioElement.currentTime;
+                    }
+                    catch (ex)
+                    {
+                        console.error(ex.message);
+                    }
+    
+    //                if (DEBUG)
+    //                {
+    //                    console.debug("currentTime: " + currentTime);
+    //                }
+    
+                    if (currentTime)
+                    {
+                        onPositionChanged(currentTime, 1);
+                    }
+                }, 20);
+        }
+    
+        function stopTimer()
+        {
+            if (_intervalTimer)
+            {
+                clearInterval(_intervalTimer);
+            }
+            _intervalTimer = undefined;
+        }
+    
+        this.isPlaying = function()
+        {
+            return _intervalTimer !== undefined;
+        };
+    
+        this.reset = function()
+        {
+            if (DEBUG)
+            {
+                console.error("this.reset()");
+            }
+    
+            this.pause();
+    
+            _audioElement.moSeeking = undefined;
+    
+            _currentSmilSrc = undefined;
+            _currentEpubSrc = undefined;
+    
+            setTimeout(function()
+            {
+                _audioElement.setAttribute("src", "");
+            }, 1);
+        };
+    
+
+        _audioElement.addEventListener("loadstart", function()
+            {
+                _touchInited = true;
+            }
+        );
+        var _touchInited = false;
+        this.touchInit = function()
+        {
+            if (!_iOS)
+            {
+                return false;
+            }
+    
+            if (_touchInited)
+            {
+                return false;
+            }
+    
+            _touchInited = true;
+    
+            _audioElement.setAttribute("src", "touch/init/html5/audio.mp3");
+            _audioElement.load();
+    
+            return true;
+        };
+    
+        var _playId = 0;
+    
+        var _seekQueuing = 0;
+        
+        this.playFile = function(smilSrc, epubSrc, seekBegin) //element
+        {
+            _playId++;
+            if (_playId > 99999)
+            {
+                _playId = 0;
+            }
+    
+            var playId = _playId;
+    
+            if (_audioElement.moSeeking)
+            {
+                _seekQueuing++;
+                if (_seekQueuing > MAX_SEEK_RETRIES)
+                {
+                    _seekQueuing = 0;
+                    return;
+                }
+                
+                if (DEBUG)
+                {
+                    console.debug("this.playFile(" + epubSrc + ")" + " @" + seekBegin + " (POSTPONE, SEEKING...)");
+                }
+    
+                setTimeout(function()
+                {
+                    self.playFile(smilSrc, epubSrc, seekBegin);
+                }, 20);
+                
+                return;
+            }
+    
+            _audioElement.moSeeking = {};
+    
+            if (DEBUG)
+            {
+                console.debug("this.playFile(" + epubSrc + ")" + " @" + seekBegin + " #" + playId);
+            }
+    
+            var audioNeedsNewSrc = !_currentEpubSrc || _currentEpubSrc !== epubSrc;
+    
+            if (!audioNeedsNewSrc)
+            {
+                if (DEBUG)
+                {
+                    console.debug("this.playFile() SAME SRC");
+                }
+    
+                this.pause();
+    
+                _currentSmilSrc = smilSrc;
+                _currentEpubSrc = epubSrc;
+    
+                playSeekCurrentTime(seekBegin, playId, false);
+    
+                return;
+            }
+    
+            if (DEBUG)
+            {
+                console.debug("this.playFile() NEW SRC");
+                console.debug("_currentEpubSrc: " + _currentEpubSrc);
+                console.debug("epubSrc: " + epubSrc);
+            }
+    
+            this.reset();
+            _audioElement.moSeeking = {};
+    
+            _currentSmilSrc = smilSrc;
+            _currentEpubSrc = epubSrc;
+    
+            //element.parentNode.insertBefore(_audioElement, element); //element.parentNode.childNodes[0]);
+            
+            if (!_Android)
+            {
+                _audioElement.addEventListener('play', onPlayToForcePreload, false);
+            }
+    
+            $(_audioElement).on(_readyEvent, {seekBegin: seekBegin, playId: playId}, onReadyToSeek);
+            
+            setTimeout(function()
+            {
+                   _audioElement.setAttribute("src", _currentEpubSrc);
+                   // _audioElement.src = _currentEpubSrc;
+                   // $(_audioElement).attr("src", _currentEpubSrc);
+    
+                   // if (_Android)
+                   // {
+                   //     _audioElement.addEventListener('loadstart', onReadyToPlayToForcePreload, false);
+                   // }
+                   
+                   _audioElement.load();
+    
+                   if (!_Android)
+                   {
+                       playToForcePreload();
+                   }
+            }, 1);
+        };
+    
+        // var onReadyToPlayToForcePreload = function ()
+        // {
+        //     _audioElement.removeEventListener('loadstart', onReadyToPlayToForcePreload, false);
+        //     
+        //     if (DEBUG)
+        //     {
+        //         console.debug("onReadyToPlayToForcePreload");
+        //     }
+        //     
+        //     playToForcePreload();
+        // };
+        
+        var playToForcePreload = function()
+        {
+            if (DEBUG)
+            {
+                console.debug("playToForcePreload");
+            }
+            
+            //_audioElement.volume = 0;
+            //_audioElement.play();
+            var vol = _volume;
+            _volume = 0;
+            self.play();
+            _volume = vol;
+        };
+    
+        var onPlayToForcePreload = function ()
+        {
+            _audioElement.removeEventListener('play', onPlayToForcePreload, false);
+            
+            if (DEBUG)
+            {
+                console.debug("onPlayToForcePreload");
+            }
+            _audioElement.pause(); // note: interval timer continues (immediately follows self.play())
+        };
+    
+        var _readyEvent = _Android ? "canplaythrough" : "canplay";
+        function onReadyToSeek_(event)
+        {
+            if (DEBUG)
+            {
+                console.debug("onReadyToSeek #" + event.data.playId);
+            }
+            playSeekCurrentTime(event.data.seekBegin, event.data.playId, true);
+        }
+        function onReadyToSeek(event)
+        {
+            $(_audioElement).off(_readyEvent, onReadyToSeek);
+            
+            if (!_Android)
+            {
+                onReadyToSeek_(event);
+            }
+            else
+            {
+                if (DEBUG)
+                {
+                    console.debug("onReadyToSeek ANDROID ... waiting a bit ... #" + event.data.playId);
+                }
+                
+                //self.play();
+                playToForcePreload();
+                
+                setTimeout(function() {
+                    onReadyToSeek_(event);
+                }, 1000);
+            }
+        }
+    
+        function playSeekCurrentTime(newCurrentTime, playId, isNewSrc)
+        {
+            if (DEBUG)
+            {
+                console.debug("playSeekCurrentTime() #" + playId);
+            }
+    
+            if (newCurrentTime == 0)
+            {
+                newCurrentTime = 0.01;
+            }
+    
+            if(Math.abs(newCurrentTime - _audioElement.currentTime) < 0.3)
+            {
+                if (DEBUG)
+                {
+                    console.debug("playSeekCurrentTime() CONTINUE");
+                }
+    
+                _audioElement.moSeeking = undefined;
+                self.play();
+                return;
+            }
+    
+            var ev = isNewSrc ? _seekedEvent1 : _seekedEvent2;
+    
+            if (DEBUG)
+            {
+                console.debug("playSeekCurrentTime() NEED SEEK, EV: " + ev);
+            }
+    
+            self.pause();
+    
+            $(_audioElement).on(ev, {newCurrentTime: newCurrentTime, playId: playId, isNewSrc: isNewSrc}, onSeeked);
+    
+            try
+            {
+                _audioElement.currentTime = newCurrentTime;
+            }
+            catch (ex)
+            {
+                console.error(ex.message);
+    
+                setTimeout(function()
+                {
+                    try
+                    {
+                        _audioElement.currentTime = newCurrentTime;
+                    }
+                    catch (ex)
+                    {
+                        console.error(ex.message);
+                    }
+                }, 5);
+            }
+        }
+        
+        var MAX_SEEK_RETRIES = 10;
+        var _seekedEvent1 = _iOS ? "canplaythrough" : "seeked"; //"progress"
+        var _seekedEvent2 = _iOS ? "timeupdate" : "seeked";
+        function onSeeked(event)
+        {
+            var ev = event.data.isNewSrc ? _seekedEvent1 : _seekedEvent2;
+    
+            var notRetry = event.data.seekRetries == undefined;
+    
+            if (notRetry || event.data.seekRetries == MAX_SEEK_RETRIES) // first retry
+            {
+                $(_audioElement).off(ev, onSeeked);
+            }
+    
+            if (DEBUG)
+            {
+                console.debug("onSeeked() #" + event.data.playId + " FIRST? " + notRetry + " EV: " + ev);
+            }
+    
+            var curTime = _audioElement.currentTime;
+            var diff = Math.abs(event.data.newCurrentTime - curTime);
+    
+            if((notRetry || event.data.seekRetries >= 0) &&
+                diff >= 1)
+            {
+                if (DEBUG)
+                {
+                    console.debug("onSeeked() time diff: " + event.data.newCurrentTime + " vs. " + curTime + " ("+diff+")");
+                }
+                
+                if (notRetry)
+                {
+                    event.data.seekRetries = MAX_SEEK_RETRIES;
+    
+                    // if (DEBUG)
+                    // {
+                    //     console.debug("onSeeked() fail => first retry, EV: " + _seekedEvent2);
+                    // }
+    
+                    event.data.isNewSrc = false;
+                    //$(_audioElement).on(_seekedEvent2, event.data, onSeeked);
+                }
+                
+                //else
+                {
+                    event.data.seekRetries--;
+    
+                    if (DEBUG)
+                    {
+                        console.debug("onSeeked() FAIL => retry again (timeout)");
+                    }
+    
+                    setTimeout(function()
+                    {
+                        onSeeked(event);
+                    }, _Android ? 1000 : 200);
+                }
+    
+                setTimeout(function()
+                {
+                    _audioElement.pause();
+                    try
+                    {
+                        _audioElement.currentTime = event.data.newCurrentTime;
+                    }
+                    catch (ex)
+                    {
+                        console.error(ex.message);
+    
+                        setTimeout(function()
+                        {
+                            try
+                            {
+                                _audioElement.currentTime = event.data.newCurrentTime;
+                            }
+                            catch (ex)
+                            {
+                                console.error(ex.message);
+                            }
+                        }, 4);
+                    }
+                }, 5);
+            }
+            else
+            {
+                if (DEBUG)
+                {
+                    console.debug("onSeeked() STATE:");
+                    console.debug(notRetry);
+                    console.debug(event.data.seekRetries);
+                    console.debug(diff);
+                }
+    
+                if (diff >= 1)
+                {
+                    if (DEBUG)
+                    {
+                        console.debug("onSeeked() ABORT, TRY AGAIN FROM SCRATCH!");
+                    }
+                    
+                    var smilSrc = _currentSmilSrc;
+                    var epubSrc = _currentEpubSrc;
+                    var seekBegin = event.data.newCurrentTime;
+                    
+                    self.reset();
+                    
+                    setTimeout(function()
+                    {
+                        self.playFile(smilSrc, epubSrc, seekBegin);
+                    }, 10);
+                    
+                    return;
+                }
+
+                if (DEBUG)
+                {
+                    console.debug("onSeeked() OKAY => play!");
+                }
+                
+                event.data.seekRetries = undefined;
+    
+                self.play();
+    
+                _audioElement.moSeeking = undefined;
+            }
+        }
     };
 
+    return AudioPlayer;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/views/media_overlay_element_highlighter',['jquery', 'rangy', 'readium_cfi_js'], function($, rangy, epubCfi) {
+/**
+ *
+ * @param reader
+ * @constructor
+ */
+var MediaOverlayElementHighlighter = function(reader) {
+
+    this.includeParWhenAdjustingToSeqSyncGranularity = true;
+
+    var DEFAULT_MO_ACTIVE_CLASS = "mo-active-default";
+    var DEFAULT_MO_SUB_SYNC_CLASS = "mo-sub-sync";
+    
+    //var BACK_COLOR = "#99CCCC";
+
+    var _highlightedElementPar = undefined;
+    this.isElementHighlighted = function(par)
+    {
+        return _highlightedElementPar && par === _highlightedElementPar;
+    };
+    
+    var _highlightedCfiPar = undefined;
+    this.isCfiHighlighted = function(par)
+    {
+        return _highlightedCfiPar && par === _highlightedCfiPar;
+    };
+
+    var _activeClass = "";
+    var _playbackActiveClass = "";
+
+    var _reader = reader;
+    
+    var USE_RANGY = true && (typeof rangy !== "undefined");
+    var _rangyCSS = undefined;
+    var _rangyRange = undefined;
+    
+    var HIGHLIGHT_ID = "MO_SPEAK";
+    
+    var self = this;
+
+    var $userStyle = undefined;
+    
+    this.reDo = function()
+    {
+        //this.reset();
+        
+        if ($userStyle)
+        {
+            $userStyle.remove();
+        }
+        $userStyle = undefined;
+
+        var he = _highlightedElementPar;
+        var hc = _highlightedCfiPar;
+        var c1 = _activeClass;
+        var c2 = _playbackActiveClass;
+        
+        if (_highlightedElementPar)
+        {
+            this.reset();
+
+            this.highlightElement(he, c1, c2);
+        }
+        else if (_highlightedCfiPar)
+        {
+            this.reset();
+
+            this.highlightCfi(hc, c1, c2);
+        }
+    };
+
+    function ensureUserStyle($element, hasAuthorStyle, overrideWithUserStyle)
+    {
+        if ($userStyle)
+        {
+            try
+            {
+                if ($userStyle[0].ownerDocument === $element[0].ownerDocument)
+                {
+                    return;
+                }
+            }
+            catch (e)
+            {
+                
+            }
+        }
+
+
+        $head = $("head", $element[0].ownerDocument.documentElement);
+
+        $userStyle = $("<style type='text/css'> </style>");
+
+        $userStyle.append("." + DEFAULT_MO_ACTIVE_CLASS + " {");
+        
+        var fallbackUserStyle = "background-color: yellow !important; color: black !important; border-radius: 0.4em;";
+        
+        var style = overrideWithUserStyle; //_reader.userStyles().findStyle("." + DEFAULT_MO_ACTIVE_CLASS);
+        if (style)
+        {
+            var atLeastOne = false;
+            for(var prop in style.declarations)
+            {
+                if(!style.declarations.hasOwnProperty(prop))
+                {
+                    continue;
+                }
+
+                atLeastOne = true;
+                $userStyle.append(prop + ": " + style.declarations[prop] + "; ");
+            }
+            
+            if (!atLeastOne && !hasAuthorStyle)
+            {
+                $userStyle.append(fallbackUserStyle);
+            }
+        }
+        else if (!hasAuthorStyle)
+        {
+            $userStyle.append(fallbackUserStyle);
+        }
+        
+        $userStyle.append("}");
+        
+        
+        // ---- CFI
+        //$userStyle.append(" .highlight {background-color: blue; border: 2x solid green;}"); //.hover-highlight
+        
+        
+        $userStyle.appendTo($head);
+
+//console.debug($userStyle[0].textContent);
+    };
+    
+    this.highlightElement = function(par, activeClass, playbackActiveClass) {
+
+        if(!par || par === _highlightedElementPar) {
+            return;
+        }
+
+        this.reset();
+
+        _highlightedElementPar = par;
+        _highlightedCfiPar = undefined;
+        
+        _activeClass = activeClass;
+        _playbackActiveClass = playbackActiveClass;
+
+        var seq = this.adjustParToSeqSyncGranularity(_highlightedElementPar);
+        var element = seq.element;
+        
+        if (_playbackActiveClass && _playbackActiveClass !== "")
+        {
+            //console.debug("MO playbackActiveClass: " + _playbackActiveClass);
+            $(element.ownerDocument.documentElement).addClass(_playbackActiveClass);
+            //console.debug("MO playbackActiveClass 2: " + element.ownerDocument.documentElement.classList);
+        }
+
+        var $hel = $(element);
+
+        var hasAuthorStyle = _activeClass && _activeClass !== "";
+        var overrideWithUserStyle = _reader.userStyles().findStyle("." + DEFAULT_MO_ACTIVE_CLASS);
+
+        ensureUserStyle($hel, hasAuthorStyle, overrideWithUserStyle);
+                
+        if (overrideWithUserStyle || !hasAuthorStyle)
+        {
+            //console.debug("MO active NO CLASS: " + _activeClass);
+
+            if (hasAuthorStyle)
+            {
+                $hel.addClass(_activeClass);
+            }
+            
+            $hel.addClass(DEFAULT_MO_ACTIVE_CLASS);
+
+            //$(element).css("background", BACK_COLOR);
+        }
+        else
+        {
+            //console.debug("MO activeClass: " + _activeClass);
+            $hel.addClass(_activeClass);
+        }
+        
+        if (this.includeParWhenAdjustingToSeqSyncGranularity || _highlightedElementPar !== seq)
+        {
+            $(_highlightedElementPar.element).addClass(DEFAULT_MO_SUB_SYNC_CLASS);
+        }
+        
+// ---- CFI
+//         try
+//         {
+//             // //noinspection JSUnresolvedVariable
+//             // var cfi = EPUBcfi.Generator.generateElementCFIComponent(element); //$hel[0]
+//             // if(cfi[0] == "!") {
+//             //     cfi = cfi.substring(1);
+//             // }
+// 
+// //console.log(element);
+//         
+//             var firstTextNode = getFirstTextNode(element);
+//             var txtFirst = firstTextNode.textContent;
+// //console.log(txtFirst);
+// 
+//             var lastTextNode = getLastTextNode(element);
+//             var txtLast = lastTextNode.textContent;
+// //console.log(txtLast);
+//         
+//             var cfi = EPUBcfi.Generator.generateCharOffsetRangeComponent(
+//                     firstTextNode, 
+//                     0, 
+//                     lastTextNode, 
+//                     txtLast.length,
+//                     ["cfi-marker"],
+//                     [],
+//                     ["MathJax_Message"]
+//                     );
+//             
+//             var id = $hel.data("mediaOverlayData").par.getSmil().spineItemId;
+//             _reader.addHighlight(id, cfi, HIGHLIGHT_ID,
+//             "highlight", //"underline"
+//             undefined // styles
+//                         );
+//         }
+//         catch(error)
+//         {
+//             console.error(error);
+//         
+//             removeHighlight();
+//         }
+    };
+    
+    this.highlightCfi = function(par, activeClass, playbackActiveClass) {
+
+        if(!par || par === _highlightedCfiPar) {
+            return;
+        }
+
+        this.reset();
+
+        _highlightedElementPar = undefined;
+        _highlightedCfiPar = par;
+        
+        _activeClass = activeClass;
+        _playbackActiveClass = playbackActiveClass;
+
+        var $hel = $(_highlightedCfiPar.cfi.cfiTextParent);
+
+        var hasAuthorStyle = _activeClass && _activeClass !== "";
+        var overrideWithUserStyle = _reader.userStyles().findStyle("." + DEFAULT_MO_ACTIVE_CLASS); // TODO: performance issue?
+
+        ensureUserStyle($hel, hasAuthorStyle, overrideWithUserStyle);
+
+        var clazz = (overrideWithUserStyle || !hasAuthorStyle) ? ((hasAuthorStyle ? (_activeClass + " ") : "") + DEFAULT_MO_ACTIVE_CLASS) : _activeClass;
+
+        if (USE_RANGY)
+        {
+            var doc = _highlightedCfiPar.cfi.cfiTextParent.ownerDocument;
+
+            _rangyRange = rangy.createRange(doc); //createNativeRange
+
+            var startCFI = "epubcfi(" + _highlightedCfiPar.cfi.partialStartCfi + ")";
+            var infoStart = EPUBcfi.getTextTerminusInfoWithPartialCFI(startCFI, doc,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoStart);
+
+            var endCFI = "epubcfi(" + _highlightedCfiPar.cfi.partialEndCfi + ")";
+            var infoEnd = EPUBcfi.getTextTerminusInfoWithPartialCFI(endCFI, doc,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoEnd);
+            
+            _rangyRange.setStartAndEnd(
+                infoStart.textNode[0], infoStart.textOffset,
+                infoEnd.textNode[0], infoEnd.textOffset
+            );
+            
+            if (false && // we use CssClassApplier instead, because surroundContents() has no trivial undoSurroundContents() function (inc. text nodes normalisation, etc.)
+                _rangyRange.canSurroundContents())
+            {
+                _rangyRange.MO_createCssClassApplier = false;
+                
+                var span = doc.createElementNS("http://www.w3.org/1999/xhtml", 'span');
+                span.id = HIGHLIGHT_ID;
+                span.setAttribute("id", span.id);
+                span.setAttribute("class", clazz + " mo-cfi-highlight");
+            
+                _rangyRange.surroundContents(span);
+            }
+            else
+            {
+                _rangyRange.MO_createCssClassApplier = true;
+                
+                if (!_rangyCSS || _rangyCSS.cssClass !== clazz)
+                {
+                    _rangyCSS = rangy.createCssClassApplier(clazz,
+                    {
+                        elementTagName: "span",
+                        elementProperties: {className: "mo-cfi-highlight"},
+                        ignoreWhiteSpace: true,
+                        applyToEditableOnly: false,
+                        normalize: true
+                    },
+                    ["span"]);
+                }
+
+                _rangyCSS.applyToRange(_rangyRange);
+            }
+        }
+        else if (_reader.plugins.highlights) // same API, newer implementation
+        {
+            try
+            {
+                //var id = $hel.data("mediaOverlayData").par.getSmil().spineItemId;
+                var id = par.getSmil().spineItemId;
+                _reader.plugins.highlights.addHighlight(id, par.cfi.partialRangeCfi, HIGHLIGHT_ID,
+                "highlight", //"underline"
+                undefined // styles
+                            );
+            }
+            catch(error)
+            {
+                console.error(error);
+            }
+        }
+        else if (_reader.plugins.annotations) // legacy
+        {
+            try
+            {
+                //var id = $hel.data("mediaOverlayData").par.getSmil().spineItemId;
+                var id = par.getSmil().spineItemId;
+                _reader.plugins.annotations.addHighlight(id, par.cfi.partialRangeCfi, HIGHLIGHT_ID,
+                "highlight", //"underline"
+                undefined // styles
+                            );
+            }
+            catch(error)
+            {
+                console.error(error);
+            }
+        }
+    };
+    
+// ---- CFI
+//     
+//     function getFirstTextNode(node)
+//     {
+//         if (node.nodeType === Node.TEXT_NODE)
+//         {
+//             if (node.textContent.trim().length > 0)
+//                 return node;
+//         }
+//         
+//         for (var i = 0; i < node.childNodes.length; i++)
+//         {
+//             var child = node.childNodes[i];
+//             var first = getFirstTextNode(child);
+//             if (first)
+//             {
+//                 return first;
+//             }
+//         }
+//         
+//         return undefined;
+//     }
+//     
+//     function getLastTextNode(node)
+//     {
+//         if (node.nodeType === Node.TEXT_NODE)
+//         {
+//             if (node.textContent.trim().length > 0)
+//                 return node;
+//         }
+//         
+//         for (var i = node.childNodes.length-1; i >= 0; i--)
+//         {
+//             var child = node.childNodes[i];
+//             var last = getLastTextNode(child);
+//             if (last)
+//             {
+//                 return last;
+//             }
+//         }
+//         
+//         return undefined;
+//     }
+//     
+
+    this.reset = function() {
+        
+        if (_highlightedCfiPar)
+        {
+            var doc = _highlightedCfiPar.cfi.cfiTextParent.ownerDocument;
+            if (USE_RANGY)
+            {
+                if (_rangyCSS && _rangyRange.MO_createCssClassApplier)
+                {
+                    _rangyCSS.undoToRange(_rangyRange);
+                }
+                else
+                {
+                    var toRemove = undefined;
+                    while ((toRemove = doc.getElementById(HIGHLIGHT_ID)) !== null)
+                    {
+                        var txt = toRemove.textContent; // TODO: innerHTML? or better: hasChildNodes loop + detach and re-attach
+                        var txtNode = doc.createTextNode(txt);
+                        
+                        toRemove.parentNode.replaceChild(txtNode, toRemove);
+                        txtNode.parentNode.normalize();
+                    }
+                }
+        
+                //_rangyCSS = undefined;
+                _rangyRange = undefined;
+            }
+            else if (_reader.plugins.highlights) // same API, new implementation
+            {
+                try
+                {
+                    _reader.plugins.highlights.removeHighlight(HIGHLIGHT_ID);
+        
+                    var toRemove = undefined;
+                    while ((toRemove = doc.getElementById("start-" + HIGHLIGHT_ID)) !== null)
+                    {
+            console.log("toRemove START");
+            console.log(toRemove);
+                        toRemove.parentNode.removeChild(toRemove);
+                    }
+                    while ((toRemove = doc.getElementById("end-" + HIGHLIGHT_ID)) !== null)
+                    {
+            console.log("toRemove END");
+            console.log(toRemove);
+                        toRemove.parentNode.removeChild(toRemove);
+                    }
+                }
+                catch(error)
+                {
+                    console.error(error);
+                }
+            }
+            else if (_reader.plugins.annotations) // legacy
+            {
+                try
+                {
+                    _reader.plugins.annotations.removeHighlight(HIGHLIGHT_ID);
+        
+                    var toRemove = undefined;
+                    while ((toRemove = doc.getElementById("start-" + HIGHLIGHT_ID)) !== null)
+                    {
+            console.log("toRemove START");
+            console.log(toRemove);
+                        toRemove.parentNode.removeChild(toRemove);
+                    }
+                    while ((toRemove = doc.getElementById("end-" + HIGHLIGHT_ID)) !== null)
+                    {
+            console.log("toRemove END");
+            console.log(toRemove);
+                        toRemove.parentNode.removeChild(toRemove);
+                    }
+                }
+                catch(error)
+                {
+                    console.error(error);
+                }
+            }
+            
+            _highlightedCfiPar = undefined;
+        }
+        
+        
+        
+
+        if(_highlightedElementPar) {
+
+            var seq = this.adjustParToSeqSyncGranularity(_highlightedElementPar);
+            var element = seq.element;
+            if (this.includeParWhenAdjustingToSeqSyncGranularity || _highlightedElementPar !== seq)
+            {
+                $(_highlightedElementPar.element).removeClass(DEFAULT_MO_SUB_SYNC_CLASS);
+            }
+            
+            if (_playbackActiveClass && _playbackActiveClass !== "")
+            {
+                //console.debug("MO RESET playbackActiveClass: " + _playbackActiveClass);
+                $(element.ownerDocument.documentElement).removeClass(_playbackActiveClass);
+            }
+
+            if (_activeClass && _activeClass !== "")
+            {
+                //console.debug("MO RESET activeClass: " + _activeClass);
+                $(element).removeClass(_activeClass);
+            }
+            //else
+            //{
+                //console.debug("MO RESET active NO CLASS: " + _activeClass);
+                $(element).removeClass(DEFAULT_MO_ACTIVE_CLASS);
+                //$(element).css("background", '');
+            //}
+
+            _highlightedElementPar = undefined;
+        }
+
+        _activeClass = "";
+        _playbackActiveClass = "";
+    };
+
+    this.adjustParToSeqSyncGranularity = function(par)
+    {
+        if (!par) return undefined;
+        
+        var sync = _reader.viewerSettings().mediaOverlaysSynchronizationGranularity;
+        if (sync && sync.length > 0)
+        {
+            var element = par.element || (par.cfi ? par.cfi.cfiTextParent : undefined);
+            if (!element)
+            {
+                console.error("adjustParToSeqSyncGranularity !element ???");
+                return par; // should never happen!
+            }
+
+            var seq = par.getFirstSeqAncestorWithEpubType(sync, this.includeParWhenAdjustingToSeqSyncGranularity);
+            if (seq && seq.element)
+            {
+                return seq;
+            }
+        }
+        
+        return par;
+    };
+};
+    return MediaOverlayElementHighlighter;
+});
+
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+define('readium_shared_js/views/scroll_view',["../globals", "jquery", "underscore", "eventEmitter", "../models/bookmark_data", "../models/current_pages_info", "../helpers",
+        "./one_page_view", "../models/page_open_request", "../models/viewer_settings"],
+    function (Globals, $, _, EventEmitter, BookmarkData, CurrentPagesInfo, Helpers,
+              OnePageView, PageOpenRequest, ViewerSettings) {
+/**
+ * Renders content inside a scrollable view port
+ * @param options
+ * @param isContinuousScroll
+ * @param reader
+ * @constructor
+ */
+var ScrollView = function (options, isContinuousScroll, reader) {
+
+    var _DEBUG = false;
+
+    //https://github.com/jquery/jquery/commit/2d715940b9b6fdeed005cd006c8bf63951cf7fb2
+    //https://github.com/jquery/jquery/commit/49833f7795d665ff1d543c4f71f29fca95b567e9
+    //https://github.com/jquery/jquery/compare/2.1.4...2.2.0
+    var _jQueryPositionNeedsFix = false; // v2.2.0 only
+    try {
+        var vs = $.fn.jquery.split(".");
+        if (parseInt(vs[0]) == 2 && parseInt(vs[1]) == 2 && parseInt(vs[2]) == 0) {
+            _jQueryPositionNeedsFix = true;
+        }
+    } catch(err) {
+        console.error(err);
+    }
+    
+    $.extend(this, new EventEmitter());
+
+    var SCROLL_MARGIN_TO_SHOW_LAST_VISBLE_LINE = 5;
+    var ITEM_LOAD_SCROLL_BUFFER = 2000;
+    var ON_SCROLL_TIME_DALAY = 300;
+
+    var self = this;
+
+    var _$viewport = options.$viewport;
+    var _spine = options.spine;
+    var _userStyles = options.userStyles;
+    var _deferredPageRequest;
+    var _$contentFrame;
+    var _$el;
+
+    var _stopTransientViewUpdate = false;
+
+    //this flags used to prevent onScroll event triggering pagination changed when internal layout modifications happens
+    //if we trigger pagination change without reference to the original request that started the change - we brake the
+    //Media Overlay bechaviyour
+    //We can't reuse same flag for all of this action because this actions mey happen in parallel
+    var _isPerformingLayoutModifications = false; //performing asynch  actions that may trigger onScroll;
+    var _isSettingScrollPosition = false; //this happens when we set scroll position based on open element request
+    var _isLoadingNewSpineItemOnPageRequest = false; //
+
+    this.isContinuousScroll = function () {
+        return isContinuousScroll;
+    };
+
+    this.render = function () {
+
+        var template = Helpers.loadTemplate("scrolled_book_frame", {});
+
+        _$el = $(template);
+        _$viewport.append(_$el);
+
+        _$contentFrame = $("#scrolled-content-frame", _$el);
+        _$contentFrame.css("overflow", "");
+        _$contentFrame.css("overflow-y", "auto");
+        _$contentFrame.css("overflow-x", "hidden");
+        _$contentFrame.css("-webkit-overflow-scrolling", "touch");
+        _$contentFrame.css("width", "100%");
+        _$contentFrame.css("height", "100%");
+        _$contentFrame.css("position", "relative");
+
+        var settings = reader.viewerSettings();
+        if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined")
+        {
+            //defaults
+            settings = new ViewerSettings({});
+        }
+        if (settings.enableGPUHardwareAccelerationCSS3D) {
+            // This is a necessary counterpart for the same CSS GPU hardware acceleration trick in one_page_view.js
+            // This affects the stacking order and re-enables the scrollbar in Safari (works fine in Chrome otherwise)
+            _$contentFrame.css("transform", "translateZ(0)");
+        }
+
+        // _$contentFrame.css("box-sizing", "border-box");
+        // _$contentFrame.css("border", "20px solid red");
+
+        self.applyStyles();
+
+        var lazyScroll = _.debounce(onScroll, ON_SCROLL_TIME_DALAY);
+
+        _$contentFrame.on('scroll', function (e) {
+            lazyScroll(e);
+            onScrollDirect();
+        });
+
+        return self;
+    };
+
+    function updateLoadedViewsTop(callback, assertScrollPosition) {
+
+        if (_stopTransientViewUpdate) {
+            callback();
+            return;
+        }
+
+        var viewPage = firstLoadedView();
+        if (!viewPage) {
+            callback();
+            return;
+        }
+
+        var viewPortRange = getVisibleRange(0);
+        var firstViewRange = getPageViewRange(viewPage);
+
+        if ((viewPortRange.top - firstViewRange.bottom) > ITEM_LOAD_SCROLL_BUFFER) {
+            var scrollPos = scrollTop();
+            removePageView(viewPage);
+            scrollTo(scrollPos - (firstViewRange.bottom - firstViewRange.top), undefined);
+            assertScrollPosition("updateLoadedViewsTop 1");
+            updateLoadedViewsTop(callback, assertScrollPosition); //recursion
+        }
+        else if ((viewPortRange.top - firstViewRange.top) < ITEM_LOAD_SCROLL_BUFFER) {
+            addToTopOf(viewPage, function (isElementAdded) {
+                if (isElementAdded) {
+                    assertScrollPosition("updateLoadedViewsTop 2");
+                    updateLoadedViewsTop(callback, assertScrollPosition); //recursion
+                }
+                else {
+                    callback();
+                }
+            });
+        }
+        else {
+            callback();
+        }
+
+    }
+
+    function updateLoadedViewsBottom(callback, assertScrollPosition) {
+
+        if (_stopTransientViewUpdate) {
+            callback();
+            return;
+        }
+
+        var viewPage = lastLoadedView();
+        if (!viewPage) {
+            callback();
+            return;
+        }
+
+        var viewPortRange = getVisibleRange(0);
+        var lastViewRange = getPageViewRange(viewPage);
+
+        if ((lastViewRange.top - viewPortRange.bottom) > ITEM_LOAD_SCROLL_BUFFER) {
+            removePageView(viewPage);
+            assertScrollPosition("updateLoadedViewsBottom 1");
+            updateLoadedViewsBottom(callback, assertScrollPosition); //recursion
+        }
+        else if ((lastViewRange.bottom - viewPortRange.bottom) < ITEM_LOAD_SCROLL_BUFFER) {
+            addToBottomOf(viewPage, function (newPageLoaded) {
+                assertScrollPosition("updateLoadedViewsBottom 2");
+                if (newPageLoaded) {
+                    updateLoadedViewsBottom(callback, assertScrollPosition); //recursion
+                }
+                else {
+                    callback();
+                }
+            });
+        }
+        else {
+            callback();
+        }
+
+    }
+
+    function updateTransientViews(pageView) {
+
+        if (!isContinuousScroll) {
+            return;
+        }
+
+        var scrollPosBefore = undefined;
+        if (_DEBUG)
+        {
+            if (pageView)
+            {
+                var offset = pageView.offset();
+                if (offset) scrollPosBefore = offset.top;
+            }
+        }
+
+        // This function double-checks whether the browser has shifted the scroll position because of unforeseen rendering issues.
+        // (this should never happen because we handle scroll adjustments during iframe height resizes explicitely in this code)
+        var assertScrollPosition = function(msg)
+        {
+            if (_DEBUG)
+            {
+                if (!scrollPosBefore) return;
+                var scrollPosAfter = undefined;
+
+                var offset = pageView.offset();
+                if (offset) scrollPosAfter = offset.top;
+
+                if (!scrollPosAfter) return;
+
+                var diff = scrollPosAfter - scrollPosBefore;
+                if (Math.abs(diff) > 1)
+                {
+                    console.debug("@@@@@@@@@@@@@@@ SCROLL ADJUST (" + msg + ") " + diff + " -- " + pageView.currentSpineItem().href);
+                    //_$contentFrame[0].scrollTop = _$contentFrame[0].scrollTop + diff;
+                }
+            }
+        };
+
+        _isPerformingLayoutModifications = true;
+        updateLoadedViewsBottom(function () {
+            updateLoadedViewsTop(function () {
+                setTimeout(function () {
+                    _isPerformingLayoutModifications = false;
+                }, ON_SCROLL_TIME_DALAY + 100);
+            }, assertScrollPosition);
+        }, assertScrollPosition);
+    }
+
+    var _mediaOverlaysWasPlayingLastTimeScrollStarted = false;
+
+    function onScrollDirect(e)
+    {
+        var settings = reader.viewerSettings();
+        if (!settings.mediaOverlaysPreservePlaybackWhenScroll)
+        {
+            if (!_mediaOverlaysWasPlayingLastTimeScrollStarted && reader.isMediaOverlayAvailable())
+            {
+                _mediaOverlaysWasPlayingLastTimeScrollStarted = reader.isPlayingMediaOverlay();
+                if (_mediaOverlaysWasPlayingLastTimeScrollStarted)
+                {
+                    reader.pauseMediaOverlay();
+                }
+            }
+        }
+    }
+
+    function onScroll(e)
+    {
+        if (   !_isPerformingLayoutModifications
+            && !_isSettingScrollPosition
+            && !_isLoadingNewSpineItemOnPageRequest) {
+
+            updateTransientViews();
+            onPaginationChanged(self);
+
+            var settings = reader.viewerSettings();
+            if (!settings.mediaOverlaysPreservePlaybackWhenScroll)
+            {
+                if (_mediaOverlaysWasPlayingLastTimeScrollStarted)
+                {
+                    setTimeout(function()
+                    {
+                        reader.playMediaOverlay();
+                        _mediaOverlaysWasPlayingLastTimeScrollStarted = false;
+                    }, 100);
+                }
+            }
+        }
+    }
+
+    function scrollTo(offset, pageRequest) {
+
+        _$contentFrame[0].scrollTop = offset;
+
+        if (pageRequest) {
+            onPaginationChanged(pageRequest.initiator, pageRequest.spineItem, pageRequest.elementId);
+        }
+    }
+
+    function updatePageViewSizeAndAdjustScroll(pageView)
+    {
+        var scrollPos = scrollTop();
+        var rangeBeforeResize = getPageViewRange(pageView);
+
+        updatePageViewSize(pageView);
+
+        var rangeAfterResize = getPageViewRange(pageView);
+
+        var heightAfter = rangeAfterResize.bottom - rangeAfterResize.top;
+        var heightBefore = rangeBeforeResize.bottom - rangeBeforeResize.top;
+
+        var delta = heightAfter - heightBefore;
+
+        if (Math.abs(delta) > 0)
+        {
+            if (_DEBUG)
+            {
+                console.debug("IMMEDIATE SCROLL ADJUST: " + pageView.currentSpineItem().href + " == " + delta);
+            }
+            scrollTo(scrollPos + delta);
+        }
+    }
+
+    function reachStableContentHeight(updateScroll, pageView, iframe, href, fixedLayout, metaWidth, msg, callback)
+    {
+        if (!Helpers.isIframeAlive(iframe))
+        {
+            if (_DEBUG)
+            {
+                console.log("reachStableContentHeight ! win && doc (iFrame disposed?)");
+            }
+
+            if (callback) callback(false);
+            return;
+        }
+
+        var MAX_ATTEMPTS = 10;
+        var TIME_MS = 300;
+
+        var w = iframe.contentWindow;
+        var d = iframe.contentDocument;
+
+        var previousPolledContentHeight = parseInt(Math.round(parseFloat(w.getComputedStyle(d.documentElement).height))); //body can be shorter!;
+
+        var initialContentHeight = previousPolledContentHeight;
+
+        if (updateScroll === 0)
+        {
+            updatePageViewSizeAndAdjustScroll(pageView);
+        }
+        else
+        {
+            updatePageViewSize(pageView);
+        }
+
+        var tryAgainFunc = function(tryAgain)
+        {
+            if (_DEBUG && tryAgain !== MAX_ATTEMPTS)
+            {
+                console.log("tryAgainFunc - " + tryAgain + ": " + href + "  <" + initialContentHeight +" -- "+ previousPolledContentHeight + ">");
+            }
+
+            tryAgain--;
+            if (tryAgain < 0)
+            {
+                if (_DEBUG)
+                {
+                    console.error("tryAgainFunc abort: " + href);
+                }
+
+                if (callback) callback(true);
+                return;
+            }
+
+            setTimeout(function()
+            {
+                try
+                {
+                    if (Helpers.isIframeAlive(iframe))
+                    {
+                        var win = iframe.contentWindow;
+                        var doc = iframe.contentDocument;
+
+                        var iframeHeight = parseInt(Math.round(parseFloat(window.getComputedStyle(iframe).height)));
+
+                        var docHeight = parseInt(Math.round(parseFloat(win.getComputedStyle(doc.documentElement).height))); //body can be shorter!
+
+                        if (previousPolledContentHeight !== docHeight)
+                        {
+                            previousPolledContentHeight = docHeight;
+
+                            tryAgainFunc(tryAgain);
+                            return;
+                        }
+
+                        // CONTENT HEIGHT IS NOW STABILISED
+
+                        var diff = iframeHeight - docHeight;
+                        if (Math.abs(diff) > 4)
+                        {
+                            if (_DEBUG)
+                            {
+                                console.log("$$$ IFRAME HEIGHT ADJUST: " + href + "  [" + diff + "]<" + initialContentHeight + " -- " + previousPolledContentHeight + ">");
+                                console.log(msg);
+                            }
+
+                            if (updateScroll === 0)
+                            {
+                                updatePageViewSizeAndAdjustScroll(pageView);
+                            }
+                            else
+                            {
+                                updatePageViewSize(pageView);
+                            }
+
+                            if (Helpers.isIframeAlive(iframe))
+                            {
+                                var win = iframe.contentWindow;
+                                var doc = iframe.contentDocument;
+
+                                var docHeightAfter = parseInt(Math.round(parseFloat(win.getComputedStyle(doc.documentElement).height))); //body can be shorter!
+                                var iframeHeightAfter = parseInt(Math.round(parseFloat(window.getComputedStyle(iframe).height)));
+
+                                var newdiff = iframeHeightAfter - docHeightAfter;
+                                if (Math.abs(newdiff) > 4)
+                                {
+                                    if (_DEBUG)
+                                    {
+                                        console.error("## IFRAME HEIGHT ADJUST: " + href + "  [" + newdiff + "]<" + initialContentHeight + " -- "+ previousPolledContentHeight + ">");
+                                        console.log(msg);
+                                    }
+
+                                    tryAgainFunc(tryAgain);
+                                    return;
+                                }
+                                else
+                                {
+                                    if (_DEBUG)
+                                    {
+                                        console.log(">> IFRAME HEIGHT ADJUSTED OKAY: " + href + "  ["+diff+"]<" + initialContentHeight + " -- " + previousPolledContentHeight + ">");
+                                        // console.log(msg);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if (_DEBUG)
+                                {
+                                    console.log("tryAgainFunc ! win && doc (iFrame disposed?)");
+                                }
+
+                                if (callback) callback(false);
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            //if (_DEBUG)
+                            // console.debug("IFRAME HEIGHT NO NEED ADJUST: " + href);
+                            // console.log(msg);
+                        }
+                    }
+                    else
+                    {
+                        if (_DEBUG)
+                        {
+                            console.log("tryAgainFunc ! win && doc (iFrame disposed?)");
+                        }
+
+                        if (callback) callback(false);
+                        return;
+                    }
+                }
+                catch(ex)
+                {
+                    console.error(ex);
+
+                    if (callback) callback(false);
+                    return;
+                }
+
+                if (callback) callback(true);
+
+            }, TIME_MS);
+        };
+
+        tryAgainFunc(MAX_ATTEMPTS);
+    }
+
+
+    function addToTopOf(topView, callback) {
+
+        var prevSpineItem = _spine.prevItem(topView.currentSpineItem(), true);
+        if (!prevSpineItem) {
+            callback(false);
+            return;
+        }
+
+        var tmpView = createPageViewForSpineItem(true);
+
+        // add to the end first to avoid scrolling during load
+        var lastView = lastLoadedView();
+        tmpView.element().insertAfter(lastView.element());
+
+        tmpView.loadSpineItem(prevSpineItem, function (success, $iframe, spineItem, isNewlyLoaded, context) {
+            if (success) {
+
+                updatePageViewSize(tmpView);
+                var range = getPageViewRange(tmpView);
+
+                removePageView(tmpView);
+
+
+                var scrollPos = scrollTop();
+
+                var newView = createPageViewForSpineItem();
+                var originalHeight = range.bottom - range.top;
+
+
+                newView.setHeight(originalHeight);
+                // iframe is loaded hidden here
+                //this.showIFrame();
+                //===> not necessary here (temporary iframe)
+
+                newView.element().insertBefore(topView.element());
+
+                scrollPos = scrollPos + originalHeight;
+
+                scrollTo(scrollPos, undefined);
+
+                newView.loadSpineItem(prevSpineItem, function (success, $iframe, spineItem, isNewlyLoaded, context) {
+                    if (success) {
+
+                        var continueCallback = function (successFlag)
+                        {
+                            onPageViewLoaded(newView, success, $iframe, spineItem, isNewlyLoaded, context);
+
+                            callback(successFlag);
+                        };
+
+                        reachStableContentHeight(0, newView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? newView.meta_width() : 0, "addToTopOf", continueCallback); // //onIFrameLoad called before this callback, so okay.
+                    }
+                    else {
+                        console.error("Unable to open 2 " + prevSpineItem.href);
+                        removePageView(newView);
+                        callback(false);
+                    }
+
+                });
+            }
+            else {
+                console.error("Unable to open 1 " + prevSpineItem.href);
+                removePageView(tmpView);
+                callback(false);
+            }
+
+        });
+    }
+
+    function updatePageViewSize(pageView) {
+
+        if (pageView.currentSpineItem().isFixedLayout()) {
+            pageView.scaleToWidth(_$contentFrame.width());
+        }
+        else {
+            pageView.resizeIFrameToContent();
+        }
+    }
+
+    function addToBottomOf(bottomView, callback) {
+
+        var nexSpineItem = _spine.nextItem(bottomView.currentSpineItem(), true);
+        if (!nexSpineItem) {
+            callback(false);
+            return;
+        }
+
+        var scrollPos = scrollTop();
+
+        var newView = createPageViewForSpineItem();
+        newView.element().insertAfter(bottomView.element());
+
+        newView.loadSpineItem(nexSpineItem, function (success, $iframe, spineItem, isNewlyLoaded, context) {
+            if (success) {
+
+                var continueCallback = function (successFlag)
+                {
+                    onPageViewLoaded(newView, success, $iframe, spineItem, isNewlyLoaded, context);
+
+                    callback(successFlag);
+                };
+
+                reachStableContentHeight(2, newView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? newView.meta_width() : 0, "addToBottomOf", continueCallback); // //onIFrameLoad called before this callback, so okay.
+            }
+            else {
+                console.error("Unable to load " + nexSpineItem.href);
+                callback(false);
+            }
+
+        });
+    }
+
+    function removeLoadedItems() {
+
+        var loadedPageViews = [];
+
+        forEachItemView(function (pageView) {
+            loadedPageViews.push(pageView);
+        }, false);
+
+        for (var i = 0, count = loadedPageViews.length; i < count; i++) {
+            removePageView(loadedPageViews[i]);
+        }
+    }
+
+    function removePageView(pageView) {
+
+        pageView.element().remove();
+
+    }
+
+
+    function setFrameSizesToRectangle(rectangle) {
+
+        _$contentFrame.css("left", rectangle.left);
+        _$contentFrame.css("top", rectangle.top);
+        _$contentFrame.css("right", rectangle.right);
+        _$contentFrame.css("bottom", rectangle.bottom);
+
+    }
+
+    this.remove = function () {
+        _$el.remove();
+    };
+
+    this.onViewportResize = function () {
+
+        if (!_$contentFrame) {
+            return;
+        }
+
+        forEachItemView(function (pageView) {
+
+            updatePageViewSize(pageView);
+        }, false);
+
+        onPaginationChanged(self);
+
+        updateTransientViews();
+    };
+
+    var _viewSettings = undefined;
+    this.setViewSettings = function (settings) {
+
+        _viewSettings = settings;
+
+        forEachItemView(function (pageView) {
+
+            pageView.setViewSettings(settings);
+
+        }, false);
+    };
+
+    function createPageViewForSpineItem(isTemporaryView) {
+
+        options.disablePageTransitions = true; // force
+
+        var pageView = new OnePageView(
+            options,
+            ["content-doc-frame"],
+            true, //enableBookStyleOverrides
+            reader);
+
+        pageView.on(OnePageView.Events.SPINE_ITEM_OPEN_START, function($iframe, spineItem) {
+            
+            Globals.logEvent("OnePageView.Events.SPINE_ITEM_OPEN_START", "ON", "scroll_view.js [ " + spineItem.href + " ]");
+
+            Globals.logEvent("CONTENT_DOCUMENT_LOAD_START", "EMIT", "scroll_view.js [ " + spineItem.href + " ]");
+            self.emit(Globals.Events.CONTENT_DOCUMENT_LOAD_START, $iframe, spineItem);
+        });
+
+        pageView.render();
+        if (_viewSettings) pageView.setViewSettings(_viewSettings);
+
+        if (!isTemporaryView) {
+            pageView.element().data("pageView", pageView);
+        }
+
+
+        if (isContinuousScroll)
+        {
+            pageView.decorateIframe();
+        }
+
+        return pageView;
+    }
+
+    function findPageViewForSpineItem(spineItem, reverse) {
+
+        var retView = undefined;
+
+        forEachItemView(function (pageView) {
+            if (pageView.currentSpineItem() == spineItem) {
+                retView = pageView;
+                //brake the iteration
+                return false;
+            }
+            else {
+                return true;
+            }
+
+        }, reverse);
+
+        return retView;
+    }
+
+    function forEachItemView(func, reverse) {
+
+        var pageNodes = _$contentFrame.children();
+
+        var count = pageNodes.length;
+        var iter = reverse ? function(ix) { return ix - 1}
+                           : function(ix) { return ix + 1};
+
+        var compare = reverse ? function(ix) { return ix >= 0}
+                              : function(ix) { return ix < count };
+
+        var start = reverse ? count - 1 : 0;
+
+        for (var i = start; compare(i); i = iter(i)) {
+
+            var $element = pageNodes.eq(i);
+            var curView = $element.data("pageView");
+
+            if (curView) {
+
+                if (func(curView) === false) {
+                    return;
+                }
+            }
+        }
+    }
+
+    function firstLoadedView() {
+
+        var firstView = undefined;
+
+        forEachItemView(function (pageView) {
+
+            firstView = pageView;
+            return false;
+
+        }, false);
+
+        return firstView;
+    }
+
+    function lastLoadedView() {
+
+        var lastView = undefined;
+
+        forEachItemView(function (pageView) {
+            lastView = pageView;
+            return false;
+
+        }, true);
+
+        return lastView;
+    }
+
+    function onPageViewLoaded(pageView, success, $iframe, spineItem, isNewlyLoaded, context) {
+
+        if (success && isNewlyLoaded) {
+            Globals.logEvent("CONTENT_DOCUMENT_LOADED", "EMIT", "scroll_view.js [ " + spineItem.href + " ]");
+            self.emit(Globals.Events.CONTENT_DOCUMENT_LOADED, $iframe, spineItem);
+        }
+
+    }
+
+    function loadSpineItem(spineItem, callback) {
+
+        removeLoadedItems();
+
+        var scrollPos = scrollTop();
+
+        var loadedView = createPageViewForSpineItem();
+
+        _$contentFrame.append(loadedView.element());
+
+        loadedView.loadSpineItem(spineItem, function (success, $iframe, spineItem, isNewlyLoaded, context) {
+
+            if (success) {
+
+                var continueCallback = function(successFlag)
+                {
+                    onPageViewLoaded(loadedView, success, $iframe, spineItem, isNewlyLoaded, context);
+
+                    callback(loadedView);
+
+                    //successFlag should always be true as loadedView iFrame cannot be dead at this stage.
+                };
+
+                reachStableContentHeight(1, loadedView, $iframe[0], spineItem.href, spineItem.isFixedLayout(), spineItem.isFixedLayout() ? loadedView.meta_width() : 0, "openPage", continueCallback); // //onIFrameLoad called before this callback, so okay.
+            }
+            else {
+                console.error("Unable to load " + spineItem.href);
+
+                removePageView(loadedView);
+                loadedView = undefined;
+            }
+
+            callback(loadedView);
+
+        });
+
+    }
+
+    this.applyStyles = function () {
+
+        Helpers.setStyles(_userStyles.getStyles(), _$el.parent());
+
+        //because left, top, bottom, right setting ignores padding of parent container
+        //we have to take it to account manually
+        var elementMargins = Helpers.Margins.fromElement(_$el);
+
+        setFrameSizesToRectangle(elementMargins.padding);
+
+    };
+
+    this.applyBookStyles = function () {
+
+        forEachItemView(function (pageView) {
+            pageView.applyBookStyles();
+        }, false);
+    };
+
+
+    this.openPage = function (pageRequest) {
+
+        _stopTransientViewUpdate = true;
+
+        //local helper function
+        var doneLoadingSpineItem = function (pageView, pageRequest) {
+
+            _deferredPageRequest = undefined;
+            openPageViewElement(pageView, pageRequest);
+            _stopTransientViewUpdate = false;
+            updateTransientViews(pageView);
+        };
+
+        if (pageRequest.spineItem) {
+
+            var pageView = findPageViewForSpineItem(pageRequest.spineItem);
+            if (pageView) {
+                doneLoadingSpineItem(pageView, pageRequest);
+            }
+            else {
+                _deferredPageRequest = pageRequest;
+                _isLoadingNewSpineItemOnPageRequest = true;
+
+                loadSpineItem(pageRequest.spineItem, function (pageView) {
+
+                    setTimeout(function () {
+                        _isLoadingNewSpineItemOnPageRequest = false;
+                    }, ON_SCROLL_TIME_DALAY + 100);
+
+                    if (pageView && _deferredPageRequest) {
+                        if (pageView.currentSpineItem() === _deferredPageRequest.spineItem) {
+                            doneLoadingSpineItem(pageView, _deferredPageRequest);
+                        }
+                        else { //while we where waiting for load new request come
+                            self.openPage(_deferredPageRequest); //recursion
+                        }
+                    }
+                    else {
+                        onPaginationChanged(pageRequest.initiator, pageRequest.spineItem, pageRequest.elementId);
+                    }
+
+                });
+            }
+        }
+        else {
+            doneLoadingSpineItem(undefined, pageRequest);
+        }
+    };
+
+    function openPageViewElement(pageView, pageRequest) {
+
+        var topOffset = 0;
+        var pageCount;
+        var $element;
+        var sfiNav;
+        var pageRange;
+
+        if (pageRequest.scrollTop !== undefined) {
+
+            topOffset = pageRequest.scrollTop;
+        }
+        else if (pageRequest.spineItemPageIndex !== undefined) {
+
+            var pageIndex;
+            pageCount = calculatePageCount();
+            if (pageRequest.spineItemPageIndex < 0) {
+                pageIndex = 0;
+            }
+            else if (pageRequest.spineItemPageIndex >= pageCount) {
+                pageIndex = pageCount - 1;
+            }
+            else {
+                pageIndex = pageRequest.spineItemPageIndex;
+            }
+
+            topOffset = pageIndex * viewHeight();
+        }
+        else if (pageView && pageRequest.elementId) {
+
+            pageRange = getPageViewRange(pageView);
+            sfiNav = pageView.getNavigator();
+            $element = sfiNav.getElementById(pageRequest.elementId);
+
+            if (!$element || !$element.length) {
+                console.warn("Element id=" + pageRequest.elementId + " not found!");
+                return;
+            }
+
+            if (isElementVisibleOnScreen(pageView, $element, 60)) {
+                //TODO refactoring required
+                // this is artificial call because MO player waits for this event to continue playing.
+                onPaginationChanged(pageRequest.initiator, pageRequest.spineItem, pageRequest.elementId);
+                return;
+            }
+
+            topOffset = sfiNav.getVerticalOffsetForElement($element) + pageRange.top;
+
+        }
+        else if (pageView && pageRequest.elementCfi) {
+
+            pageRange = getPageViewRange(pageView);
+            sfiNav = pageView.getNavigator();
+
+            var domRange = sfiNav.getDomRangeFromRangeCfi(pageRequest.elementCfi);            
+            if (!domRange) {
+                console.warn("Range for cfi=" + pageRequest.elementCfi + " not found!");
+                return;
+            }
+            
+            var domRangeAsRange = getDomRangeAsRange(pageView, domRange);
+            if (isRangeIsVisibleOnScreen(pageView, domRangeAsRange, 60)) {
+                //TODO refactoring required
+                // this is artificial call because MO player waits for this event to continue playing.
+                onPaginationChanged(pageRequest.initiator, pageRequest.spineItem, pageRequest.elementId);
+                return;
+            }
+
+            topOffset = domRangeAsRange.top;
+
+        }
+        else if (pageRequest.firstPage) {
+
+            topOffset = 0;
+        }
+        else if (pageRequest.lastPage) {
+            pageCount = calculatePageCount();
+
+            if (pageCount === 0) {
+                return;
+            }
+
+            topOffset = scrollHeight() - viewHeight() - 5;
+        }
+        else if (pageView) {
+
+            pageRange = getPageViewRange(pageView);
+            topOffset = pageRange.top;
+        }
+        else {
+            topOffset = 0;
+        }
+
+        if (scrollTop() != topOffset) {
+
+            _isSettingScrollPosition = true;
+            scrollTo(topOffset, pageRequest);
+
+            setTimeout(function () {
+                _isSettingScrollPosition = false;
+            }, ON_SCROLL_TIME_DALAY + 100); //we have to wait more than scroll delay to make sure that we don't react on onScroll
+
+        }
+        else {
+            onPaginationChanged(pageRequest.initiator, pageRequest.spineItem, pageRequest.elementId);
+        }
+    }
+
+    function calculatePageCount() {
+
+        return Math.ceil(scrollHeight() / viewHeight());
+    }
+
+    function onPaginationChanged(initiator, paginationRequest_spineItem, paginationRequest_elementId) {
+        
+        Globals.logEvent("InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED", "EMIT", "scroll_view.js");
+        self.emit(Globals.InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED, {
+            paginationInfo: self.getPaginationInfo(),
+            initiator: initiator,
+            spineItem: paginationRequest_spineItem,
+            elementId: paginationRequest_elementId
+        });
+    }
+
+    function scrollTop() {
+        return _$contentFrame[0].scrollTop;
+    }
+
+    function scrollBottom() {
+        return scrollHeight() - (scrollTop() + viewHeight());
+    }
+
+    function viewHeight() {
+        return _$contentFrame.height();
+    }
+
+    function scrollHeight() {
+        return _$contentFrame[0].scrollHeight;
+    }
+
+    this.openPageNext = function (initiator) {
+
+        var pageRequest;
+
+        if (scrollBottom() > 0) {
+
+            pageRequest = new PageOpenRequest(undefined, initiator);
+            pageRequest.scrollTop = scrollTop() + Math.min(scrollBottom(), viewHeight() - SCROLL_MARGIN_TO_SHOW_LAST_VISBLE_LINE);
+            openPageViewElement(undefined, pageRequest);
+        }
+
+    };
+
+    this.openPagePrev = function (initiator) {
+
+        var pageRequest;
+
+        if (scrollTop() > 0) {
+
+            pageRequest = new PageOpenRequest(undefined, initiator);
+            pageRequest.scrollTop = scrollTop() - (viewHeight() - SCROLL_MARGIN_TO_SHOW_LAST_VISBLE_LINE);
+            if (pageRequest.scrollTop < 0) {
+                pageRequest.scrollTop = 0;
+            }
+
+            openPageViewElement(undefined, pageRequest);
+        }
+    };
+
+    function getVisiblePageViews() {
+
+        var views = [];
+
+        var range = getVisibleRange(-SCROLL_MARGIN_TO_SHOW_LAST_VISBLE_LINE);
+
+        forEachItemView(function (pageView) {
+
+            if (isPageViewVisibleInRange(pageView, range)) {
+
+                views.push(pageView);
+            }
+            else if (views.length > 0) {
+
+                return false;
+            }
+
+            return true;
+
+        }, false);
+
+        return views;
+
+    }
+
+
+    function getFirstVisiblePageView() {
+
+        var visibleViews = getVisiblePageViews();
+
+        return visibleViews[0];
+    }
+
+    function isPageViewVisibleInRange(pageView, range) {
+        var pageViewRange = getPageViewRange(pageView);
+        return rangeLength(intersectRanges(pageViewRange, range)) > 0;
+    }
+
+    function getPageViewRange(pageView) {
+        var range = {top: 0, bottom: 0};
+
+        var el = pageView.element();
+        var pos = el.position();
+        
+        if (_jQueryPositionNeedsFix) {
+            var offsetParent = el.offsetParent();
+            pos.top -= offsetParent.scrollTop();
+            pos.left -= offsetParent.scrollLeft();
+        }
+
+        range.top = pos.top + scrollTop();
+        range.bottom = range.top + pageView.getCalculatedPageHeight();
+
+        return range;
+    }
+
+    this.getPaginationInfo = function () {
+        var spineItem;
+        var pageCount;
+        var pageView;
+        var pageViewRange;
+        var heightAboveViewport;
+        var heightBelowViewport;
+        var pageCountAbove;
+        var pageCountBelow;
+
+        var viewPortRange = getVisibleRange();
+        var viewPortHeight = viewPortRange.bottom - viewPortRange.top;
+
+        var paginationInfo = new CurrentPagesInfo(_spine, false);
+
+        var visibleViews = getVisiblePageViews();
+
+        for (var i = 0, count = visibleViews.length; i < count; i++) {
+
+            pageView = visibleViews[i];
+            spineItem = pageView.currentSpineItem();
+            pageViewRange = getPageViewRange(pageView);
+
+            heightAboveViewport = Math.max(viewPortRange.top - pageViewRange.top, 0);
+            heightBelowViewport = Math.max(pageViewRange.bottom - viewPortRange.bottom, 0);
+
+            pageCountAbove = Math.ceil(heightAboveViewport / viewPortHeight);
+            pageCountBelow = Math.ceil(heightBelowViewport / viewPortHeight);
+            pageCount = pageCountAbove + pageCountBelow + 1;
+
+            paginationInfo.addOpenPage(pageCountAbove, pageCount, spineItem.idref, spineItem.index);
+        }
+
+        return paginationInfo;
+    };
+
+    this.bookmarkCurrentPage = function () {
+        
+        return self.getFirstVisibleCfi();
+    };
+
+
+    this.getLoadedSpineItems = function () {
+        var spineItems = [];
+
+        forEachItemView(function (pageView) {
+            spineItems.push(pageView.currentSpineItem());
+        }, false);
+
+        return spineItems;
+    };
+
+    this.getElement = function (spineItemIdref, selector) {
+        var element = undefined;
+
+        forEachItemView(function (pageView) {
+            if(pageView.currentSpineItem().idref == spineItemIdref) {
+
+                element = pageView.getNavigator().getElement(selector);
+
+                return false;
+            }
+
+            return true;
+
+        }, false);
+
+        return element;
+    };
+
+    this.getElementById = function(spineItemIdref, id) {
+        var found = undefined;
+
+        forEachItemView(function (pageView) {
+            if (pageView.currentSpineItem().idref == spineItemIdref) {
+
+                found = pageView.getNavigator().getElementById(id);
+                return false;
+            }
+
+            return true;
+
+        }, false);
+
+        if (!found) {
+            console.error("spine item is not loaded");
+            return undefined;
+        }
+
+        return found;
+    };
+
+    this.getElementByCfi = function (spineItemIdref, cfi, classBlacklist, elementBlacklist, idBlacklist) {
+        var found = undefined;
+
+        forEachItemView(function (pageView) {
+            if (pageView.currentSpineItem().idref == spineItemIdref) {
+
+                found = pageView.getNavigator().getElementByCfi(spineItemIdref, cfi, classBlacklist, elementBlacklist, idBlacklist);
+                return false;
+            }
+
+            return true;
+
+        }, false);
+
+        if (!found) {
+            console.error("spine item is not loaded");
+            return undefined;
+        }
+
+        return found;
+
+    };
+
+    function callOnVisiblePageView(iterator) {
+        var viewPortRange = getVisibleRange();
+
+        var result = undefined;
+        var normalizedRange = {top: 0, bottom: 0};
+        var pageViewRange;
+
+        var steppedToVisiblePage = false;
+
+        forEachItemView(function (pageView) {
+            pageViewRange = getPageViewRange(pageView);
+
+            normalizedRange.top = Math.max(pageViewRange.top, viewPortRange.top) - pageViewRange.top;
+            normalizedRange.bottom = Math.min(pageViewRange.bottom, viewPortRange.bottom) - pageViewRange.top;
+
+            if (rangeLength(normalizedRange) > 0) {
+                steppedToVisiblePage = true;
+
+                result = iterator(pageView, normalizedRange);
+                if (result) {
+                    return false;
+                }
+            }
+            else if (steppedToVisiblePage) {
+                return false;
+            }
+
+            return true; //continue iteration
+
+        }, false);
+
+        return result;
+    }
+
+    this.getFirstVisibleMediaOverlayElement = function () {
+        return callOnVisiblePageView(function (pageView, pageRange) {
+            return pageView.getNavigator().getFirstVisibleMediaOverlayElement(pageRange);
+        });
+    };
+
+    // /**
+    //  * @deprecated
+    //  */
+    // this.getVisibleMediaOverlayElements = function() {
+    //     var viewPortRange = getVisibleRange();
+    //
+    //     var pageMoElements;
+    //     var moElements = [];
+    //     var normalizedRange = {top: 0, bottom: 0};
+    //     var pageViewRange;
+    //
+    //     forEachItemView(function(pageView){
+    //         pageViewRange = getPageViewRange(pageView);
+    //
+    //         normalizedRange.top = Math.max(pageViewRange.top, viewPortRange.top) - pageViewRange.top;
+    //         normalizedRange.bottom = Math.min(pageViewRange.bottom, viewPortRange.bottom) - pageViewRange.top;
+    //
+    //         if(rangeLength(normalizedRange) > 0) {
+    //             pageMoElements = pageView.getNavigator().getVisibleMediaOverlayElements(normalizedRange);
+    //             moElements.push.apply(moElements, pageMoElements);
+    //         }
+    //     }, false);
+    //
+    //     return moElements;
+    // };
+
+    function getVisibleRange(expand) {
+        if (expand !== 0 && !expand) {
+            expand = 0;
+        }
+
+        var range = {
+
+            top: scrollTop() - expand,
+            bottom: scrollTop() + viewHeight() + expand
+        };
+
+        if (range.top < 0) {
+            range.top = 0;
+        }
+
+        if (range.bottom > scrollHeight()) {
+            range.bottom = scrollHeight();
+        }
+
+        return range;
+
+    }
+
+    function intersectRanges(r1, r2) {
+        return {
+
+            top: Math.max(r1.top, r2.top),
+            bottom: Math.min(r1.bottom, r2.bottom)
+        };
+    }
+
+    function rangeLength(range) {
+        if (range.bottom < range.top) {
+            return 0;
+        }
+
+        return range.bottom - range.top;
+    }
+
+    function isElementVisibleOnScreen(pageView, $element, percentVisible) {
+
+        var elementRange = getElementRange(pageView, $element);
+
+        return isRangeIsVisibleOnScreen(elementRange, percentVisible);
+    }
+
+    function isRangeIsVisibleOnScreen(range, percentVisible) {
+
+        var visibleRange = getVisibleRange();
+
+        var smallestVisibleLength = Math.min(rangeLength(visibleRange), rangeLength(range));
+        if (smallestVisibleLength === 0) {
+            smallestVisibleLength = 5; // if element is 0 height we will set it to arbitrary 5 pixels - not to divide by 0
+        }
+
+        var intersectionRange = intersectRanges(visibleRange, range);
+
+        var visiblePercent = (rangeLength(intersectionRange) / smallestVisibleLength) * 100;
+
+        return visiblePercent >= percentVisible;
+    }
+
+    function getElementRange(pageView, $element) {
+
+        var pageRange = getPageViewRange(pageView);
+
+        var elementRange = {top: 0, bottom: 0};
+        elementRange.top = $element.offset().top + pageRange.top;
+        elementRange.bottom = elementRange.top + $element.height();
+
+        return elementRange;
+    }
+    
+    function getDomRangeAsRange(pageView, domRange) {
+
+        var pageRange = getPageViewRange(pageView);
+
+        var elementRange = {top: 0, bottom: 0};
+        var boundingClientRect = domRange.getBoundingClientRect();
+        elementRange.top = boundingClientRect.top + pageRange.top;
+        elementRange.bottom = elementRange.top + boundingClientRect.height;
+
+        return elementRange;
+    }
+
+    this.insureElementVisibility = function (spineItemId, element, initiator) {
+        var pageView = undefined;
+
+        forEachItemView(function (pv) {
+            if (pv.currentSpineItem().idref === spineItemId) {
+
+                pageView = pv;
+                return false;
+            }
+
+            return true;
+        }, false);
+
+        if (!pageView) {
+            console.warn("Page for element " + element + " not found");
+            return;
+        }
+
+        var $element = $(element);
+
+        var elementRange = getElementRange(pageView, $element);
+
+        if (!isRangeIsVisibleOnScreen(elementRange, 60)) {
+
+            var spineItem = _spine.getItemById(spineItemId);
+            var openPageRequest = new PageOpenRequest(spineItem, initiator);
+            openPageRequest.scrollTop = elementRange.top;
+
+            self.openPage(openPageRequest);
+        }
+
+    };
+
+    this.getVisibleElements = function(selector, includeSpineItem) {
+        var elements = [];
+        forEachItemView(function (pageView) {
+            if (includeSpineItem) {
+                elements.push({elements: pageView.getVisibleElements(selector), spineItem: pageView.currentSpineItem()});
+            } else {
+                elements = _.flatten([elements, pageView.getVisibleElements(selector)], true);
+            }
+        });
+        return elements;
+    };
+
+    this.getVisibleElementsWithFilter = function(filterFunction) {
+
+        console.warn('getVisibleElementsWithFilter: Not implemented yet for scroll_view');
+    };
+
+    this.isElementVisible = function($element){
+
+        console.warn('isElementVisible: Not implemented yet for scroll_view');
+    };
+
+    this.getElements = function(spineItemIdref, selector) {
+        var pageView = findPageViewForSpineItem(spineItemIdref);
+        if (pageView) {
+            return pageView.getElements(spineItemIdref, selector);
+        }
+    };
+
+    this.isNodeFromRangeCfiVisible = function (spineIdref, partialCfi) {
+        var pageView = findPageViewForSpineItem(spineIdRef);
+        if (pageView) {
+            return pageView.isNodeFromRangeCfiVisible(spineIdRef, partialCfi);
+        }
+    };
+
+    this.isVisibleSpineItemElementCfi = function (spineIdRef, partialCfi) {
+        var pageView = findPageViewForSpineItem(spineIdRef);
+        if (pageView) {
+            return pageView.isVisibleSpineItemElementCfi(spineIdRef, partialCfi);
+        }
+    };
+
+    this.getNodeRangeInfoFromCfi = function(spineIdRef, partialCfi){
+        var pageView = findPageViewForSpineItem(spineIdRef);
+        if (pageView) {
+            return pageView.isVisibleSpineItemElementCfi(spineIdRef, partialCfi);
+        }
+    };
+    
+    function getFirstOrLastVisibleCfi(pickerFunc) {
+        var pageViews = getVisiblePageViews();
+        var selectedPageView = pickerFunc(pageViews);
+        var pageViewTopOffset = selectedPageView.element().position().top;
+        var visibleContentOffsets, frameDimensions;
+        
+        var setupFunctions = [
+            function () {
+                visibleContentOffsets = {
+                    top: pageViewTopOffset,
+                    left: 0
+                };
+            },
+            function() {
+                var height = selectedPageView.element().height();
+                
+                if (pageViewTopOffset >= 0) {
+                    height = viewHeight() - pageViewTopOffset;
+                }
+
+                frameDimensions = {
+                    width: selectedPageView.element().width(),
+                    height: height
+                };
+                
+                visibleContentOffsets = {
+                    top: 0,
+                    left: 0
+                };
+            }
+        ];
+        
+        //invoke setup function
+        pickerFunc(setupFunctions)();
+        
+        var cfiFunctions = [
+            selectedPageView.getFirstVisibleCfi,
+            selectedPageView.getLastVisibleCfi
+        ];
+        
+        return pickerFunc(cfiFunctions)(visibleContentOffsets, frameDimensions);
+    }
+    
+    this.getFirstVisibleCfi = function () {
+        
+        return getFirstOrLastVisibleCfi(_.first);
+    };
+
+    this.getLastVisibleCfi = function () {
+        
+        return getFirstOrLastVisibleCfi(_.last);
+    };
+
+    this.getDomRangeFromRangeCfi = function (rangeCfi, rangeCfi2, inclusive) {
+        if (rangeCfi2 && rangeCfi.idref !== rangeCfi2.idref) {
+            console.error("getDomRangeFromRangeCfi: both CFIs must be scoped under the same spineitem idref");
+            return undefined;
+        }
+
+        rangeCfi = rangeCfi || {};
+        rangeCfi2 = rangeCfi2 || {};
+
+        return callOnVisiblePageView(function (pageView) {
+            if (pageView.currentSpineItem().idref === rangeCfi.idref) {
+                return pageView.getDomRangeFromRangeCfi(rangeCfi.contentCFI, rangeCfi2.contentCFI, inclusive);
+            }
+        });
+    };
+
+    this.getRangeCfiFromDomRange = function (domRange) {
+        return callOnVisiblePageView(function (pageView) {
+            return pageView.getRangeCfiFromDomRange(domRange);
+        });
+    };
+
+    this.getVisibleCfiFromPoint = function (x, y, precisePoint) {
+        return callOnVisiblePageView(function (pageView) {
+            return createBookmark(pageView.currentSpineItem(), pageView.getVisibleCfiFromPoint(x, y, precisePoint));
+        });
+    };
+
+    this.getRangeCfiFromPoints = function (startX, startY, endX, endY) {
+        return callOnVisiblePageView(function (pageView) {
+            return createBookmark(pageView.currentSpineItem(), pageView.getRangeCfiFromPoints(startX, startY, endX, endY));
+        });
+    };
+
+    this.getCfiForElement = function(x, y) {
+        return callOnVisiblePageView(function (pageView) {
+            return createBookmark(pageView.currentSpineItem(), pageView.getCfiForElement(x, y));
+        });
+    };
+
+    this.getElementFromPoint = function (x, y) {
+        return callOnVisiblePageView(function (pageView) {
+            return pageView.getElementFromPoint(x, y);
+        });
+    };
+};
+
+return ScrollView;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/views/media_overlay_player',["../globals", "jquery", "../helpers", "./audio_player", "./media_overlay_element_highlighter", "../models/smil_iterator", "rangy", 'readium_cfi_js', './scroll_view'],
+    function(Globals, $, Helpers, AudioPlayer, MediaOverlayElementHighlighter, SmilIterator, rangy, epubCfi, ScrollView) {
+/**
+ *
+ * @param reader
+ * @param onStatusChanged
+ * @constructor
+ */
+var MediaOverlayPlayer = function(reader, onStatusChanged) {
+
+
+    var _smilIterator = undefined;
+
+    var _audioPlayer = new AudioPlayer(onStatusChanged, onAudioPositionChanged, onAudioEnded, onPlay, onPause);
+
+    var _ttsIsPlaying = false;
+    var _currentTTS = undefined;
+    var _enableHTMLSpeech = true && typeof window.speechSynthesis !== "undefined" && speechSynthesis != null; // set to false to force "native" platform TTS engine, rather than HTML Speech API
+    
+    var _SpeechSynthesisUtterance = undefined;
+    //var _skipTTSEndEvent = false;
+    var TOKENIZE_TTS = false;
+
+    var _embeddedIsPlaying = false;
+    var _currentEmbedded = undefined;
+
+
+    this.isPlaying = function()
+    {
+        return _audioPlayer.isPlaying() || _ttsIsPlaying || _embeddedIsPlaying || _blankPagePlayer;
+    }
+
+    //var _currentPagination = undefined;
+    var _package = reader.package();
+    var _settings = reader.viewerSettings();
+    var self = this;
+    var _elementHighlighter = new MediaOverlayElementHighlighter(reader);
+
+    reader.on(Globals.Events.READER_VIEW_DESTROYED, function(){
+        Globals.logEvent("READER_VIEW_DESTROYED", "ON", "media_overlay_player.js");
+        
+        self.reset();
+    });
+
+
+    this.applyStyles = function()
+    {
+        _elementHighlighter.reDo();
+    };
+
+//
+// should use this.onSettingsApplied() instead!
+//    this.setRate = function(rate) {
+//        _audioPlayer.setRate(rate);
+//    };
+//    this.setVolume = function(volume) {
+//        _audioPlayer.setVolume(volume);
+//    };
+
+
+    this.onSettingsApplied = function() {
+//console.debug(_settings);
+        _audioPlayer.setRate(_settings.mediaOverlaysRate);
+        _audioPlayer.setVolume(_settings.mediaOverlaysVolume / 100.0);
+    };
+    self.onSettingsApplied();
+    
+    reader.on(Globals.Events.SETTINGS_APPLIED, function() {
+        
+        Globals.logEvent("SETTINGS_APPLIED", "ON", "media_overlay_player.js");
+        this.onSettingsApplied();
+    }, this);
+
+    /*
+    var lastElement = undefined;
+    var lastElementColor = "";
+    */
+
+    var _wasPlayingAtDocLoadStart = false;
+    this.onDocLoadStart = function() {
+        // 1) Globals.Events.CONTENT_DOCUMENT_LOAD_START
+        // (maybe 2-page fixed-layout or reflowable spread == 2 documents == 2x events)
+        // MOPLayer.onDocLoad()
+        
+        // 2) Globals.Events.CONTENT_DOCUMENT_LOADED
+        // (maybe 2-page fixed-layout or reflowable spread == 2 documents == 2x events)
+        //_mediaOverlayDataInjector.attachMediaOverlayData($iframe, spineItem, _viewerSettings);
+        
+        // 3) Globals.Events.PAGINATION_CHANGED (layout finished, notified before rest of app, just once)
+        // MOPLayer.onPageChanged()
+
+        var wasPlaying = self.isPlaying();
+        if (wasPlaying)
+        {
+            _wasPlayingAtDocLoadStart = true;
+            self.pause();
+        }
+    };
+    
+    var _lastPaginationData = undefined;
+    
+    this.onPageChanged = function(paginationData) {
+        
+        _lastPaginationData = paginationData;
+        
+        var wasPausedBecauseNoAutoNextSmil = _wasPausedBecauseNoAutoNextSmil;
+        _wasPausedBecauseNoAutoNextSmil = false;
+        
+        var wasPlayingAtDocLoadStart = _wasPlayingAtDocLoadStart;
+        _wasPlayingAtDocLoadStart = false;
+
+        if(!paginationData) {
+            self.reset();
+            return;
+        }
+
+//        if (paginationData.paginationInfo)
+//        {
+//            _currentPagination = paginationData.paginationInfo;
+//        }
+
+        /*
+        if (lastElement)
+        {
+            $(lastElement).css("background-color", lastElementColor);
+            lastElement = undefined;
+        }
+        */
+
+        var element = undefined;
+        var isCfiTextRange = false;
+        
+        var fakeOpfRoot = "/99!";
+        var epubCfiPrefix = "epubcfi";
+        
+        if (paginationData.elementId || paginationData.initiator == self)
+        {
+            var spineItems = reader.getLoadedSpineItems();
+
+            var rtl = reader.spine().isRightToLeft();
+
+            for(var i = (rtl ? (spineItems.length - 1) : 0); rtl && i >=0 || !rtl && i < spineItems.length; i += (rtl ? -1: 1))
+            {
+                var spineItem = spineItems[i];
+                if (paginationData.spineItem && paginationData.spineItem != spineItem)
+                {
+                    continue;
+                }
+                
+                if (paginationData.elementId && paginationData.elementId.indexOf(epubCfiPrefix) === 0)
+                {
+                    _elementHighlighter.reset(); // ensure clean DOM (no CFI span markers)
+                    
+                    var partial = paginationData.elementId.substr(epubCfiPrefix.length + 1, paginationData.elementId.length - epubCfiPrefix.length - 2);
+                    
+                    if (partial.indexOf(fakeOpfRoot) === 0)
+                    {
+                        partial = partial.substr(fakeOpfRoot.length, partial.length - fakeOpfRoot.length);
+                    }
+//console.log(partial);
+                    var parts = partial.split(",");
+                    if (parts && parts.length === 3)
+                    {
+                        try
+                        {
+                            var cfi = parts[0] + parts[1];
+                            var $element = reader.getElementByCfi(spineItem.idref, cfi,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+
+                            element = ($element && $element.length > 0) ? $element[0] : undefined;
+                            if (element)
+                            {
+                                if (element.nodeType === Node.TEXT_NODE)
+                                {
+                                    element = element.parentNode;
+                                }
+                                break;
+                            }
+                        }
+                        catch (error)
+                        {
+                            console.error(error);
+                        }
+                    }
+                    else
+                    {
+                        try
+                        {
+                            //var cfi = "epubcfi(" + partial + ")";
+                            //var $element = EPUBcfi.getTargetElementWithPartialCFI(cfi, DOC);
+                            var $element = reader.getElementByCfi(spineItem.idref, partial,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+                                
+                            element = ($element && $element.length > 0) ? $element[0] : undefined;
+                            if (element)
+                            {
+                                if (element.nodeType === Node.TEXT_NODE)
+                                {
+                                    element = element.parentNode;
+                                }
+                                break;
+                            }
+                        }
+                        catch (error)
+                        {
+                            console.error(error);
+                        }
+                    }
+                }
+
+                if (!element)
+                {
+                    if (paginationData.initiator == self && !paginationData.elementId)
+                    {
+                        var $element = reader.getElement(spineItem.idref, "body");
+                        element = ($element && $element.length > 0) ? $element[0] : undefined;
+                    }
+                    else
+                    {
+                        var $element = reader.getElementById(spineItem.idref, paginationData.elementId);
+                        element = ($element && $element.length > 0) ? $element[0] : undefined;
+                        //("#" + Globals.Helpers.escapeJQuerySelector(paginationData.elementId))
+                    }
+                    
+                    if (element)
+                    {
+                        /*
+                        console.error("GREEN: " + paginationData.elementId);
+                        lastElement = element;
+                        lastElementColor = $(element).css("background-color");
+                        $(element).css("background-color", "green");
+                         */
+                        break;
+                    }
+                }
+            }
+
+            if (!element)
+            {
+                console.error("paginationData.elementId BUT !element: " + paginationData.elementId);
+            }
+        }
+
+        var wasPlaying = self.isPlaying() || wasPlayingAtDocLoadStart;
+
+        if(!_smilIterator || !_smilIterator.currentPar) {
+            if(paginationData.initiator !== self) {
+                clipBeginOffset = 0.0;
+                self.reset();
+
+                if (paginationData.elementId && element)
+                {
+                    if (wasPlaying || wasPausedBecauseNoAutoNextSmil)
+                    {
+                        paginationData.elementIdResolved = element;
+                        self.toggleMediaOverlayRefresh(paginationData);
+                    }
+                }
+                else if (wasPlaying || wasPausedBecauseNoAutoNextSmil)
+                {
+                    self.toggleMediaOverlay();
+                }
+                return;
+            }
+
+            //paginationData.initiator === self
+//
+//            if (!paginationData.elementId)
+//            {
+//                console.error("!paginationData.elementId");
+//                clipBeginOffset = 0.0;
+//                return;
+//            }
+
+            if(!element)
+            {
+                console.error("!element: " + paginationData.elementId);
+                clipBeginOffset = 0.0;
+                return;
+            }
+
+            var moData = $(element).data("mediaOverlayData");
+            if(!moData) {
+                console.error("!moData: " + paginationData.elementId);
+                clipBeginOffset = 0.0;
+                return;
+            }
+
+            var parToPlay = moData.par ? moData.par : moData.pars[0];
+
+            if (moData.pars)
+            {
+                for (var iPar = 0; iPar < moData.pars.length; iPar++)
+                {
+                    var p = moData.pars[iPar];
+                    
+                    if (paginationData.elementId === p.cfi.smilTextSrcCfi)
+                    {
+                        parToPlay = p;
+                        break;
+                    }
+                }
+            }
+            
+            playPar(parToPlay);
+            return;
+        }
+
+        var noReverseData = !_smilIterator.currentPar.element && !_smilIterator.currentPar.cfi;
+        if(noReverseData) {
+            console.error("!! _smilIterator.currentPar.element ??");
+        }
+
+//console.debug("+++> paginationData.elementId: " + paginationData.elementId + " /// " + _smilIterator.currentPar.text.srcFile + " # " + _smilIterator.currentPar.text.srcFragmentId); //PageOpenRequest.elementId
+
+
+        if(paginationData.initiator == self)
+        {
+            var notSameTargetID = paginationData.elementId && paginationData.elementId !== _smilIterator.currentPar.text.srcFragmentId;
+
+            if(notSameTargetID) {
+                console.error("!! paginationData.elementId !== _smilIterator.currentPar.text.srcFragmentId");
+            }
+
+            if(notSameTargetID || noReverseData) {
+                clipBeginOffset = 0.0;
+                return;
+            }
+
+            if(wasPlaying)
+            {
+                highlightCurrentElement();
+            }
+            else
+            {
+                playCurrentPar();
+            }
+        }
+        else
+        {
+            if(!wasPlaying && !wasPausedBecauseNoAutoNextSmil)
+            {
+                self.reset();
+                return;
+            }
+
+            if(!paginationData.elementId)
+            {
+                //self.reset();
+            }
+
+            if(paginationData.elementId && !element)
+            {
+                //self.reset();
+                return;
+            }
+
+            if(paginationData.elementId)
+            {
+                paginationData.elementIdResolved = element;
+            }
+            
+            self.toggleMediaOverlayRefresh(paginationData);
+        }
+    };
+
+    function playPar(par) {
+
+        var parSmil = par.getSmil();
+        if(!_smilIterator || _smilIterator.smil != parSmil)
+        {
+            _smilIterator = new SmilIterator(parSmil);
+        }
+        else {
+            _smilIterator.reset();
+        }
+
+        _smilIterator.goToPar(par);
+
+        if(!_smilIterator.currentPar) {
+            console.error("playPar !_smilIterator.currentPar");
+            return;
+        }
+
+        playCurrentPar();
+    }
+
+    var clipBeginOffset = 0.0;
+
+    var _blankPagePlayer = undefined;
+
+    function initBlankPagePlayer()
+    {
+        self.resetBlankPage();
+
+        _blankPagePlayer = setTimeout(function() {
+
+            if (!_blankPagePlayer)
+            {
+                return;
+            }
+
+            self.resetBlankPage();
+
+            if (!_smilIterator || !_smilIterator.currentPar)
+            {
+                self.reset();
+                return;
+            }
+
+            audioCurrentTime = 0.0;
+//console.log("BLANK END.");
+            //nextSmil(true);
+            onAudioPositionChanged(_smilIterator.currentPar.audio.clipEnd + 0.1, 2);
+
+        }, 2000);
+
+        onStatusChanged({isPlaying: true});
+    }
+
+    function playCurrentPar() {
+        _wasPlayingScrolling = false;
+        
+        if (!_smilIterator || !_smilIterator.currentPar)
+        {
+            console.error("playCurrentPar !_smilIterator || !_smilIterator.currentPar ???");
+            return;
+        }
+
+        if (!_smilIterator.smil.id)
+        {
+            _audioPlayer.reset();
+
+            self.resetTTS();
+            self.resetEmbedded();
+
+            setTimeout(function()
+            {
+                initBlankPagePlayer();
+            }, 100);
+
+            return;
+        }
+        else if (!_smilIterator.currentPar.audio.src)
+        {
+            clipBeginOffset = 0.0;
+
+//            if (_currentTTS)
+//            {
+//                _skipTTSEnded = true;
+//            }
+
+            _audioPlayer.reset();
+
+            var element = _smilIterator.currentPar.element;
+            if (element)
+            {
+                audioCurrentTime = 0.0;
+
+                var name = element.nodeName ? element.nodeName.toLowerCase() : undefined;
+
+                if (name === "audio" || name === "video")
+                {
+                    self.resetTTS();
+                    self.resetBlankPage();
+
+                    if (_currentEmbedded)
+                    {
+                        self.resetEmbedded();
+                    }
+
+                    _currentEmbedded = element;
+
+                    _currentEmbedded.pause();
+
+                    // DONE at reader_view.attachMO()
+                    //$(_currentEmbedded).attr("preload", "auto");
+
+                    _currentEmbedded.currentTime = 0;
+
+                    _currentEmbedded.play();
+
+                    $(_currentEmbedded).on("ended", self.onEmbeddedEnd);
+
+                    _embeddedIsPlaying = true;
+                    
+                    // gives the audio player some dispatcher time to raise the onPause event
+                    setTimeout(function(){
+                        onStatusChanged({isPlaying: true});
+                    }, 80);
+
+//                    $(element).on("seeked", function()
+//                    {
+//                        $(element).off("seeked", onSeeked);
+//                    });
+                }
+                else
+                {
+                    self.resetEmbedded();
+                    self.resetBlankPage();
+
+                    _currentTTS = element.textContent; //.innerText (CSS display sensitive + script + style tags)
+                    if (!_currentTTS || _currentTTS == "")
+                    {
+                        _currentTTS = undefined;
+                    }
+                    else
+                    {
+                        speakStart(_currentTTS);
+                    }
+                }
+            }
+            
+            var cfi = _smilIterator.currentPar.cfi;
+            if (cfi)
+            {
+                audioCurrentTime = 0.0;
+                self.resetEmbedded();
+                self.resetBlankPage();
+
+                _elementHighlighter.reset(); // ensure clean DOM (no CFI span markers)
+                
+                var doc = cfi.cfiTextParent.ownerDocument;
+
+                var startCFI = "epubcfi(" + cfi.partialStartCfi + ")";
+                var infoStart = EPUBcfi.getTextTerminusInfoWithPartialCFI(startCFI, doc,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoStart);
+
+                var endCFI = "epubcfi(" + cfi.partialEndCfi + ")";
+                var infoEnd = EPUBcfi.getTextTerminusInfoWithPartialCFI(endCFI, doc,
+                ["cfi-marker", "mo-cfi-highlight"],
+                [],
+                ["MathJax_Message"]);
+//console.log(infoEnd);
+
+                if (rangy)
+                {
+                    //infoStart.textNode[0].parentNode.ownerDocument
+                    var range = rangy.createRange(doc); //createNativeRange
+                    range.setStartAndEnd(
+                        infoStart.textNode[0], infoStart.textOffset,
+                        infoEnd.textNode[0], infoEnd.textOffset
+                    );
+                    _currentTTS = range.toString(); //.text()
+                }
+                else
+                {
+                    _currentTTS = undefined;
+                }
+
+                if (!_currentTTS || _currentTTS == "")
+                {
+                    _currentTTS = undefined;
+                }
+                else
+                {
+                    speakStart(_currentTTS);
+                }
+            }
+        }
+        else
+        {
+            self.resetTTS();
+            self.resetEmbedded();
+            self.resetBlankPage();
+
+            var dur = _smilIterator.currentPar.audio.clipEnd - _smilIterator.currentPar.audio.clipBegin;
+            if (dur <= 0 || clipBeginOffset > dur)
+            {
+                console.error("### MO XXX PAR OFFSET: " + clipBeginOffset + " / " + dur);
+                clipBeginOffset = 0.0;
+            }
+            else
+            {
+//console.debug("### MO PAR OFFSET: " + clipBeginOffset);
+            }
+
+            var audioContentRef = Helpers.ResolveContentRef(_smilIterator.currentPar.audio.src, _smilIterator.smil.href);
+
+            var audioSource = _package.resolveRelativeUrlMO(audioContentRef);
+
+            var startTime = _smilIterator.currentPar.audio.clipBegin + clipBeginOffset;
+
+//console.debug("PLAY START TIME: " + startTime + "("+_smilIterator.currentPar.audio.clipBegin+" + "+clipBeginOffset+")");
+
+            _audioPlayer.playFile(_smilIterator.currentPar.audio.src, audioSource, startTime); //_smilIterator.currentPar.element ? _smilIterator.currentPar.element : _smilIterator.currentPar.cfi.cfiTextParent
+        }
+
+        clipBeginOffset = 0.0;
+
+        highlightCurrentElement();
+    }
+
+    function nextSmil(goNext)
+    {
+        self.pause();
+
+//console.debug("current Smil: " + _smilIterator.smil.href + " /// " + _smilIterator.smil.id);
+
+        var nextSmil = goNext ? _package.media_overlay.getNextSmil(_smilIterator.smil) : _package.media_overlay.getPreviousSmil(_smilIterator.smil);
+        if(nextSmil) {
+
+//console.debug("nextSmil: " + nextSmil.href + " /// " + nextSmil.id);
+
+            _smilIterator = new SmilIterator(nextSmil);
+            if(_smilIterator.currentPar) {
+                if (!goNext)
+                {
+                    while (!_smilIterator.isLast())
+                    {
+                        _smilIterator.next();
+                    }
+                }
+
+//console.debug("openContentUrl (nextSmil): " + _smilIterator.currentPar.text.src + " -- " + _smilIterator.smil.href);
+
+                reader.openContentUrl(_smilIterator.currentPar.text.src, _smilIterator.smil.href, self);
+            }
+        }
+        else
+        {
+            console.log("No more SMIL");
+            self.reset();
+        }
+    }
+
+
+    var _skipAudioEnded = false;
+//    var _skipTTSEnded = false;
+
+    var audioCurrentTime = 0.0;
+
+    var DIRECTION_MARK = -999;
+
+//    var _letPlay = false;
+
+//from
+//1 = audio player
+//2 = blank page
+//3 = video/audio embbeded
+//4 = TTS
+//5 = audio end
+//6 = user previous/next/escape
+    function onAudioPositionChanged(position, from, skipping) { //noLetPlay
+
+        audioCurrentTime = position;
+
+//        if (_letPlay)
+//        {
+//            return;
+//        }
+
+        _skipAudioEnded = false;
+//        _skipTTSEnded = false;
+
+        if (!_smilIterator || !_smilIterator.currentPar)
+        {
+            return;
+        }
+
+        var parFrom = _smilIterator.currentPar;
+        
+        var audio = _smilIterator.currentPar.audio;
+
+        //var TOLERANCE = 0.05;
+        if(
+            //position >= (audio.clipBegin - TOLERANCE) &&
+        position > DIRECTION_MARK &&
+            position <= audio.clipEnd) {
+
+//console.debug("onAudioPositionChanged: " + position);
+            return;
+        }
+
+        _skipAudioEnded = true;
+
+//console.debug("PLAY NEXT: " + "(" + audio.clipBegin + " -- " + audio.clipEnd + ") [" + from + "] " +  position);
+//console.debug(_smilIterator.currentPar.text.srcFragmentId);
+
+        var isPlaying = _audioPlayer.isPlaying();
+        if (isPlaying && from === 6)
+        {
+            console.debug("from userNav _audioPlayer.isPlaying() ???");
+        }
+
+        var goNext = position > audio.clipEnd;
+
+        var doNotNextSmil = !_autoNextSmil && from !== 6 && goNext;
+
+        var spineItemIdRef = (_smilIterator && _smilIterator.smil && _smilIterator.smil.spineItemId) ? _smilIterator.smil.spineItemId : ((_lastPaginationData && _lastPaginationData.spineItem && _lastPaginationData.spineItem.idref) ? _lastPaginationData.spineItem.idref : undefined);
+        if (doNotNextSmil && spineItemIdRef && _lastPaginationData && _lastPaginationData.paginationInfo && _lastPaginationData.paginationInfo.openPages && _lastPaginationData.paginationInfo.openPages.length > 1)
+        {
+            //var iPage = _lastPaginationData.paginationInfo.isRightToLeft ? _lastPaginationData.paginationInfo.openPages.length - 1 : 0;
+            var iPage = 0;
+            
+            var openPage = _lastPaginationData.paginationInfo.openPages[iPage];
+            if (spineItemIdRef === openPage.idref)
+            {
+                doNotNextSmil = false;
+            }
+        }
+        
+        if (goNext)
+        {
+            _smilIterator.next();
+        }
+        else //position <= DIRECTION_MARK
+        {
+            _smilIterator.previous();
+        }
+
+        if(!_smilIterator.currentPar)
+        {
+            //
+            //        if (!noLetPlay)
+            //        {
+            //            _letPlay = true;
+            //            setTimeout(function()
+            //            {
+            //                _letPlay = false;
+            //                nextSmil(goNext);
+            //            }, 200);
+            //        }
+            //        else
+            //        {
+            //            nextSmil(goNext);
+            //        }
+
+//console.debug("NEXT SMIL ON AUDIO POS");
+        
+            if (doNotNextSmil)
+            {
+                _wasPausedBecauseNoAutoNextSmil = true;
+                self.reset();
+                //self.pause();
+            }
+            else
+            {
+                nextSmil(goNext);
+            }
+            return;
+        }
+
+//console.debug("ITER: " + _smilIterator.currentPar.text.srcFragmentId);
+
+        if(!_smilIterator.currentPar.audio) {
+            self.pause();
+            return;
+        }
+        
+        if(_settings.mediaOverlaysSkipSkippables)
+        {
+            var skip = false;
+            var parent = _smilIterator.currentPar;
+            while (parent)
+            {
+                if (parent.isSkippable && parent.isSkippable(_settings.mediaOverlaysSkippables))
+                {
+                    skip = true;
+                    break;
+                }
+                parent = parent.parent;
+            }
+
+            if (skip)
+            {
+                console.log("MO SKIP: " + parent.epubtype);
+
+                self.pause();
+
+                var pos = goNext ? _smilIterator.currentPar.audio.clipEnd + 0.1 : DIRECTION_MARK - 1;
+
+                onAudioPositionChanged(pos, from, true); //noLetPlay
+                return;
+            }
+        }
+
+        // _settings.mediaOverlaysSynchronizationGranularity
+        if (!isPlaying && (_smilIterator.currentPar.element || _smilIterator.currentPar.cfi && _smilIterator.currentPar.cfi.cfiTextParent))
+        {
+            var scopeTo = _elementHighlighter.adjustParToSeqSyncGranularity(_smilIterator.currentPar);
+            if (scopeTo && scopeTo !== _smilIterator.currentPar)
+            {
+                var scopeFrom = _elementHighlighter.adjustParToSeqSyncGranularity(parFrom);
+                if (scopeFrom && (scopeFrom === scopeTo || !goNext))
+                {
+                    if (scopeFrom === scopeTo)
+                    {
+                        do
+                        {
+                            if (goNext) _smilIterator.next();
+                            else  _smilIterator.previous();
+                        } while (_smilIterator.currentPar && _smilIterator.currentPar.hasAncestor(scopeFrom));
+
+                        if (!_smilIterator.currentPar)
+                        {
+    //console.debug("adjustParToSeqSyncGranularity nextSmil(goNext)");
+
+                            if (doNotNextSmil)
+                            {
+                                _wasPausedBecauseNoAutoNextSmil = true;
+                                self.reset();
+                                //self.pause();
+                            }
+                            else
+                            {
+                                nextSmil(goNext);
+                            }
+                            
+                            return;
+                        }
+                    }
+                    
+//console.debug("ADJUSTED: " + _smilIterator.currentPar.text.srcFragmentId);
+                    if (!goNext)
+                    {
+                        var landed = _elementHighlighter.adjustParToSeqSyncGranularity(_smilIterator.currentPar);
+                        if (landed && landed !== _smilIterator.currentPar)
+                        {
+                            var backup = _smilIterator.currentPar;
+                    
+                            var innerPar = undefined;
+                            do
+                            {
+                                innerPar = _smilIterator.currentPar;
+                                _smilIterator.previous();
+                            }
+                            while (_smilIterator.currentPar && _smilIterator.currentPar.hasAncestor(landed));
+                        
+                            if (_smilIterator.currentPar)
+                            {
+                                _smilIterator.next();
+                                
+                                if (!_smilIterator.currentPar.hasAncestor(landed))
+                                {
+                                    console.error("adjustParToSeqSyncGranularity !_smilIterator.currentPar.hasAncestor(landed) ???");
+                                }
+                                //assert 
+                            }
+                            else
+                            {
+//console.debug("adjustParToSeqSyncGranularity reached begin");
+
+                                _smilIterator.reset();
+                                
+                                if (_smilIterator.currentPar !== innerPar)
+                                {
+                                    console.error("adjustParToSeqSyncGranularity _smilIterator.currentPar !=== innerPar???");
+                                }
+                            }
+
+                            if (!_smilIterator.currentPar)
+                            {
+                                console.error("adjustParToSeqSyncGranularity !_smilIterator.currentPar ?????");
+                                _smilIterator.goToPar(backup);
+                            }
+                            
+//console.debug("ADJUSTED PREV: " + _smilIterator.currentPar.text.srcFragmentId);
+                        }
+                    }
+                }
+            }
+        }
+        
+        if(_audioPlayer.isPlaying()
+            && _smilIterator.currentPar.audio.src
+            && _smilIterator.currentPar.audio.src == _audioPlayer.currentSmilSrc()
+                && position >= _smilIterator.currentPar.audio.clipBegin
+                && position <= _smilIterator.currentPar.audio.clipEnd)
+        {
+//console.debug("ONLY highlightCurrentElement");
+            highlightCurrentElement();
+            return;
+        }
+
+        //position <= DIRECTION_MARK goes here (goto previous):
+
+//            if (!noLetPlay && position > DIRECTION_MARK
+//                && _audioPlayer.isPlaying() && _audioPlayer.srcRef() != _smilIterator.currentPar.audio.src)
+//            {
+//                _letPlay = true;
+//                setTimeout(function()
+//                {
+//                    _letPlay = false;
+//                    playCurrentPar();
+//                }, 100);
+//
+//                playCurrentPar();
+//
+//                return;
+//            }
+
+        playCurrentPar();
+    }
+
+    this.touchInit = function()
+    {
+        var todo = _audioPlayer.touchInit();
+        if (todo)
+        {
+            if (_enableHTMLSpeech)
+            {
+                speakStart("o", 0);
+            }
+        }
+    };
+
+    var tokeniseTTS = function(element)
+    {
+        var BLOCK_DELIMITERS = ['p', 'div', 'pagenum', 'td', 'table', 'li', 'ul', 'ol'];
+        var BOUNDARY_PUNCTUATION = [',', ';', '.', '-', '??', '??', '?', '!'];
+        var IGNORABLE_PUNCTUATION = ['"', '\'', '??', '??', '??', '??'];
+
+        var flush = function(t, r)
+        {
+            if (t.word.length <= 0)
+            {
+                return;
+            }
+
+            var pos = t.text.length;
+            r.spanMap[pos] = t.counter;
+            t.text += t.word;
+            t.markup += t.html.substring(0, t.wordStart) +
+                '<span class="tts_off" id="tts_' + t.counter + '">' +
+                t.html.substring(t.wordStart, t.wordEnd) +
+                '</span>' + t.html.substring(t.wordEnd, t.html.length);
+            t.word = "";
+            t.html = "";
+            t.wordStart = -1;
+            t.wordEnd = -1;
+            t.counter++;
+        };
+
+        var r =
+        {
+            element : element,
+            innerHTML_tts : "",
+            spanMap : {},
+            text : "",
+            lastCharIndex : undefined
+        };
+        r.element.innerHTML_original = element.innerHTML;
+
+        var t =
+        {
+            inTag : false,
+            counter : 0,
+            wordStart : -1,
+            wordEnd : -1,
+            text : '',
+            markup : '',
+            word : '',
+            html : ''
+        };
+
+        var limit = r.element.innerHTML_original.length;
+        var i = 0;
+        while (i <= limit)
+        {
+            if (t.inTag)
+            {
+                t.html += r.element.innerHTML_original[i];
+                if (r.element.innerHTML_original[i] == ">") {
+                    t.inTag = false;
+                    // if it's a block element delimiter, flush
+                    var blockCheck = t.html.match(/<\/(.*?)>$/);
+                    if (blockCheck && BLOCK_DELIMITERS.indexOf(blockCheck[1]) > -1)
+                    {
+                        flush(t, r);
+                        t.text += ' ';
+                    }
+                }
+            }
+            else
+            {
+                if (i == limit || r.element.innerHTML_original[i].match(/\s/))
+                {
+                    flush(t, r);
+
+                    // append the captured whitespace
+                    if (i < limit)
+                    {
+                        t.text += r.element.innerHTML_original[i];
+                        t.markup += r.element.innerHTML_original[i];
+                    }
+                }
+                else if (BOUNDARY_PUNCTUATION.indexOf(r.element.innerHTML_original[i]) > -1)
+                {
+                    flush(t, r);
+
+                    t.wordStart = t.html.length;
+                    t.wordEnd = t.html.length + 1;
+                    t.word += r.element.innerHTML_original[i];
+                    t.html += r.element.innerHTML_original[i];
+
+                    flush(t, r);
+                }
+                else if (r.element.innerHTML_original[i] == "<")
+                {
+                    t.inTag = true;
+                    t.html += r.element.innerHTML_original[i];
+                }
+                else
+                {
+                    if (t.word.length == 0)
+                    {
+                        t.wordStart = t.html.length;
+                    }
+                    t.wordEnd = t.html.length + 1;
+                    t.word += r.element.innerHTML_original[i];
+                    t.html += r.element.innerHTML_original[i];
+                }
+            }
+            i++;
+        }
+//
+//console.debug(t.text);
+//        console.debug("----");
+//console.debug(t.markup);
+
+        r.text = t.text;
+        r.innerHTML_tts = t.markup;
+        r.element.innerHTML = r.innerHTML_tts;
+
+        return r;
+    };
+
+    var $ttsStyle = undefined;
+    function ensureTTSStyle($element)
+    {
+        if ($ttsStyle && $ttsStyle[0].ownerDocument === $element[0].ownerDocument)
+        {
+            return;
+        }
+
+        var style = ".tts_on{background-color:red;color:white;} .tts_off{}";
+
+        $head = $("head", $element[0].ownerDocument.documentElement);
+
+        $ttsStyle = $("<style type='text/css'> </style>").appendTo($head);
+
+        $ttsStyle.append(style);
+    }
+
+    var speakStart = function(txt, volume)
+    {
+        var tokenData = undefined;
+        var curPar = (_smilIterator && _smilIterator.currentPar) ? _smilIterator.currentPar : undefined;
+        var element = curPar ? curPar.element : undefined;
+        var cfi = curPar ? curPar.cfi : undefined;
+
+        if (!volume || volume > 0)
+        {
+            // gives the audio player some dispatcher time to raise the onPause event
+            setTimeout(function(){
+                onStatusChanged({isPlaying: true});
+            }, 80);
+            
+            _ttsIsPlaying = true;
+
+            if (TOKENIZE_TTS && element)
+            {
+                var $el = $(element);
+                ensureTTSStyle($el);
+
+
+                if (element.innerHTML_original)
+                {
+                    element.innerHTML = element.innerHTML_original;
+                    element.innerHTML_original = undefined;
+                }
+                tokenData = tokeniseTTS(element);
+            }
+        }
+
+        if (!_enableHTMLSpeech)
+        {
+            Globals.logEvent("MEDIA_OVERLAY_TTS_SPEAK", "EMIT", "media_overlay_player.js");
+            reader.emit(Globals.Events.MEDIA_OVERLAY_TTS_SPEAK, {tts: txt}); // resume if txt == undefined
+            return;
+        }
+
+        if (!txt && window.speechSynthesis.paused)
+        {
+//console.debug("TTS resume");
+            window.speechSynthesis.resume();
+
+            return;
+        }
+
+        var text = txt || _currentTTS;
+
+        if (text)
+        {
+            if (_SpeechSynthesisUtterance)
+            {
+//console.debug("_SpeechSynthesisUtterance nullify");
+
+                if (TOKENIZE_TTS)
+                {
+                    if (_SpeechSynthesisUtterance.onend)
+                    {
+                        _SpeechSynthesisUtterance.onend({forceSkipEnd: true, target: _SpeechSynthesisUtterance});
+                    }
+                    
+                    _SpeechSynthesisUtterance.tokenData = undefined;
+                    
+                    _SpeechSynthesisUtterance.onboundary = undefined;
+    //                 _SpeechSynthesisUtterance.onboundary = function(event)
+    //                 {
+    // console.debug("OLD TTS boundary");
+    //                 
+    //                         event.target.tokenData = undefined;
+    //  
+    //                 };
+                }
+
+                _SpeechSynthesisUtterance.onend = undefined;
+//                 _SpeechSynthesisUtterance.onend = function(event)
+//                 {
+// console.debug("OLD TTS ended");
+//                     if (TOKENIZE_TTS)
+//                     {
+//                         event.target.tokenData = undefined;
+//                     }
+//                 };
+                
+                _SpeechSynthesisUtterance.onerror = undefined;
+//                 _SpeechSynthesisUtterance.onerror = function(event)
+//                 {
+// console.debug("OLD TTS error");
+// //console.debug(event);
+//                     if (TOKENIZE_TTS)
+//                     {
+//                         event.target.tokenData = undefined;
+//                     }
+//                 };
+
+                _SpeechSynthesisUtterance = undefined;
+            }
+//
+//            if (window.speechSynthesis.pending ||
+//                window.speechSynthesis.speaking)
+//            {
+//                _skipTTSEndEvent = true;
+//            }
+            
+console.debug("paused: "+window.speechSynthesis.paused);
+console.debug("speaking: "+window.speechSynthesis.speaking);
+console.debug("pending: "+window.speechSynthesis.pending);
+
+//             if (!window.speechSynthesis.paused)
+//             {
+// console.debug("TTS pause before speak");
+//                 window.speechSynthesis.pause();
+//             }
+            
+            function cancelTTS(first)
+            {
+                if (first || window.speechSynthesis.pending)
+                {
+    console.debug("TTS cancel before speak");
+                    window.speechSynthesis.cancel();
+
+                    setTimeout(function()
+                    {
+                        cancelTTS(false);
+                    }, 5);
+                }
+                else
+                {
+                    updateTTS();
+                }
+            }
+            cancelTTS(true);
+            
+            function updateTTS()
+            {
+            // setTimeout(function()
+            // {
+
+                _SpeechSynthesisUtterance = new SpeechSynthesisUtterance();
+
+                if (TOKENIZE_TTS && tokenData)
+                {
+                    _SpeechSynthesisUtterance.tokenData = tokenData;
+                
+                    _SpeechSynthesisUtterance.onboundary = function(event)
+                    //_SpeechSynthesisUtterance.addEventListener("boundary", function(event)
+                    {
+                        if (!_SpeechSynthesisUtterance)
+                        {
+                            return;
+                        }
+
+        console.debug("TTS boundary: " + event.name + " / " + event.charIndex);
+        //console.debug(event);
+
+                        var tokenised = event.target.tokenData;
+                        if (!tokenised || !tokenised.spanMap.hasOwnProperty(event.charIndex))
+                        {
+                            return;
+                        }
+
+                        if (false && tokenised.lastCharIndex)
+                        {
+        //console.debug("TTS lastCharIndex: " + tokenised.lastCharIndex);
+                            var id = 'tts_' + tokenised.spanMap[tokenised.lastCharIndex];
+        //console.debug("TTS lastCharIndex ID: " + id);
+                            var spanPrevious = tokenised.element.querySelector("#"+id);
+                            if (spanPrevious)
+                            {
+        //console.debug("TTS OFF");
+                                spanPrevious.className = 'tts_off';
+                                //spanPrevious.style.backgroundColor = "white";
+                            }
+                        }
+                        else
+                        {
+                            [].forEach.call(
+                                tokenised.element.querySelectorAll(".tts_on"),
+                                function(el)
+                                {
+        console.debug("TTS OFF " + el.id);
+                                    el.className = 'tts_off';
+                                }
+                            );
+                        }
+
+                        var id = 'tts_' + tokenised.spanMap[event.charIndex];
+        console.debug("TTS charIndex ID: " + id);
+                        var spanNew = tokenised.element.querySelector("#"+id);
+                        if (spanNew)
+                        {
+        console.debug("TTS ON");
+                            spanNew.className = 'tts_on';
+                            //spanNew.style.backgroundColor = "transparent";
+                        }
+
+                        tokenised.lastCharIndex = event.charIndex;
+                    };
+                }
+
+                _SpeechSynthesisUtterance.onend = function(event)
+                //_SpeechSynthesisUtterance.addEventListener("end", function(event)
+                {
+                    if (!_SpeechSynthesisUtterance)
+                    {
+                        //_skipTTSEndEvent = false;
+                        return;
+                    }
+    //
+    //                if (_skipTTSEndEvent)
+    //                {
+    //                    _skipTTSEndEvent = false;
+    //                    return;
+    //                }
+
+console.debug("TTS ended");
+    //console.debug(event);
+
+                    if (TOKENIZE_TTS)
+                    {
+                        var tokenised = event.target.tokenData;
+
+                        var doEnd = !event.forceSkipEnd && (_SpeechSynthesisUtterance === event.target) && (!tokenised || tokenised.element.innerHTML_original);
+
+                        if (tokenised)
+                        {
+                            if (tokenised.element.innerHTML_original)
+                            {
+                                tokenised.element.innerHTML = tokenised.element.innerHTML_original;
+                            }
+                            else
+                            {
+                                [].forEach.call(
+                                    tokenised.element.querySelectorAll(".tts_on"),
+                                    function(el)
+                                    {
+        console.debug("TTS OFF (end)" + el.id);
+                                        el.className = 'tts_off';
+                                    }
+                                );
+                            }
+
+                            tokenised.element.innerHTML_original = undefined;
+                        }
+
+
+                        if (doEnd)
+                        {
+                            self.onTTSEnd();
+                        }
+                        else
+                        {
+    console.debug("TTS end SKIPPED");
+                        }
+                    }
+                    else
+                    {
+                        self.onTTSEnd();
+                    }
+                };
+
+                _SpeechSynthesisUtterance.onerror = function(event)
+                //_SpeechSynthesisUtterance.addEventListener("error", function(event)
+                {
+                    if (!_SpeechSynthesisUtterance)
+                    {
+                        return;
+                    }
+
+console.error("TTS error");
+//console.debug(event);
+console.debug(_SpeechSynthesisUtterance.text);
+console.debug(window.speechSynthesis.paused);
+console.debug(window.speechSynthesis.pending);
+console.debug(window.speechSynthesis.speaking);
+
+                    if (TOKENIZE_TTS)
+                    {
+                        var tokenised = event.target.tokenData;
+                        if (tokenised)
+                        {
+                            if (tokenised.element.innerHTML_original)
+                            {
+                                tokenised.element.innerHTML = tokenised.element.innerHTML_original;
+                            }
+                            else
+                            {
+                                [].forEach.call(
+                                    tokenised.element.ownerDocument.querySelectorAll(".tts_on"),
+                                    function(el)
+                                    {
+        console.debug("TTS OFF (error)" + el.id);
+                                        el.className = 'tts_off';
+                                    }
+                                );
+                            }
+                            tokenised.element.innerHTML_original = undefined;
+                        }
+                    }
+                };
+
+                var vol = volume || _audioPlayer.getVolume();
+                _SpeechSynthesisUtterance.volume = vol;
+
+                _SpeechSynthesisUtterance.rate = _audioPlayer.getRate();
+                _SpeechSynthesisUtterance.pitch = 1;
+
+                //_SpeechSynthesisUtterance.lang = "en-US";
+
+                _SpeechSynthesisUtterance.text = text;
+
+    //console.debug("TTS speak: " + text);
+                window.speechSynthesis.speak(_SpeechSynthesisUtterance);
+
+                if (window.speechSynthesis.paused)
+                {
+console.debug("TTS resume");
+                    window.speechSynthesis.resume();
+                }
+
+           //}, 5);
+           }
+        }
+    };
+
+    var speakStop = function()
+    {
+        var wasPlaying = _ttsIsPlaying;
+
+        if (wasPlaying) {
+            onStatusChanged({isPlaying: false});
+        }
+        
+        _ttsIsPlaying = false;
+
+        if (!_enableHTMLSpeech)
+        {
+            if (wasPlaying) {
+                Globals.logEvent("MEDIA_OVERLAY_TTS_STOP", "EMIT", "media_overlay_player.js");
+                reader.emit(Globals.Events.MEDIA_OVERLAY_TTS_STOP, undefined);
+            }
+            return;
+        }
+
+//console.debug("TTS pause");
+        window.speechSynthesis.pause();
+    };
+
+    var _timerTick = undefined;
+
+    function onPlay() {
+        onPause();
+
+        var func = function() {
+
+            if (!_smilIterator || !_smilIterator.currentPar)
+            {
+                return;
+            }
+
+            var smil = _smilIterator.smil; //currentPar.getSmil();
+            if (!smil.mo)
+            {
+                return;
+            }
+
+//            if (!_smilIterator.currentPar.audio.src)
+//            {
+//                return;
+//            }
+
+            var playPosition = audioCurrentTime - _smilIterator.currentPar.audio.clipBegin;
+            if (playPosition <= 0)
+            {
+                return;
+            }
+
+            var smilIndex = smil.mo.smil_models.indexOf(smil);
+
+            var smilIterator = new SmilIterator(smil);
+            var parIndex = -1;
+            while (smilIterator.currentPar)
+            {
+                parIndex++;
+                if (smilIterator.currentPar == _smilIterator.currentPar)
+                {
+                    break;
+                }
+                smilIterator.next();
+            }
+
+            onStatusChanged({playPosition: playPosition, smilIndex: smilIndex, parIndex: parIndex});
+        };
+
+        setTimeout(func, 500);
+
+        _timerTick = setInterval(func, 1500);
+    }
+
+    function onPause() {
+
+        audioCurrentTime = 0.0;
+        if (_timerTick !== undefined)
+        {
+            clearInterval(_timerTick);
+        }
+        _timerTick = undefined;
+    }
+
+
+    this.onEmbeddedEnd = function()
+    {
+        audioCurrentTime = 0.0;
+
+        _embeddedIsPlaying = false;
+        //_currentEmbedded = undefined;
+
+        if (!_smilIterator || !_smilIterator.currentPar)
+        {
+            self.reset();
+            return;
+        }
+
+        onAudioPositionChanged(_smilIterator.currentPar.audio.clipEnd + 0.1, 3);
+    };
+
+    this.onTTSEnd = function()
+    {
+        audioCurrentTime = 0.0;
+
+        _ttsIsPlaying = false;
+        //_currentTTS = undefined;
+
+//        if(_skipTTSEnded)
+//        {
+//            _skipTTSEnded = false;
+//            return;
+//        }
+
+        if (!_smilIterator || !_smilIterator.currentPar)
+        {
+            self.reset();
+            return;
+        }
+
+        onAudioPositionChanged(_smilIterator.currentPar.audio.clipEnd + 0.1, 4);
+    };
+
+    function onAudioEnded() {
+
+        onPause();
+//
+//        if (_letPlay)
+//        {
+//            return;
+//        }
+
+        if(_skipAudioEnded)
+        {
+            _skipAudioEnded = false;
+            return;
+        }
+
+        if (!_smilIterator || !_smilIterator.currentPar)
+        {
+            self.reset();
+            return;
+        }
+
+        onAudioPositionChanged(_smilIterator.currentPar.audio.clipEnd + 0.1, 5);
+    }
+
+    function highlightCurrentElement() {
+
+        if(!_smilIterator) {
+            return;
+        }
+
+        if(!_smilIterator.currentPar) {
+            return;
+        }
+
+        if (_smilIterator.currentPar.text.srcFragmentId && _smilIterator.currentPar.text.srcFragmentId.length > 0)
+        {
+            if (_smilIterator.currentPar.element) {
+    //console.error(_smilIterator.currentPar.element.id + ": " + _smilIterator.currentPar.audio.clipBegin + " / " + _smilIterator.currentPar.audio.clipEnd);
+
+                if (!_elementHighlighter.isElementHighlighted(_smilIterator.currentPar))
+                {
+                    _elementHighlighter.highlightElement(_smilIterator.currentPar, _package.media_overlay.activeClass, _package.media_overlay.playbackActiveClass);
+
+                    if (!_wasPlayingScrolling)
+                    {
+                        reader.insureElementVisibility(_smilIterator.currentPar.getSmil().spineItemId, _smilIterator.currentPar.element, self);
+                    }
+                }
+            
+                return;
+            
+            } else if (_smilIterator.currentPar.cfi) {
+
+                if (!_elementHighlighter.isCfiHighlighted(_smilIterator.currentPar))
+                {
+                    _elementHighlighter.highlightCfi(_smilIterator.currentPar, _package.media_overlay.activeClass, _package.media_overlay.playbackActiveClass);
+
+                    if (!_wasPlayingScrolling)
+                    {
+                        reader.insureElementVisibility(_smilIterator.currentPar.getSmil().spineItemId, _smilIterator.currentPar.cfi.cfiTextParent, self);
+                    }
+                }
+                
+                return;
+            }
+        }
+        
+        // body (not FRAG ID)
+        if (_smilIterator.currentPar.element) {
+            return;
+        }
+        
+        //else: single SMIL per multiple XHTML? ==> open new spine item
+        
+        /*
+        var textRelativeRef = Globals.Helpers.ResolveContentRef(_smilIterator.currentPar.text.srcFile, _smilIterator.smil.href);
+console.debug("textRelativeRef: " + textRelativeRef);
+        if (textRelativeRef)
+        {
+            var textAbsoluteRef = _package.resolveRelativeUrl(textRelativeRef);
+console.debug("textAbsoluteRef: " + textAbsoluteRef);
+        }
+        */
+
+        var src = _smilIterator.currentPar.text.src;
+        var base = _smilIterator.smil.href;
+
+        //self.pause();
+        //self.reset();
+        _smilIterator = undefined;
+
+        reader.openContentUrl(src, base, self);
+    }
+
+    this.escape = function() {
+        
+        if(!_smilIterator || !_smilIterator.currentPar) {
+
+            this.toggleMediaOverlay();
+            return;
+        }
+
+        if(!self.isPlaying())
+        {
+            //playCurrentPar();
+            self.play();
+            return;
+        }
+
+        if(_settings.mediaOverlaysEscapeEscapables)
+        {
+            var parent = _smilIterator.currentPar;
+            while (parent)
+            {
+                if (parent.isEscapable && parent.isEscapable(_settings.mediaOverlaysEscapables))
+                {
+                    do
+                    {
+                        _smilIterator.next();
+                    } while (_smilIterator.currentPar && _smilIterator.currentPar.hasAncestor(parent));
+
+                    if (!_smilIterator.currentPar)
+                    {
+                        nextSmil(true);
+                        return;
+                    }
+
+                    //_smilIterator.goToPar(_smilIterator.currentPar);
+                    playCurrentPar();
+                    return;
+                }
+
+                parent = parent.parent;
+            }
+        }
+
+        this.nextMediaOverlay(true);
+    };
+
+
+    this.playUserPar = function(par) {
+        if(self.isPlaying())
+        {
+            self.pause();
+        }
+
+        if (par.element || par.cfi && par.cfi.cfiTextParent)
+        {
+            var seq = _elementHighlighter.adjustParToSeqSyncGranularity(par);
+            if (seq && seq !== par)
+            {
+                var findFirstPar = function(smilNode)
+                {
+                    if (smilNode.nodeType && smilNode.nodeType === "par") return smilNode;
+                    
+                    if (!smilNode.children || smilNode.children.length <= 0) return undefined;
+                    
+                    for (var i = 0; i < smilNode.children.length; i++)
+                    {
+                        var child = smilNode.children[i];
+                        var inPar = findFirstPar(child);
+                        if (inPar) return inPar;
+                    }
+                };
+                var firstPar = findFirstPar(seq);
+                if (firstPar) par = firstPar;
+            }
+        }
+
+        playPar(par);
+    };
+
+    this.resetTTS = function() {
+        _currentTTS = undefined;
+//        _skipTTSEnded = false;
+        speakStop();
+    };
+
+    this.resetBlankPage = function() {
+        var wasPlaying = false;
+        
+        if (_blankPagePlayer)
+        {
+            wasPlaying = true;
+            
+            var timer = _blankPagePlayer;
+            _blankPagePlayer = undefined;
+            clearTimeout(timer);
+        }
+        _blankPagePlayer = undefined;
+
+        if (wasPlaying) {
+            onStatusChanged({isPlaying: false});
+        }
+    };
+
+    this.resetEmbedded = function() {
+        var wasPlaying = _embeddedIsPlaying;
+        
+        if (_currentEmbedded)
+        {
+            $(_currentEmbedded).off("ended", self.onEmbeddedEnd);
+            _currentEmbedded.pause();
+        }
+        _currentEmbedded = undefined;
+        
+        if (wasPlaying) {
+            onStatusChanged({isPlaying: false});
+        }
+        _embeddedIsPlaying = false;
+    };
+
+    this.reset = function() {
+        clipBeginOffset = 0.0;
+        _audioPlayer.reset();
+        self.resetTTS();
+        self.resetEmbedded();
+        self.resetBlankPage();
+        _elementHighlighter.reset();
+        _smilIterator = undefined;
+        _skipAudioEnded = false;
+    };
+
+    this.play = function ()
+    {
+        if (_smilIterator && _smilIterator.smil && !_smilIterator.smil.id)
+        {
+            initBlankPagePlayer();
+            return;
+        }
+        else if (_currentEmbedded)
+        {
+            _embeddedIsPlaying = true;
+            _currentEmbedded.play();
+            onStatusChanged({isPlaying: true});
+        }
+        else if (_currentTTS)
+        {
+            speakStart(undefined);
+        }
+        else
+        {
+            if (!_audioPlayer.play())
+            {
+                console.log("Audio player was dead, reactivating...");
+
+                this.reset();
+                this.toggleMediaOverlay();
+                return;
+            }
+        }
+
+        highlightCurrentElement();
+    }
+
+    this.pause = function()
+    {
+        _wasPlayingScrolling = false;
+        
+        if (_blankPagePlayer)
+        {
+            this.resetBlankPage();
+        }
+        else if (_embeddedIsPlaying)
+        {
+            _embeddedIsPlaying = false;
+            if (_currentEmbedded)
+            {
+                _currentEmbedded.pause();
+            }
+            onStatusChanged({isPlaying: false});
+        }
+        else if (_ttsIsPlaying)
+        {
+            speakStop();
+        }
+        else
+        {
+            _audioPlayer.pause();
+        }
+
+        _elementHighlighter.reset();
+    }
+
+    this.isMediaOverlayAvailable = function() {
+
+//        console.debug("isMediaOverlayAvailable()");
+//
+//        var now1 = window.performance && window.performance.now ? window.performance.now() : Date.now();
+//
+//        if (console.time)
+//        {
+//            console.time("MO");
+//        }
+
+        var visibleMediaElement = reader.getFirstVisibleMediaOverlayElement();
+
+//        if (console.timeEnd)
+//        {
+//            console.timeEnd("MO");
+//        }
+//
+//        var now2 = window.performance && window.performance.now ? window.performance.now() : Date.now();
+//
+//        console.debug(now2 - now1);
+
+        return typeof visibleMediaElement !== "undefined";
+    };
+
+    this.nextOrPreviousMediaOverlay = function(previous) {
+        if(self.isPlaying())
+        {
+            self.pause();
+        }
+        else
+        {
+            if (_smilIterator && _smilIterator.currentPar)
+            {
+                //playCurrentPar();
+                self.play();
+                return;
+            }
+        }
+
+        if(!_smilIterator)
+        {
+            this.toggleMediaOverlay();
+            return;
+        }
+
+        var position = previous ? DIRECTION_MARK - 1 : _smilIterator.currentPar.audio.clipEnd + 0.1;
+
+        onAudioPositionChanged(position, 6);
+        // setTimeout(function(){
+        //     
+        // }, 1);
+
+        //self.play();
+        //playCurrentPar();
+    };
+
+    this.nextMediaOverlay = function() {
+        this.nextOrPreviousMediaOverlay(false);
+    };
+
+    this.previousMediaOverlay = function() {
+        this.nextOrPreviousMediaOverlay(true);
+    };
+
+    /*
+    this.setMediaOverlaySkippables = function(items) {
+
+    };
+
+    this.setMediaOverlayEscapables = function(items) {
+
+    };
+    */
+
+    this.mediaOverlaysOpenContentUrl = function(contentRefUrl, sourceFileHref, offset)
+    {
+        clipBeginOffset = offset;
+
+        //self.pause();
+        //self.reset();
+        _smilIterator = undefined;
+
+        reader.openContentUrl(contentRefUrl, sourceFileHref, self);
+
+        /*
+        if (_currentPagination && _currentPagination.isFixedLayout && _currentPagination.openPages && _currentPagination.openPages.length > 0)
+        {
+            var combinedPath = Globals.Helpers.ResolveContentRef(contentRefUrl, sourceFileHref);
+
+            var hashIndex = combinedPath.indexOf("#");
+            var hrefPart;
+            var elementId;
+            if(hashIndex >= 0) {
+                hrefPart = combinedPath.substr(0, hashIndex);
+                elementId = combinedPath.substr(hashIndex + 1);
+            }
+            else {
+                hrefPart = combinedPath;
+                elementId = undefined;
+            }
+
+            var spineItem = reader.spine.getItemByHref(hrefPart);
+            var spineItemIndex = _currentPagination.openPages[0].spineItemIndex;
+
+            //var idref = _currentPagination.openPages[0].idref;
+            //spineItem.idref === idref
+            //var currentSpineItem = reader.spine.getItemById(idref);
+            //currentSpineItem == spineItem
+            if (spineItem.index === spineItemIndex)
+            {
+                self.onPageChanged({
+                    paginationInfo: _currentPagination,
+                    elementId: elementId,
+                    initiator: self
+                });
+            }
+        }
+        */
+    };
+
+    this.toggleMediaOverlay = function() {
+        if(self.isPlaying()) {
+            self.pause();
+            return;
+        }
+
+        //if we have position to continue from (reset wasn't called)
+        if(_smilIterator) {
+            self.play();
+            return;
+        }
+
+        this.toggleMediaOverlayRefresh(undefined);
+    };
+
+    var _wasPlayingScrolling = false;
+
+    this.toggleMediaOverlayRefresh = function(paginationData)
+    {
+//console.debug("moData SMIL: " + moData.par.getSmil().href + " // " + + moData.par.getSmil().id);
+
+        var spineItems = reader.getLoadedSpineItems();
+
+        //paginationData.isRightToLeft
+        var rtl = reader.spine().isRightToLeft();
+
+        //paginationData.spineItemCount
+        //paginationData.openPages
+        //{spineItemPageIndex: , spineItemPageCount: , idref: , spineItemIndex: }
+
+        var playingPar = undefined;
+        var wasPlaying = self.isPlaying();
+        if(wasPlaying && _smilIterator)
+        {
+            var isScrollView = paginationData.initiator && paginationData.initiator instanceof ScrollView;
+            if (isScrollView && _settings.mediaOverlaysPreservePlaybackWhenScroll)
+            {
+                _wasPlayingScrolling = true;
+                return;
+            }
+            
+            playingPar = _smilIterator.currentPar;
+            self.pause();
+        }
+        
+        _wasPlayingScrolling = false;
+
+        //paginationData && paginationData.elementId
+        //paginationData.initiator != self
+
+        //_package.isFixedLayout()
+
+        var element = (paginationData && paginationData.elementIdResolved) ? paginationData.elementIdResolved : undefined;
+
+        var id = (paginationData && paginationData.elementId) ? paginationData.elementId : undefined;
+
+        if (!element)
+        {
+            if (id)
+            {
+                console.error("[WARN] id did not resolve to element?");
+            }
+            
+            for(var i = (rtl ? (spineItems.length - 1) : 0); (rtl && i >=0) || (!rtl && i < spineItems.length); i += (rtl ? -1: 1))
+            {
+                var spineItem = spineItems[i];
+                if (!spineItem)
+                {
+                    console.error("spineItems[i] is undefined??");
+                    continue;
+                }
+            
+                if (paginationData && paginationData.spineItem && paginationData.spineItem != spineItem)
+                {
+                    continue;
+                }
+
+                if (id)
+                {
+                    var $element = reader.getElementById(spineItem.idref, id);
+                    //var $element = reader.getElement(spineItem.idref, "#" + ReadiumSDK.Helpers.escapeJQuerySelector(id));
+                    element = ($element && $element.length > 0) ? $element[0] : undefined;
+                }
+                else if (spineItem.isFixedLayout())
+                {
+                    if (paginationData && paginationData.paginationInfo && paginationData.paginationInfo.openPages)
+                    {
+                        // openPages are sorted by spineItem index, so the smallest index on display is the one we need to play (page on the left in LTR, or page on the right in RTL progression)
+                        var index = 0; // !paginationData.paginationInfo.isRightToLeft ? 0 : paginationData.paginationInfo.openPages.length - 1;
+                    
+                        if (paginationData.paginationInfo.openPages[index] && paginationData.paginationInfo.openPages[index].idref && paginationData.paginationInfo.openPages[index].idref === spineItem.idref)
+                        {
+                            var $element = reader.getElement(spineItem.idref, "body");
+                            element = ($element && $element.length > 0) ? $element[0] : undefined;
+                        }
+                    }
+                }
+
+                if (element)
+                {
+                    break;
+                }
+            }
+        }
+
+        if (!element)
+        {
+            element = reader.getFirstVisibleMediaOverlayElement();
+        }
+
+        if (!element)
+        {
+            self.reset();
+            return;
+        }
+
+        var moData = $(element).data("mediaOverlayData");
+
+        if (!moData)
+        {
+            var foundMe = false;
+            var depthFirstTraversal = function(elements)
+            {
+                if (!elements)
+                {
+                    return false;
+                }
+
+                for (var i = 0; i < elements.length; i++)
+                {
+                    if (element === elements[i]) foundMe = true;
+                    
+                    if (foundMe)
+                    {
+                        var d = $(elements[i]).data("mediaOverlayData");
+                        if (d)
+                        {
+                            moData = d;
+                            return true;
+                        }
+                    }
+
+                    var found = depthFirstTraversal(elements[i].children);
+                    if (found)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            var root = element;
+            while (root && root.nodeName.toLowerCase() !== "body")
+            {
+                root = root.parentNode;
+            }
+
+            if (!root)
+            {
+                self.reset();
+                return;
+            }
+
+            depthFirstTraversal([root]);
+        }
+
+        if (!moData)
+        {
+            self.reset();
+            return;
+        }
+
+        var zPar = moData.par ? moData.par : moData.pars[0];
+        var parSmil = zPar.getSmil();
+        if(!_smilIterator || _smilIterator.smil != parSmil)
+        {
+            _smilIterator = new SmilIterator(parSmil);
+        }
+        else
+        {
+            _smilIterator.reset();
+        }
+        
+        _smilIterator.goToPar(zPar);
+        
+        if (!_smilIterator.currentPar && id)
+        {
+            _smilIterator.reset();
+            _smilIterator.findTextId(id);
+        }
+        
+        if (!_smilIterator.currentPar)
+        {
+            self.reset();
+            return;
+        }
+
+        if (wasPlaying && playingPar && playingPar === _smilIterator.currentPar)
+        {
+            self.play();
+        }
+        else
+        {
+            playCurrentPar();
+            //playPar(zPar);
+        }
+    };
+
+    this.isPlayingCfi = function()
+    {
+        return _smilIterator && _smilIterator.currentPar && _smilIterator.currentPar.cfi;
+    };
+    
+    var _wasPausedBecauseNoAutoNextSmil = false;
+    var _autoNextSmil = true;
+    this.setAutomaticNextSmil = function(autoNext)
+    {
+        _autoNextSmil = autoNext;
+    };
+};
+    return MediaOverlayPlayer;
+});
+
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/spine',["./spine_item", "../helpers", "URIjs"], function(SpineItem, Helpers, URI) {
+/**
+ *  Wrapper of the spine object received from hosting application
+ *
+ *  @class  Models.Spine
+ */
+
+var Spine = function(epubPackage, spineDTO) {
+
+    var self = this;
+
+    /*
+     * Collection of spine items
+     * @property items
+     * @type {Array}
+     */
+    this.items = [];
+
+    /*
+     * Page progression direction ltr|rtl|default
+     * @property direction
+     * @type {string}
+     */
+    this.direction = "ltr";
+
+    /*
+     * @property package
+     * @type {Models.Package}
+     *
+     */
+    this.package = epubPackage;
+
+    var _handleLinear = false;
+
+    this.handleLinear = function(handleLinear) {
+        _handleLinear = handleLinear;
+    };
+
+    function isValidLinearItem(item) {
+        return !_handleLinear || item.linear !== "no";
+    }
+
+
+    this.isValidLinearItem = function(index) {
+        
+        if(!isValidIndex(index)) {
+            return undefined;
+        }
+
+        return isValidLinearItem(this.item(index));
+    };
+
+    this.prevItem = function(item) {
+
+        return lookForPrevValidItem(item.index - 1);
+    };
+
+    function lookForNextValidItem(ix) {
+
+        if(!isValidIndex(ix)) {
+            return undefined;
+        }
+
+        var item = self.items[ix];
+
+        if(isValidLinearItem(item)) {
+            return item;
+        }
+
+        return lookForNextValidItem(item.index + 1);
+    }
+
+    function lookForPrevValidItem(ix) {
+
+        if(!isValidIndex(ix)) {
+            return undefined;
+        }
+
+        var item = self.items[ix];
+
+        if(isValidLinearItem(item)) {
+            return item;
+        }
+
+        return lookForPrevValidItem(item.index - 1);
+    }
+
+    this.nextItem = function(item){
+
+        return lookForNextValidItem(item.index + 1);
+    };
+
+    this.getItemUrl = function(item) {
+
+        return self.package.resolveRelativeUrl(item.href);
+
+    };
+
+    function isValidIndex(index) {
+
+        return index >= 0 && index < self.items.length;
+    }
+
+    this.first = function() {
+
+        return lookForNextValidItem(0);
+    };
+
+    this.last = function() {
+
+        return lookForPrevValidItem(this.items.length - 1);
+    };
+
+    this.isFirstItem = function(item) {
+
+        return self.first() === item;
+    };
+
+    this.isLastItem = function(item) {
+
+        return self.last() === item;
+    };
+
+    this.item = function(index) {
+        
+        if (isValidIndex(index))
+            return self.items[index];
+            
+        return undefined;
+    };
+
+    this.isRightToLeft = function() {
+
+        return self.direction == "rtl";
+    };
+
+    this.isLeftToRight = function() {
+
+        return !self.isRightToLeft();
+    };
+
+    this.getItemById = function(idref) {
+
+        var length = self.items.length;
+
+        for(var i = 0; i < length; i++) {
+            if(self.items[i].idref == idref) {
+
+                return self.items[i];
+            }
+        }
+
+        return undefined;
+    };
+
+    this.getItemByHref = function(href) {
+
+        // var href1 = Helpers.ResolveContentRef(self.items[i].href, self.package.rootUrl + "/pack.opf");
+        // var href1 = self.package.resolveRelativeUrl(href);
+        //var href1 = new URI(href).absoluteTo(self.package.rootUrl).pathname();
+        //var href1 = new URI(self.package.resolveRelativeUrl(href)).relativeTo(self.package.rootUrl).pathname();
+        
+        var href1 = new URI(self.package.resolveRelativeUrl(href)).normalizePathname().pathname();
+        
+        var length = self.items.length;
+
+        for(var i = 0; i < length; i++) {
+            
+            var href2 = new URI(self.package.resolveRelativeUrl(self.items[i].href)).normalizePathname().pathname();
+            
+            //if(self.items[i].href == href) {
+            if(href1 == href2) {
+                return self.items[i];
+            }
+        }
+
+        return undefined;
+    };
+
+    function updateSpineItemsSpread() {
+
+        var len = self.items.length;
+
+        var isFirstPageInSpread = false;
+        var baseSide = self.isLeftToRight() ? SpineItem.SPREAD_LEFT : SpineItem.SPREAD_RIGHT;
+
+        for(var i = 0; i < len; i++) {
+
+            var spineItem = self.items[i];
+            if( !spineItem.page_spread) {
+
+                var spread = spineItem.isRenditionSpreadAllowed() ? (isFirstPageInSpread ? baseSide : SpineItem.alternateSpread(baseSide)) : SpineItem.SPREAD_CENTER;
+                spineItem.setSpread(spread);
+            }
+
+            isFirstPageInSpread = !spineItem.isRenditionSpreadAllowed() || spineItem.page_spread != baseSide;
+        }
+    }
+
+    if(spineDTO) {
+
+        if(spineDTO.direction) {
+            this.direction = spineDTO.direction;
+        }
+
+        var length = spineDTO.items.length;
+        for(var i = 0; i < length; i++) {
+            var item = new SpineItem(spineDTO.items[i], i, this);
+            this.items.push(item);
+        }
+
+        updateSpineItemsSpread();
+    }
+
+};
+    return Spine;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+define ('readium_shared_js/models/smil_model',["../helpers"], function(Helpers) {
+
+/**
+ *
+ * @param parent
+ * @constructor
+ */
+var Smil = {};
+
+Smil.SmilNode = function(parent) {
+
+    this.parent = parent;
+    
+    this.id = "";
+    
+    //root node is a smil model
+    this.getSmil = function() {
+
+        var node = this;
+        while(node.parent) {
+            node = node.parent;
+        }
+
+        return node;
+    };
+    
+    this.hasAncestor = function(node)
+    {
+        var parent = this.parent;
+        while(parent)
+        {
+            if (parent == node)
+            {
+                return true;
+            }
+
+            parent = parent.parent;
+        }
+
+        return false;
+    };
+};
+
+Smil.TimeContainerNode = function(parent) {
+
+    this.parent = parent;
+    
+    this.children = undefined;
+    this.index = undefined;
+    
+    this.epubtype = "";
+
+    this.isEscapable = function(userEscapables)
+    {
+        if (this.epubtype === "")
+        {
+            return false;
+        }
+
+        var smilModel = this.getSmil();
+        if (!smilModel.mo)
+        {
+            return false;
+        }
+
+        var arr = smilModel.mo.escapables;
+        if (userEscapables.length > 0)
+        {
+            arr = userEscapables;
+        }
+
+        for (var i = 0; i < arr.length; i++)
+        {
+            if (this.epubtype.indexOf(arr[i]) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    this.isSkippable = function(userSkippables)
+    {
+        if (this.epubtype === "")
+        {
+            return false;
+        }
+        
+        var smilModel = this.getSmil();
+        if (!smilModel.mo)
+        {
+            return false;
+        }
+
+        var arr = smilModel.mo.skippables;
+        if (userSkippables.length > 0)
+        {
+            arr = userSkippables;
+        }
+
+        for (var i = 0; i < arr.length; i++)
+        {
+            if (this.epubtype.indexOf(arr[i]) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    };
+};
+
+Smil.TimeContainerNode.prototype = new Smil.SmilNode();
+
+//////////////////////////
+//MediaNode
+
+Smil.MediaNode = function(parent) {
+
+    this.parent = parent;
+    
+    this.src = "";
+};
+
+Smil.MediaNode.prototype = new Smil.SmilNode();
+
+////////////////////////////
+//SeqNode
+
+Smil.SeqNode = function(parent) {
+
+    this.parent = parent;
+    
+    this.children = [];
+    this.nodeType = "seq";
+    this.textref = "";
+    
+    this.durationMilliseconds = function()
+    {
+        var smilData = this.getSmil();
+            
+        var total = 0;
+        
+        for (var i = 0; i < this.children.length; i++)
+        {
+            var container = this.children[i];
+            if (container.nodeType === "par")
+            {
+                if (!container.audio)
+                {
+                    continue;
+                }
+                if (container.text && (!container.text.manifestItemId || container.text.manifestItemId != smilData.spineItemId))
+                {
+// console.log(container.text);
+// console.log(smilData.spineItemId);
+                    continue;
+                }
+                
+                var clipDur = container.audio.clipDurationMilliseconds();
+                total += clipDur;
+            }
+            else if (container.nodeType === "seq")
+            {
+                total += container.durationMilliseconds();
+            }
+        }
+
+        return total;
+    };
+    
+    this.clipOffset = function(offset, par)
+    {
+        var smilData = this.getSmil();
+        
+        for (var i = 0; i < this.children.length; i++)
+        {
+            var container = this.children[i];
+            if (container.nodeType === "par")
+            {
+                if (container == par)
+                {
+                    return true;
+                }
+
+                if (!container.audio)
+                {
+                    continue;
+                }
+
+                if (container.text && (!container.text.manifestItemId || container.text.manifestItemId != smilData.spineItemId))
+                {
+                    continue;
+                }
+
+                var clipDur = container.audio.clipDurationMilliseconds();
+                offset.offset += clipDur;
+            }
+            else if (container.nodeType === "seq")
+            {
+                var found = container.clipOffset(offset, par);
+                if (found)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+
+    this.parallelAt = function(timeMilliseconds)
+    {
+        var smilData = this.getSmil();
+        
+        var offset = 0;
+
+        for (var i = 0; i < this.children.length; i++)
+        {
+            var timeAdjusted = timeMilliseconds - offset;
+
+            var container = this.children[i];
+            
+            if (container.nodeType === "par")
+            {
+                if (!container.audio)
+                {
+                    continue;
+                }
+
+                if (container.text && (!container.text.manifestItemId || container.text.manifestItemId != smilData.spineItemId))
+                {
+                    continue;
+                }
+
+                var clipDur = container.audio.clipDurationMilliseconds();
+
+                if (clipDur > 0 && timeAdjusted <= clipDur)
+                {
+                    return container;
+                }
+
+                offset += clipDur;
+            }
+            else if (container.nodeType === "seq")
+            {
+                var para = container.parallelAt(timeAdjusted);
+                if (para)
+                {
+                    return para;
+                }
+
+                offset += container.durationMilliseconds();
+            }
+        }
+
+        return undefined;
+    };
+
+    this.nthParallel = function(index, count)
+    {
+        for (var i = 0; i < this.children.length; i++)
+        {
+            var container = this.children[i];
+            
+            if (container.nodeType === "par")
+            {
+                count.count++;
+
+                if (count.count == index)
+                {
+                    return container;
+                }
+            }
+            else if (container.nodeType === "seq")
+            {
+                var para = container.nthParallel(index, count);
+                if (para)
+                {
+                    return para;
+                }
+            }
+        }
+
+        return undefined;
+    };
+    
+};
+
+Smil.SeqNode.prototype = new Smil.TimeContainerNode();
+
+//////////////////////////
+//ParNode
+
+Smil.ParNode = function(parent) {
+
+    this.parent = parent;
+    
+    this.children = [];
+    this.nodeType = "par";
+    this.text = undefined;
+    this.audio = undefined;
+    this.element = undefined;
+    
+
+    this.getFirstSeqAncestorWithEpubType = function(epubtype, includeSelf) {
+        if (!epubtype) return undefined;
+        
+        var parent = includeSelf ? this : this.parent;
+        while (parent)
+        {
+            if (parent.epubtype && parent.epubtype.indexOf(epubtype) >= 0)
+            {
+                return parent; // assert(parent.nodeType === "seq")
+            }
+            
+            parent = parent.parent;
+        }
+        
+        return undefined;
+    };
+};
+
+Smil.ParNode.prototype = new Smil.TimeContainerNode();
+
+//////////////////////////
+//TextNode
+
+Smil.TextNode = function(parent) {
+
+    this.parent = parent;
+
+    this.nodeType = "text";
+    this.srcFile = "";
+    this.srcFragmentId = "";
+    
+    
+    this.manifestItemId = undefined;
+    this.updateMediaManifestItemId = function()
+    {
+        var smilData = this.getSmil();
+        
+        if (!smilData.href || !smilData.href.length)
+        {
+            return; // Blank MO page placeholder, no real SMIL
+        }
+        
+        // var srcParts = item.src.split('#');
+//         item.srcFile = srcParts[0];
+//         item.srcFragmentId = (srcParts.length === 2) ? srcParts[1] : "";
+        
+        var src = this.srcFile ? this.srcFile : this.src;
+// console.log("src: " + src);
+// console.log("smilData.href: " + smilData.href);
+        var ref = Helpers.ResolveContentRef(src, smilData.href);
+//console.log("ref: " + ref);
+        var full = smilData.mo.package.resolveRelativeUrlMO(ref);
+// console.log("full: " + full);
+// console.log("---");
+        for (var j = 0; j < smilData.mo.package.spine.items.length; j++)
+        {
+            var item = smilData.mo.package.spine.items[j];
+//console.log("item.href: " + item.href);
+            var url = smilData.mo.package.resolveRelativeUrl(item.href);
+//console.log("url: " + url);
+            if (url === full)
+            {
+//console.error("FOUND: " + item.idref);
+                this.manifestItemId = item.idref;
+                return;
+            }
+        }
+        
+        console.error("Cannot set the Media ManifestItemId? " + this.src + " && " + smilData.href);
+        
+//        throw "BREAK";
+    };
+    
+};
+
+Smil.TextNode.prototype = new Smil.MediaNode();
+
+///////////////////////////
+//AudioNode
+
+Smil.AudioNode = function(parent) {
+
+    this.parent = parent;
+
+    this.nodeType = "audio";
+
+    this.clipBegin = 0;
+
+    this.MAX = 1234567890.1; //Number.MAX_VALUE - 0.1; //Infinity;
+    this.clipEnd = this.MAX;
+    
+
+    this.clipDurationMilliseconds = function()
+    {
+        var _clipBeginMilliseconds = this.clipBegin * 1000;
+        var _clipEndMilliseconds = this.clipEnd * 1000;
+        
+        if (this.clipEnd >= this.MAX || _clipEndMilliseconds <= _clipBeginMilliseconds)
+        {
+            return 0;
+        }
+
+        return _clipEndMilliseconds - _clipBeginMilliseconds;
+    };  
+};
+
+Smil.AudioNode.prototype = new Smil.MediaNode();
+
+//////////////////////////////
+//SmilModel
+
+var SmilModel = function() {
+
+    this.parent = undefined;
+    
+    
+    
+    this.children = []; //collection of seq or par smil nodes
+    this.id = undefined; //manifest item id
+    this.href = undefined; //href of the .smil source file
+    this.duration = undefined;
+    this.mo = undefined;
+    
+    this.parallelAt = function(timeMilliseconds)
+    {
+        return this.children[0].parallelAt(timeMilliseconds);
+    };
+
+    this.nthParallel = function(index)
+    {
+        var count = {count: -1};
+        return this.children[0].nthParallel(index, count);
+    };
+
+    this.clipOffset = function(par)
+    {
+        var offset = {offset: 0};
+        if (this.children[0].clipOffset(offset, par))
+        {
+            return offset.offset;
+        }
+
+        return 0;
+    };
+    
+    this.durationMilliseconds_Calculated = function()
+    {
+        return this.children[0].durationMilliseconds();
+    };
+    
+
+    var _epubtypeSyncs = [];
+    // 
+    // this.clearSyncs = function()
+    // {
+    //     _epubtypeSyncs = [];
+    // };
+
+    this.hasSync = function(epubtype)
+    {
+        for (var i = 0; i < _epubtypeSyncs.length; i++)
+        {
+            if (_epubtypeSyncs[i] === epubtype)
+            {
+//console.debug("hasSync OK: ["+epubtype+"]");
+                return true;
+            }
+        }
+        
+//console.debug("hasSync??: ["+epubtype+"] " + _epubtypeSyncs);
+        return false;
+    };
+    
+    this.addSync = function(epubtypes)
+    {
+        if (!epubtypes) return;
+        
+//console.debug("addSyncs: "+epubtypes);
+
+        var parts = epubtypes.split(' ');
+        for (var i = 0; i < parts.length; i++)
+        {
+            var epubtype = parts[i].trim();
+
+            if (epubtype.length > 0 && !this.hasSync(epubtype))
+            {
+                _epubtypeSyncs.push(epubtype);
+
+//console.debug("addSync: "+epubtype);
+            }
+        }
+    };
+    
+};
+
+SmilModel.fromSmilDTO = function(smilDTO, mo) {
+
+    if (mo.DEBUG)
+    {
+        console.debug("Media Overlay DTO import...");
+    }
+
+    var indent = 0;
+    var getIndent = function()
+    {
+        var str = "";
+        for (var i = 0; i < indent; i++)
+        {
+            str += "   ";
+        }
+        return str;
+    }
+
+    var smilModel = new SmilModel();
+    smilModel.id = smilDTO.id;
+    smilModel.spineItemId = smilDTO.spineItemId;
+    smilModel.href = smilDTO.href;
+    
+    smilModel.smilVersion = smilDTO.smilVersion;
+    
+    smilModel.duration = smilDTO.duration;
+    if (smilModel.duration && smilModel.duration.length && smilModel.duration.length > 0)
+    {
+        console.error("SMIL duration is string, parsing float... (" + smilModel.duration + ")");
+        smilModel.duration = parseFloat(smilModel.duration);
+    }
+    
+    smilModel.mo = mo; //Models.MediaOverlay
+
+    if (smilModel.mo.DEBUG)
+    {
+        console.log("JS MO smilVersion=" + smilModel.smilVersion);
+        console.log("JS MO id=" + smilModel.id);
+        console.log("JS MO spineItemId=" + smilModel.spineItemId);
+        console.log("JS MO href=" + smilModel.href);
+        console.log("JS MO duration=" + smilModel.duration);
+    }
+
+    var safeCopyProperty = function(property, from, to, isRequired) {
+
+        if((property in from))
+        { // && from[property] !== ""
+
+            if( !(property in to) ) {
+                console.debug("property " + property + " not declared in smil node " + to.nodeType);
+            }
+
+            to[property] = from[property];
+
+            if (smilModel.mo.DEBUG)
+            {
+            console.log(getIndent() + "JS MO: [" + property + "=" + to[property] + "]");
+            }
+        }
+        else if(isRequired) {
+            console.log("Required property " + property + " not found in smil node " + from.nodeType);
+        }
+    };
+
+    var createNodeFromDTO = function(nodeDTO, parent) {
+
+        var node;
+
+        if(nodeDTO.nodeType == "seq") {
+
+            if (smilModel.mo.DEBUG)
+            {
+            console.log(getIndent() + "JS MO seq");
+            }
+
+            node = new Smil.SeqNode(parent);
+
+            safeCopyProperty("textref", nodeDTO, node, ((parent && parent.parent) ? true : false));
+            safeCopyProperty("id", nodeDTO, node);
+            safeCopyProperty("epubtype", nodeDTO, node);
+
+            if (node.epubtype)
+            {
+                node.getSmil().addSync(node.epubtype);
+            }
+            
+            indent++;
+            copyChildren(nodeDTO, node);
+            indent--;
+        }
+        else if (nodeDTO.nodeType == "par") {
+
+            if (smilModel.mo.DEBUG)
+            {
+            console.log(getIndent() + "JS MO par");
+            }
+
+            node = new Smil.ParNode(parent);
+
+            safeCopyProperty("id", nodeDTO, node);
+            safeCopyProperty("epubtype", nodeDTO, node);
+
+            if (node.epubtype)
+            {
+                node.getSmil().addSync(node.epubtype);
+            }
+
+            indent++;
+            copyChildren(nodeDTO, node);
+            indent--;
+            
+            for(var i = 0, count = node.children.length; i < count; i++) {
+                var child = node.children[i];
+
+                if(child.nodeType == "text") {
+                    node.text = child;
+                }
+                else if(child.nodeType == "audio") {
+                    node.audio = child;
+                }
+                else {
+                    console.error("Unexpected smil node type: " + child.nodeType);
+                }
+            }
+
+////////////////
+var forceTTS = false; // for testing only!
+////////////////
+
+            if (forceTTS || !node.audio)
+            {
+                // synthetic speech (playback using TTS engine), or embedded media, or blank page
+                var fakeAudio = new Smil.AudioNode(node);
+
+                fakeAudio.clipBegin = 0;
+                fakeAudio.clipEnd = fakeAudio.MAX;
+                fakeAudio.src = undefined;
+
+                node.audio = fakeAudio;
+            }
+        }
+        else if (nodeDTO.nodeType == "text") {
+
+            if (smilModel.mo.DEBUG)
+            {
+            console.log(getIndent() + "JS MO text");
+            }
+
+            node = new Smil.TextNode(parent);
+
+            safeCopyProperty("src", nodeDTO, node, true);
+            safeCopyProperty("srcFile", nodeDTO, node, true);
+            safeCopyProperty("srcFragmentId", nodeDTO, node, false);
+            safeCopyProperty("id", nodeDTO, node);
+            
+            node.updateMediaManifestItemId();
+        }
+        else if (nodeDTO.nodeType == "audio") {
+
+            if (smilModel.mo.DEBUG)
+            {
+            console.log(getIndent() + "JS MO audio");
+            }
+
+            node = new Smil.AudioNode(parent);
+
+            safeCopyProperty("src", nodeDTO, node, true);
+            safeCopyProperty("id", nodeDTO, node);
+
+            safeCopyProperty("clipBegin", nodeDTO, node);
+            if (node.clipBegin && node.clipBegin.length && node.clipBegin.length > 0)
+            {
+                console.error("SMIL clipBegin is string, parsing float... (" + node.clipBegin + ")");
+                node.clipBegin = parseFloat(node.clipBegin);
+            }
+            if (node.clipBegin < 0)
+            {
+                if (smilModel.mo.DEBUG)
+                {
+                    console.log(getIndent() + "JS MO clipBegin adjusted to ZERO");
+                }
+                node.clipBegin = 0;
+            }
+
+            safeCopyProperty("clipEnd", nodeDTO, node);
+            if (node.clipEnd && node.clipEnd.length && node.clipEnd.length > 0)
+            {
+                console.error("SMIL clipEnd is string, parsing float... (" + node.clipEnd + ")");
+                node.clipEnd = parseFloat(node.clipEnd);
+            }
+            if (node.clipEnd <= node.clipBegin)
+            {
+                if (smilModel.mo.DEBUG)
+                {
+                    console.log(getIndent() + "JS MO clipEnd adjusted to MAX");
+                }
+                node.clipEnd = node.MAX;
+            }
+            
+            //node.updateMediaManifestItemId(); ONLY XHTML SPINE ITEMS 
+        }
+        else {
+            console.error("Unexpected smil node type: " + nodeDTO.nodeType);
+            return undefined;
+        }
+
+        return node;
+
+    };
+
+    var copyChildren = function(from, to) {
+
+        var count = from.children.length;
+
+        for(var i = 0; i < count; i++) {
+            var node = createNodeFromDTO(from.children[i], to);
+            node.index = i;
+            to.children.push(node);
+        }
+
+    };
+
+    copyChildren(smilDTO, smilModel);
+
+    return smilModel;
+
+};
+
+return SmilModel;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+// Modified by Daniel Weck
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/media_overlay',["./smil_model"], function(SmilModel) {
+/**
+ *
+ * @param package
+ * @constructor
+ */
+var MediaOverlay = function(package) {
+
+    this.package = package;
+    
+
+    this.parallelAt = function(timeMilliseconds)
+    {
+        var offset = 0;
+        
+        for (var i = 0; i < this.smil_models.length; i++)
+        {
+            var smilData = this.smil_models[i];
+            
+            var timeAdjusted = timeMilliseconds - offset;
+
+            var para = smilData.parallelAt(timeAdjusted);
+            if (para)
+            {
+                return para;
+            }
+
+            offset += smilData.durationMilliseconds_Calculated();
+        }
+
+        return undefined;
+    };
+    
+    this.percentToPosition = function(percent, smilData, par, milliseconds)
+    {
+        if (percent < 0.0 || percent > 100.0)
+        {
+            percent = 0.0;
+        }
+            
+        var total = this.durationMilliseconds_Calculated();
+
+        var timeMs = total * (percent / 100.0);
+
+        par.par = this.parallelAt(timeMs);
+        if (!par.par)
+        {
+            return;
+        }
+        
+        var smilDataPar = par.par.getSmil();
+        if (!smilDataPar)
+        {
+            return;
+        }
+        
+        var smilDataOffset = 0;
+        
+        for (var i = 0; i < this.smil_models.length; i++)
+        {
+            smilData.smilData = this.smil_models[i];
+            if (smilData.smilData == smilDataPar)
+            {
+                break;
+            }
+            smilDataOffset += smilData.smilData.durationMilliseconds_Calculated();
+        }
+
+        milliseconds.milliseconds = timeMs - (smilDataOffset + smilData.smilData.clipOffset(par.par));
+    };
+
+    this.durationMilliseconds_Calculated = function()
+    {
+        var total = 0;
+        
+        for (var i = 0; i < this.smil_models.length; i++)
+        {
+            var smilData = this.smil_models[i];
+
+            total += smilData.durationMilliseconds_Calculated();
+        }
+        
+        return total;
+    };
+    
+    this.smilAt = function(smilIndex)
+    {
+        if (smilIndex < 0 || smilIndex >= this.smil_models.length)
+        {
+            return undefined;
+        }
+        
+        return this.smil_models[smilIndex];
+    }
+    
+    this.positionToPercent = function(smilIndex, parIndex, milliseconds)
+    {
+// console.log(">>>>>>>>>>");
+// console.log(milliseconds);
+// console.log(smilIndex);
+// console.log(parIndex);
+// console.log("-------");
+                
+        if (smilIndex >= this.smil_models.length)
+        {
+            return -1.0;
+        }
+
+        var smilDataOffset = 0;
+        for (var i = 0; i < smilIndex; i++)
+        {
+            var sd = this.smil_models[i];
+            smilDataOffset += sd.durationMilliseconds_Calculated();
+        }
+
+//console.log(smilDataOffset);
+        
+        var smilData = this.smil_models[smilIndex];
+
+        var par = smilData.nthParallel(parIndex);
+        if (!par)
+        {
+            return -1.0;
+        }
+
+        var offset = smilDataOffset + smilData.clipOffset(par) + milliseconds;
+
+//console.log(offset);
+        
+        var total = this.durationMilliseconds_Calculated();
+
+///console.log(total);
+
+        var percent = (offset / total) * 100;
+
+//console.log("<<<<<<<<<<< " + percent);
+        
+        return percent;
+      };
+      
+    this.smil_models = [];
+
+    this.skippables = [];
+    this.escapables = [];
+
+    this.duration = undefined;
+    this.narrator = undefined;
+
+
+    this.activeClass = undefined;
+    this.playbackActiveClass = undefined;
+
+    this.DEBUG = false;
+
+
+    this.getSmilBySpineItem = function (spineItem) {
+        if (!spineItem) return undefined;
+
+        for(var i = 0, count = this.smil_models.length; i < count; i++)
+        {
+            var smil = this.smil_models[i];
+            if(smil.spineItemId === spineItem.idref) {
+                if (spineItem.media_overlay_id !== smil.id)
+                {
+                    console.error("SMIL INCORRECT ID?? " + spineItem.media_overlay_id + " /// " + smil.id);
+                }
+                return smil;
+            }
+        }
+
+        return undefined;
+    };
+
+    /*
+    this.getSmilById = function (id) {
+
+        for(var i = 0, count = this.smil_models.length; i < count; i++) {
+
+            var smil = this.smil_models[i];
+            if(smil.id === id) {
+                return smil;
+            }
+        }
+
+        return undefined;
+    };
+    */
+
+    this.getNextSmil = function(smil) {
+
+        var index = this.smil_models.indexOf(smil);
+        if(index == -1 || index == this.smil_models.length - 1) {
+            return undefined;
+        }
+
+        return this.smil_models[index + 1];
+    }
+
+    this.getPreviousSmil = function(smil) {
+
+        var index = this.smil_models.indexOf(smil);
+        if(index == -1 || index == 0) {
+            return undefined;
+        }
+
+        return this.smil_models[index - 1];
+    }
+};
+
+MediaOverlay.fromDTO = function(moDTO, pack) {
+
+    var mo = new MediaOverlay(pack);
+
+    if(!moDTO) {
+        console.debug("No Media Overlay.");
+        return mo;
+    }
+
+    // if (mo.DEBUG)
+    //     console.debug(JSON.stringify(moDTO));
+        
+    mo.duration = moDTO.duration;
+    if (mo.duration && mo.duration.length && mo.duration.length > 0)
+    {
+        console.error("SMIL total duration is string, parsing float... (" + mo.duration + ")");
+        mo.duration = parseFloat(mo.duration);
+    }
+    if (mo.DEBUG)
+        console.debug("Media Overlay Duration (TOTAL): " + mo.duration);
+
+    mo.narrator = moDTO.narrator;
+    if (mo.DEBUG)
+        console.debug("Media Overlay Narrator: " + mo.narrator);
+
+    mo.activeClass = moDTO.activeClass;
+    if (mo.DEBUG)
+        console.debug("Media Overlay Active-Class: " + mo.activeClass);
+
+    mo.playbackActiveClass = moDTO.playbackActiveClass;
+    if (mo.DEBUG)
+        console.debug("Media Overlay Playback-Active-Class: " + mo.playbackActiveClass);
+
+    var count = moDTO.smil_models.length;
+    if (mo.DEBUG)
+        console.debug("Media Overlay SMIL count: " + count);
+
+    for(var i = 0; i < count; i++) {
+        var smilModel = SmilModel.fromSmilDTO(moDTO.smil_models[i], mo);
+        mo.smil_models.push(smilModel);
+
+        if (mo.DEBUG)
+            console.debug("Media Overlay Duration (SPINE ITEM): " + smilModel.duration);
+    }
+
+    count = moDTO.skippables.length;
+    if (mo.DEBUG)
+        console.debug("Media Overlay SKIPPABLES count: " + count);
+
+    for(var i = 0; i < count; i++) {
+        mo.skippables.push(moDTO.skippables[i]);
+
+        //if (mo.DEBUG)
+        //    console.debug("Media Overlay SKIPPABLE: " + mo.skippables[i]);
+    }
+
+    count = moDTO.escapables.length;
+    if (mo.DEBUG)
+        console.debug("Media Overlay ESCAPABLES count: " + count);
+
+    for(var i = 0; i < count; i++) {
+        mo.escapables.push(moDTO.escapables[i]);
+
+        //if (mo.DEBUG)
+        //    console.debug("Media Overlay ESCAPABLE: " + mo.escapables[i]);
+    }
+
+    return mo;
+};
+
+return MediaOverlay;
+});
+
+
+
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+define('readium_shared_js/models/package_data',[],function() {
+/**
+ * This object is not instantiated directly but provided by the host application to the DOMAccess layer in the
+ * Views.ReaderView.openBook function
+ *
+ * Provided for reference only
+ *
+ * @class Models.PackageData
+ */
+var PackageData = {
+
+    /**
+     * @property rootUrl Url of the package file
+     * @type {string}
+     *
+     */
+    rootUrl: "",
+    /**
+     * @property rootUrl Url of the package file, to prefix Media Overlays SMIL audio references
+     * @type {string}
+     *
+     */
+    rootUrlMO: "",
+    /**
+     *
+     * @property rendering_layout expected values "reflowable"|rendering_layout="pre-paginated"
+     * @type {string}
+     */
+    rendering_layout: "",
+
+    spine: {
+
+        direction: "ltr",
+        items: [
+            {
+                href:"",
+                idref:"",
+                page_spread:"", //"page-spread-left"|"page-spread-right"|"page-spread-center"
+                rendering_layout:"" //"reflowable"|"pre-paginated"
+            }
+        ]
+    }
+};
+
+return PackageData;
+});
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+define('readium_shared_js/models/package',['../helpers','./spine_item','./spine','./media_overlay', './package_data', 'URIjs'], function (Helpers, SpineItem, Spine, MediaOverlay, PackageData, URI) {
+/**
+ *
+ * @class Package
+ * @constructor
+ */
+var Package = function(packageData){
+
+    var self = this;
+
+    this.spine = undefined;
+    
+    this.rootUrl = undefined;
+    this.rootUrlMO = undefined;
+    
+    this.media_overlay = undefined;
+    
+    this.rendition_viewport = undefined;
+    
+    this.rendition_flow = undefined;
+    
+    this.rendition_layout = undefined;
+
+    //TODO: unused yet!
+    this.rendition_spread = undefined;
+
+    //TODO: unused yet!
+    this.rendition_orientation = undefined;
+
+    this.resolveRelativeUrlMO = function(relativeUrl) {
+        
+        var relativeUrlUri = undefined;
+        try {
+            relativeUrlUri = new URI(relativeUrl);
+        } catch(err) {
+            console.error(err);
+            console.log(relativeUrl);
+        }
+        if (relativeUrlUri && relativeUrlUri.is("absolute")) return relativeUrl; //relativeUrlUri.scheme() == "http://", "https://", "data:", etc.
+
+
+        if(self.rootUrlMO && self.rootUrlMO.length > 0) {
+
+            var url = self.rootUrlMO;
+            
+            try {
+                //url = new URI(relativeUrl).absoluteTo(url).search('').hash('').toString();
+                url = new URI(url).search('').hash('').toString();
+            } catch(err) {
+                console.error(err);
+                console.log(url);
+            }
+            
+            if(Helpers.EndsWith(url, "/")){
+                return url + relativeUrl;
+            }
+            else {
+                return url + "/" + relativeUrl;
+            }
+        }
+
+        return self.resolveRelativeUrl(relativeUrl);
+    };
+
+    this.resolveRelativeUrl = function(relativeUrl) {
+
+        var relativeUrlUri = undefined;
+        try {
+            relativeUrlUri = new URI(relativeUrl);
+        } catch(err) {
+            console.error(err);
+            console.log(relativeUrl);
+        }
+        if (relativeUrlUri && relativeUrlUri.is("absolute")) return relativeUrl; //relativeUrlUri.scheme() == "http://", "https://", "data:", etc.
+
+        
+        if(self.rootUrl) {
+
+            var url = self.rootUrl;
+            
+            try {
+                //url = new URI(relativeUrl).absoluteTo(url).search('').hash('').toString();
+                url = new URI(url).search('').hash('').toString();
+            } catch(err) {
+                console.error(err);
+                console.log(url);
+            }
+            
+            if(Helpers.EndsWith(url, "/")){
+                return url + relativeUrl;
+            }
+            else {
+                return url + "/" + relativeUrl;
+            }
+        }
+
+        return relativeUrl;
+    };
+
+    this.isFixedLayout = function() {
+        return self.rendition_layout === SpineItem.RENDITION_LAYOUT_PREPAGINATED;
+    };
+
+    this.isReflowable = function() {
+        return !self.isFixedLayout();
+    };
+    
+
+    if(packageData) {
+        
+        this.rootUrl = packageData.rootUrl;
+        this.rootUrlMO = packageData.rootUrlMO;
+
+        this.rendition_viewport = packageData.rendition_viewport;
+
+        this.rendition_layout = packageData.rendition_layout;
+
+        this.rendition_flow = packageData.rendition_flow;
+        this.rendition_orientation = packageData.rendition_orientation;
+        this.rendition_spread = packageData.rendition_spread;
+        
+        this.spine = new Spine(this, packageData.spine);
+
+        this.media_overlay = MediaOverlay.fromDTO(packageData.media_overlay, this);
+    }
+};
+
+return Package;
+});
+
+
+/* globals define, exports, module */
+
+(function(root, definition) {
+	if (typeof define === 'function' && define.amd) {
+		// AMD. Register as an anonymous module.
+		define('FontLoader',[], definition);
+	} else if (typeof exports === 'object') {
+		// Node. Does not work with strict CommonJS, but only CommonJS-like 
+		// environments that support module.exports, like Node.
+		module.exports = definition();
+	} else {
+		// Browser globals (root is window)
+		root.FontLoader = definition();
+	}
+}(window, function() {
+	
+	var isIE = /MSIE/i.test(navigator.userAgent),
+		ieVer = null;
+	
+	// Get Internet Explorer version
+	if (isIE) {
+		var re, result;
+		re = new RegExp("MSIE ([0-9]{1,}[.0-9]{0,})");
+		result = re.exec(navigator.userAgent);
+		if (result !== null) {
+			ieVer = parseFloat(result[1]);
+		}
+	}
+
+    /**
+     * @typedef {Object} FontDescriptor
+     * @property {String} family
+     * @property {String} weight
+     * @property {String} style
+     */
+
+	/**
+	 * FontLoader detects when web fonts specified in the "fontFamiliesArray" array were loaded and rendered. Then it
+	 * notifies the specified delegate object via "fontLoaded" and "complete" methods when specific or all fonts were
+	 * loaded respectively. The use of this functions implies that the insertion of specified web fonts into the
+	 * document is done elsewhere.
+	 *
+     * The fonts parameter may be an array of strings specifying the font-families with optionally specified font
+     * variations using FVD notation or font descriptor objects of the following type:
+     * {
+     *     family: "fontFamily",
+     *     weight: 400,
+     *     style: 'normal'
+     * }
+     * Where styles may ne one of the following: normal, bold, italic or oblique. If only string is specified, the
+     * default used weight and style are 400 and 'normal' respectively.
+     *
+	 * If all the specified fonts were loaded before the timeout was reached, the "complete" delegate method will be
+     * invoked with "null" error parameter. Otherwise, if timeout was reached before all specified fonts were loaded,
+     * the "complete" method will be invoked with an error object with two fields: the "message" string and the
+     * "notLoadedFonts" array of FontDescriptor objects of all the fonts that weren't loaded.
+	 *
+	 * @param {Array.<String|FontDescriptor>} fonts   Array of font-family strings or font descriptor objects.
+	 * @param {Object}        delegate                Delegate object whose callback methods will be invoked in its own context.
+	 * @param {Function}      [delegate.complete]     Called when all fonts were loaded or the timeout was reached.
+	 * @param {Function}      [delegate.fontLoaded]   Called for each loaded font with its font-family string as its single parameter.
+	 * @param {Number}        [timeout=3000]          Timeout in milliseconds. Pass "null" to disable timeout.
+	 * @param {HTMLDocument}  [contextDocument]       The DOM tree context to use, if none provided then it will be the document.
+	 * @constructor
+	 */
+	function FontLoader(fonts, delegate, timeout, contextDocument) {
+		// Public
+		this.delegate = delegate;
+		this.timeout = (typeof timeout !== "undefined") ? timeout : 3000;
+
+		// Private
+        this._fontsArray = this._parseFonts(fonts);
+		this._testDiv = null;
+		this._testContainer = null;
+		this._adobeBlankSizeWatcher = null;
+		this._sizeWatchers = [];
+		this._timeoutId = null;
+		this._intervalId = null;
+		this._intervalDelay = 50;
+		this._numberOfLoadedFonts = 0;
+		this._numberOfFonts = this._fontsArray.length;
+		this._fontsMap = {};
+		this._finished = false;
+		this._document = contextDocument || document;
+	}
+
+	FontLoader.useAdobeBlank = !isIE || ieVer >= 11.0;
+	FontLoader.useResizeEvent = isIE && ieVer < 11.0 && typeof document.attachEvent !== "undefined";
+	FontLoader.useIntervalChecking = window.opera || (isIE && ieVer < 11.0 && !FontLoader.useResizeEvent);
+	FontLoader.referenceText = " !\"\\#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~";
+	FontLoader.referenceFontFamilies = FontLoader.useAdobeBlank ? ["AdobeBlank"] : ["serif", "cursive"];
+    FontLoader.adobeBlankFontFaceStyleId = "fontLoaderAdobeBlankFontFace";
+    FontLoader.adobeBlankReferenceSize = null;
+	FontLoader.referenceFontFamilyVariationSizes = {};
+	FontLoader.adobeBlankFontFaceRule = "@font-face{ font-family:AdobeBlank; src:url('data:font/opentype;base64,T1RUTwAKAIAAAwAgQ0ZGIM6ZbkwAAEPEAAAZM0RTSUcAAAABAABtAAAAAAhPUy8yAR6vMwAAARAAAABgY21hcDqI98oAACjEAAAa4GhlYWT+BQILAAAArAAAADZoaGVhCCID7wAAAOQAAAAkaG10eAPoAHwAAFz4AAAQBm1heHAIAVAAAAABCAAAAAZuYW1lD/tWxwAAAXAAACdScG9zdP+4ADIAAEOkAAAAIAABAAAAAQj1Snw1O18PPPUAAwPoAAAAAM2C2p8AAAAAzYLanwB8/4gDbANwAAAAAwACAAAAAAAAAAEAAANw/4gAyAPoAHwAfANsAAEAAAAAAAAAAAAAAAAAAAACAABQAAgBAAAABAAAAZAABQAAAooCWAAAAEsCigJYAAABXgAyANwAAAAAAAAAAAAAAAD3/67/+9///w/gAD8AAAAAQURCRQHAAAD//wNw/4gAyANwAHhgLwH/AAAAAAAAAAAAAAAgAAAAAAARANIAAQAAAAAAAQALAAAAAQAAAAAAAgAHAAsAAQAAAAAAAwAbABIAAQAAAAAABAALAAAAAQAAAAAABQA5AC0AAQAAAAAABgAKAGYAAwABBAkAAABuAHAAAwABBAkAAQAWAN4AAwABBAkAAgAOAPQAAwABBAkAAwA2AQIAAwABBAkABAAWAN4AAwABBAkABQByATgAAwABBAkABgAUAaoAAwABBAkACAA0Ab4AAwABBAkACwA0AfIAAwABBAkADSQSAiYAAwABBAkADgBIJjhBZG9iZSBCbGFua1JlZ3VsYXIxLjAzNTtBREJFO0Fkb2JlQmxhbms7QURPQkVWZXJzaW9uIDEuMDM1O1BTIDEuMDAzO2hvdGNvbnYgMS4wLjcwO21ha2VvdGYubGliMi41LjU5MDBBZG9iZUJsYW5rAKkAIAAyADAAMQAzACAAQQBkAG8AYgBlACAAUwB5AHMAdABlAG0AcwAgAEkAbgBjAG8AcgBwAG8AcgBhAHQAZQBkAC4AIABBAGwAbAAgAFIAaQBnAGgAdABzACAAUgBlAHMAZQByAHYAZQBkAC4AQQBkAG8AYgBlACAAQgBsAGEAbgBrAFIAZQBnAHUAbABhAHIAMQAuADAAMwA1ADsAQQBEAEIARQA7AEEAZABvAGIAZQBCAGwAYQBuAGsAOwBBAEQATwBCAEUAVgBlAHIAcwBpAG8AbgAgADEALgAwADMANQA7AFAAUwAgADEALgAwADAAMwA7AGgAbwB0AGMAbwBuAHYAIAAxAC4AMAAuADcAMAA7AG0AYQBrAGUAbwB0AGYALgBsAGkAYgAyAC4ANQAuADUAOQAwADAAQQBkAG8AYgBlAEIAbABhAG4AawBBAGQAbwBiAGUAIABTAHkAcwB0AGUAbQBzACAASQBuAGMAbwByAHAAbwByAGEAdABlAGQAaAB0AHQAcAA6AC8ALwB3AHcAdwAuAGEAZABvAGIAZQAuAGMAbwBtAC8AdAB5AHAAZQAvAEEAZABvAGIAZQAgAEIAbABhAG4AawAgAGkAcwAgAHIAZQBsAGUAYQBzAGUAZAAgAHUAbgBkAGUAcgAgAHQAaABlACAAUwBJAEwAIABPAHAAZQBuACAARgBvAG4AdAAgAEwAaQBjAGUAbgBzAGUAIAAtACAAcABsAGUAYQBzAGUAIAByAGUAYQBkACAAaQB0ACAAYwBhAHIAZQBmAHUAbABsAHkAIABhAG4AZAAgAGQAbwAgAG4AbwB0ACAAZABvAHcAbgBsAG8AYQBkACAAdABoAGUAIABmAG8AbgB0AHMAIAB1AG4AbABlAHMAcwAgAHkAbwB1ACAAYQBnAHIAZQBlACAAdABvACAAdABoAGUAIAB0AGgAZQAgAHQAZQByAG0AcwAgAG8AZgAgAHQAaABlACAAbABpAGMAZQBuAHMAZQA6AA0ACgANAAoAQwBvAHAAeQByAGkAZwBoAHQAIACpACAAMgAwADEAMwAgAEEAZABvAGIAZQAgAFMAeQBzAHQAZQBtAHMAIABJAG4AYwBvAHIAcABvAHIAYQB0AGUAZAAgACgAaAB0AHQAcAA6AC8ALwB3AHcAdwAuAGEAZABvAGIAZQAuAGMAbwBtAC8AKQAsACAAdwBpAHQAaAAgAFIAZQBzAGUAcgB2AGUAZAAgAEYAbwBuAHQAIABOAGEAbQBlACAAQQBkAG8AYgBlACAAQgBsAGEAbgBrAA0ACgANAAoAVABoAGkAcwAgAEYAbwBuAHQAIABTAG8AZgB0AHcAYQByAGUAIABpAHMAIABsAGkAYwBlAG4AcwBlAGQAIAB1AG4AZABlAHIAIAB0AGgAZQAgAFMASQBMACAATwBwAGUAbgAgAEYAbwBuAHQAIABMAGkAYwBlAG4AcwBlACwAIABWAGUAcgBzAGkAbwBuACAAMQAuADEALgANAAoADQAKAFQAaABpAHMAIABsAGkAYwBlAG4AcwBlACAAaQBzACAAYwBvAHAAaQBlAGQAIABiAGUAbABvAHcALAAgAGEAbgBkACAAaQBzACAAYQBsAHMAbwAgAGEAdgBhAGkAbABhAGIAbABlACAAdwBpAHQAaAAgAGEAIABGAEEAUQAgAGEAdAA6ACAAaAB0AHQAcAA6AC8ALwBzAGMAcgBpAHAAdABzAC4AcwBpAGwALgBvAHIAZwAvAE8ARgBMAA0ACgANAAoALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAA0ACgBTAEkATAAgAE8AUABFAE4AIABGAE8ATgBUACAATABJAEMARQBOAFMARQAgAFYAZQByAHMAaQBvAG4AIAAxAC4AMQAgAC0AIAAyADYAIABGAGUAYgByAHUAYQByAHkAIAAyADAAMAA3AA0ACgAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ALQAtAC0ADQAKAA0ACgBQAFIARQBBAE0AQgBMAEUADQAKAFQAaABlACAAZwBvAGEAbABzACAAbwBmACAAdABoAGUAIABPAHAAZQBuACAARgBvAG4AdAAgAEwAaQBjAGUAbgBzAGUAIAAoAE8ARgBMACkAIABhAHIAZQAgAHQAbwAgAHMAdABpAG0AdQBsAGEAdABlACAAdwBvAHIAbABkAHcAaQBkAGUAIABkAGUAdgBlAGwAbwBwAG0AZQBuAHQAIABvAGYAIABjAG8AbABsAGEAYgBvAHIAYQB0AGkAdgBlACAAZgBvAG4AdAAgAHAAcgBvAGoAZQBjAHQAcwAsACAAdABvACAAcwB1AHAAcABvAHIAdAAgAHQAaABlACAAZgBvAG4AdAAgAGMAcgBlAGEAdABpAG8AbgAgAGUAZgBmAG8AcgB0AHMAIABvAGYAIABhAGMAYQBkAGUAbQBpAGMAIABhAG4AZAAgAGwAaQBuAGcAdQBpAHMAdABpAGMAIABjAG8AbQBtAHUAbgBpAHQAaQBlAHMALAAgAGEAbgBkACAAdABvACAAcAByAG8AdgBpAGQAZQAgAGEAIABmAHIAZQBlACAAYQBuAGQAIABvAHAAZQBuACAAZgByAGEAbQBlAHcAbwByAGsAIABpAG4AIAB3AGgAaQBjAGgAIABmAG8AbgB0AHMAIABtAGEAeQAgAGIAZQAgAHMAaABhAHIAZQBkACAAYQBuAGQAIABpAG0AcAByAG8AdgBlAGQAIABpAG4AIABwAGEAcgB0AG4AZQByAHMAaABpAHAAIAB3AGkAdABoACAAbwB0AGgAZQByAHMALgANAAoADQAKAFQAaABlACAATwBGAEwAIABhAGwAbABvAHcAcwAgAHQAaABlACAAbABpAGMAZQBuAHMAZQBkACAAZgBvAG4AdABzACAAdABvACAAYgBlACAAdQBzAGUAZAAsACAAcwB0AHUAZABpAGUAZAAsACAAbQBvAGQAaQBmAGkAZQBkACAAYQBuAGQAIAByAGUAZABpAHMAdAByAGkAYgB1AHQAZQBkACAAZgByAGUAZQBsAHkAIABhAHMAIABsAG8AbgBnACAAYQBzACAAdABoAGUAeQAgAGEAcgBlACAAbgBvAHQAIABzAG8AbABkACAAYgB5ACAAdABoAGUAbQBzAGUAbAB2AGUAcwAuACAAVABoAGUAIABmAG8AbgB0AHMALAAgAGkAbgBjAGwAdQBkAGkAbgBnACAAYQBuAHkAIABkAGUAcgBpAHYAYQB0AGkAdgBlACAAdwBvAHIAawBzACwAIABjAGEAbgAgAGIAZQAgAGIAdQBuAGQAbABlAGQALAAgAGUAbQBiAGUAZABkAGUAZAAsACAAcgBlAGQAaQBzAHQAcgBpAGIAdQB0AGUAZAAgAGEAbgBkAC8AbwByACAAcwBvAGwAZAAgAHcAaQB0AGgAIABhAG4AeQAgAHMAbwBmAHQAdwBhAHIAZQAgAHAAcgBvAHYAaQBkAGUAZAAgAHQAaABhAHQAIABhAG4AeQAgAHIAZQBzAGUAcgB2AGUAZAAgAG4AYQBtAGUAcwAgAGEAcgBlACAAbgBvAHQAIAB1AHMAZQBkACAAYgB5ACAAZABlAHIAaQB2AGEAdABpAHYAZQAgAHcAbwByAGsAcwAuACAAVABoAGUAIABmAG8AbgB0AHMAIABhAG4AZAAgAGQAZQByAGkAdgBhAHQAaQB2AGUAcwAsACAAaABvAHcAZQB2AGUAcgAsACAAYwBhAG4AbgBvAHQAIABiAGUAIAByAGUAbABlAGEAcwBlAGQAIAB1AG4AZABlAHIAIABhAG4AeQAgAG8AdABoAGUAcgAgAHQAeQBwAGUAIABvAGYAIABsAGkAYwBlAG4AcwBlAC4AIABUAGgAZQAgAHIAZQBxAHUAaQByAGUAbQBlAG4AdAAgAGYAbwByACAAZgBvAG4AdABzACAAdABvACAAcgBlAG0AYQBpAG4AIAB1AG4AZABlAHIAIAB0AGgAaQBzACAAbABpAGMAZQBuAHMAZQAgAGQAbwBlAHMAIABuAG8AdAAgAGEAcABwAGwAeQAgAHQAbwAgAGEAbgB5ACAAZABvAGMAdQBtAGUAbgB0ACAAYwByAGUAYQB0AGUAZAAgAHUAcwBpAG4AZwAgAHQAaABlACAAZgBvAG4AdABzACAAbwByACAAdABoAGUAaQByACAAZABlAHIAaQB2AGEAdABpAHYAZQBzAC4ADQAKAA0ACgBEAEUARgBJAE4ASQBUAEkATwBOAFMADQAKACIARgBvAG4AdAAgAFMAbwBmAHQAdwBhAHIAZQAiACAAcgBlAGYAZQByAHMAIAB0AG8AIAB0AGgAZQAgAHMAZQB0ACAAbwBmACAAZgBpAGwAZQBzACAAcgBlAGwAZQBhAHMAZQBkACAAYgB5ACAAdABoAGUAIABDAG8AcAB5AHIAaQBnAGgAdAAgAEgAbwBsAGQAZQByACgAcwApACAAdQBuAGQAZQByACAAdABoAGkAcwAgAGwAaQBjAGUAbgBzAGUAIABhAG4AZAAgAGMAbABlAGEAcgBsAHkAIABtAGEAcgBrAGUAZAAgAGEAcwAgAHMAdQBjAGgALgAgAFQAaABpAHMAIABtAGEAeQAgAGkAbgBjAGwAdQBkAGUAIABzAG8AdQByAGMAZQAgAGYAaQBsAGUAcwAsACAAYgB1AGkAbABkACAAcwBjAHIAaQBwAHQAcwAgAGEAbgBkACAAZABvAGMAdQBtAGUAbgB0AGEAdABpAG8AbgAuAA0ACgANAAoAIgBSAGUAcwBlAHIAdgBlAGQAIABGAG8AbgB0ACAATgBhAG0AZQAiACAAcgBlAGYAZQByAHMAIAB0AG8AIABhAG4AeQAgAG4AYQBtAGUAcwAgAHMAcABlAGMAaQBmAGkAZQBkACAAYQBzACAAcwB1AGMAaAAgAGEAZgB0AGUAcgAgAHQAaABlACAAYwBvAHAAeQByAGkAZwBoAHQAIABzAHQAYQB0AGUAbQBlAG4AdAAoAHMAKQAuAA0ACgANAAoAIgBPAHIAaQBnAGkAbgBhAGwAIABWAGUAcgBzAGkAbwBuACIAIAByAGUAZgBlAHIAcwAgAHQAbwAgAHQAaABlACAAYwBvAGwAbABlAGMAdABpAG8AbgAgAG8AZgAgAEYAbwBuAHQAIABTAG8AZgB0AHcAYQByAGUAIABjAG8AbQBwAG8AbgBlAG4AdABzACAAYQBzACAAZABpAHMAdAByAGkAYgB1AHQAZQBkACAAYgB5ACAAdABoAGUAIABDAG8AcAB5AHIAaQBnAGgAdAAgAEgAbwBsAGQAZQByACgAcwApAC4ADQAKAA0ACgAiAE0AbwBkAGkAZgBpAGUAZAAgAFYAZQByAHMAaQBvAG4AIgAgAHIAZQBmAGUAcgBzACAAdABvACAAYQBuAHkAIABkAGUAcgBpAHYAYQB0AGkAdgBlACAAbQBhAGQAZQAgAGIAeQAgAGEAZABkAGkAbgBnACAAdABvACwAIABkAGUAbABlAHQAaQBuAGcALAAgAG8AcgAgAHMAdQBiAHMAdABpAHQAdQB0AGkAbgBnACAALQAtACAAaQBuACAAcABhAHIAdAAgAG8AcgAgAGkAbgAgAHcAaABvAGwAZQAgAC0ALQAgAGEAbgB5ACAAbwBmACAAdABoAGUAIABjAG8AbQBwAG8AbgBlAG4AdABzACAAbwBmACAAdABoAGUAIABPAHIAaQBnAGkAbgBhAGwAIABWAGUAcgBzAGkAbwBuACwAIABiAHkAIABjAGgAYQBuAGcAaQBuAGcAIABmAG8AcgBtAGEAdABzACAAbwByACAAYgB5ACAAcABvAHIAdABpAG4AZwAgAHQAaABlACAARgBvAG4AdAAgAFMAbwBmAHQAdwBhAHIAZQAgAHQAbwAgAGEAIABuAGUAdwAgAGUAbgB2AGkAcgBvAG4AbQBlAG4AdAAuAA0ACgANAAoAIgBBAHUAdABoAG8AcgAiACAAcgBlAGYAZQByAHMAIAB0AG8AIABhAG4AeQAgAGQAZQBzAGkAZwBuAGUAcgAsACAAZQBuAGcAaQBuAGUAZQByACwAIABwAHIAbwBnAHIAYQBtAG0AZQByACwAIAB0AGUAYwBoAG4AaQBjAGEAbAAgAHcAcgBpAHQAZQByACAAbwByACAAbwB0AGgAZQByACAAcABlAHIAcwBvAG4AIAB3AGgAbwAgAGMAbwBuAHQAcgBpAGIAdQB0AGUAZAAgAHQAbwAgAHQAaABlACAARgBvAG4AdAAgAFMAbwBmAHQAdwBhAHIAZQAuAA0ACgANAAoAUABFAFIATQBJAFMAUwBJAE8ATgAgACYAIABDAE8ATgBEAEkAVABJAE8ATgBTAA0ACgBQAGUAcgBtAGkAcwBzAGkAbwBuACAAaQBzACAAaABlAHIAZQBiAHkAIABnAHIAYQBuAHQAZQBkACwAIABmAHIAZQBlACAAbwBmACAAYwBoAGEAcgBnAGUALAAgAHQAbwAgAGEAbgB5ACAAcABlAHIAcwBvAG4AIABvAGIAdABhAGkAbgBpAG4AZwAgAGEAIABjAG8AcAB5ACAAbwBmACAAdABoAGUAIABGAG8AbgB0ACAAUwBvAGYAdAB3AGEAcgBlACwAIAB0AG8AIAB1AHMAZQAsACAAcwB0AHUAZAB5ACwAIABjAG8AcAB5ACwAIABtAGUAcgBnAGUALAAgAGUAbQBiAGUAZAAsACAAbQBvAGQAaQBmAHkALAAgAHIAZQBkAGkAcwB0AHIAaQBiAHUAdABlACwAIABhAG4AZAAgAHMAZQBsAGwAIABtAG8AZABpAGYAaQBlAGQAIABhAG4AZAAgAHUAbgBtAG8AZABpAGYAaQBlAGQAIABjAG8AcABpAGUAcwAgAG8AZgAgAHQAaABlACAARgBvAG4AdAAgAFMAbwBmAHQAdwBhAHIAZQAsACAAcwB1AGIAagBlAGMAdAAgAHQAbwAgAHQAaABlACAAZgBvAGwAbABvAHcAaQBuAGcAIABjAG8AbgBkAGkAdABpAG8AbgBzADoADQAKAA0ACgAxACkAIABOAGUAaQB0AGgAZQByACAAdABoAGUAIABGAG8AbgB0ACAAUwBvAGYAdAB3AGEAcgBlACAAbgBvAHIAIABhAG4AeQAgAG8AZgAgAGkAdABzACAAaQBuAGQAaQB2AGkAZAB1AGEAbAAgAGMAbwBtAHAAbwBuAGUAbgB0AHMALAAgAGkAbgAgAE8AcgBpAGcAaQBuAGEAbAAgAG8AcgAgAE0AbwBkAGkAZgBpAGUAZAAgAFYAZQByAHMAaQBvAG4AcwAsACAAbQBhAHkAIABiAGUAIABzAG8AbABkACAAYgB5ACAAaQB0AHMAZQBsAGYALgANAAoADQAKADIAKQAgAE8AcgBpAGcAaQBuAGEAbAAgAG8AcgAgAE0AbwBkAGkAZgBpAGUAZAAgAFYAZQByAHMAaQBvAG4AcwAgAG8AZgAgAHQAaABlACAARgBvAG4AdAAgAFMAbwBmAHQAdwBhAHIAZQAgAG0AYQB5ACAAYgBlACAAYgB1AG4AZABsAGUAZAAsACAAcgBlAGQAaQBzAHQAcgBpAGIAdQB0AGUAZAAgAGEAbgBkAC8AbwByACAAcwBvAGwAZAAgAHcAaQB0AGgAIABhAG4AeQAgAHMAbwBmAHQAdwBhAHIAZQAsACAAcAByAG8AdgBpAGQAZQBkACAAdABoAGEAdAAgAGUAYQBjAGgAIABjAG8AcAB5ACAAYwBvAG4AdABhAGkAbgBzACAAdABoAGUAIABhAGIAbwB2AGUAIABjAG8AcAB5AHIAaQBnAGgAdAAgAG4AbwB0AGkAYwBlACAAYQBuAGQAIAB0AGgAaQBzACAAbABpAGMAZQBuAHMAZQAuACAAVABoAGUAcwBlACAAYwBhAG4AIABiAGUAIABpAG4AYwBsAHUAZABlAGQAIABlAGkAdABoAGUAcgAgAGEAcwAgAHMAdABhAG4AZAAtAGEAbABvAG4AZQAgAHQAZQB4AHQAIABmAGkAbABlAHMALAAgAGgAdQBtAGEAbgAtAHIAZQBhAGQAYQBiAGwAZQAgAGgAZQBhAGQAZQByAHMAIABvAHIAIABpAG4AIAB0AGgAZQAgAGEAcABwAHIAbwBwAHIAaQBhAHQAZQAgAG0AYQBjAGgAaQBuAGUALQByAGUAYQBkAGEAYgBsAGUAIABtAGUAdABhAGQAYQB0AGEAIABmAGkAZQBsAGQAcwAgAHcAaQB0AGgAaQBuACAAdABlAHgAdAAgAG8AcgAgAGIAaQBuAGEAcgB5ACAAZgBpAGwAZQBzACAAYQBzACAAbABvAG4AZwAgAGEAcwAgAHQAaABvAHMAZQAgAGYAaQBlAGwAZABzACAAYwBhAG4AIABiAGUAIABlAGEAcwBpAGwAeQAgAHYAaQBlAHcAZQBkACAAYgB5ACAAdABoAGUAIAB1AHMAZQByAC4ADQAKAA0ACgAzACkAIABOAG8AIABNAG8AZABpAGYAaQBlAGQAIABWAGUAcgBzAGkAbwBuACAAbwBmACAAdABoAGUAIABGAG8AbgB0ACAAUwBvAGYAdAB3AGEAcgBlACAAbQBhAHkAIAB1AHMAZQAgAHQAaABlACAAUgBlAHMAZQByAHYAZQBkACAARgBvAG4AdAAgAE4AYQBtAGUAKABzACkAIAB1AG4AbABlAHMAcwAgAGUAeABwAGwAaQBjAGkAdAAgAHcAcgBpAHQAdABlAG4AIABwAGUAcgBtAGkAcwBzAGkAbwBuACAAaQBzACAAZwByAGEAbgB0AGUAZAAgAGIAeQAgAHQAaABlACAAYwBvAHIAcgBlAHMAcABvAG4AZABpAG4AZwAgAEMAbwBwAHkAcgBpAGcAaAB0ACAASABvAGwAZABlAHIALgAgAFQAaABpAHMAIAByAGUAcwB0AHIAaQBjAHQAaQBvAG4AIABvAG4AbAB5ACAAYQBwAHAAbABpAGUAcwAgAHQAbwAgAHQAaABlACAAcAByAGkAbQBhAHIAeQAgAGYAbwBuAHQAIABuAGEAbQBlACAAYQBzACAAcAByAGUAcwBlAG4AdABlAGQAIAB0AG8AIAB0AGgAZQAgAHUAcwBlAHIAcwAuAA0ACgANAAoANAApACAAVABoAGUAIABuAGEAbQBlACgAcwApACAAbwBmACAAdABoAGUAIABDAG8AcAB5AHIAaQBnAGgAdAAgAEgAbwBsAGQAZQByACgAcwApACAAbwByACAAdABoAGUAIABBAHUAdABoAG8AcgAoAHMAKQAgAG8AZgAgAHQAaABlACAARgBvAG4AdAAgAFMAbwBmAHQAdwBhAHIAZQAgAHMAaABhAGwAbAAgAG4AbwB0ACAAYgBlACAAdQBzAGUAZAAgAHQAbwAgAHAAcgBvAG0AbwB0AGUALAAgAGUAbgBkAG8AcgBzAGUAIABvAHIAIABhAGQAdgBlAHIAdABpAHMAZQAgAGEAbgB5ACAATQBvAGQAaQBmAGkAZQBkACAAVgBlAHIAcwBpAG8AbgAsACAAZQB4AGMAZQBwAHQAIAB0AG8AIABhAGMAawBuAG8AdwBsAGUAZABnAGUAIAB0AGgAZQAgAGMAbwBuAHQAcgBpAGIAdQB0AGkAbwBuACgAcwApACAAbwBmACAAdABoAGUAIABDAG8AcAB5AHIAaQBnAGgAdAAgAEgAbwBsAGQAZQByACgAcwApACAAYQBuAGQAIAB0AGgAZQAgAEEAdQB0AGgAbwByACgAcwApACAAbwByACAAdwBpAHQAaAAgAHQAaABlAGkAcgAgAGUAeABwAGwAaQBjAGkAdAAgAHcAcgBpAHQAdABlAG4AIABwAGUAcgBtAGkAcwBzAGkAbwBuAC4ADQAKAA0ACgA1ACkAIABUAGgAZQAgAEYAbwBuAHQAIABTAG8AZgB0AHcAYQByAGUALAAgAG0AbwBkAGkAZgBpAGUAZAAgAG8AcgAgAHUAbgBtAG8AZABpAGYAaQBlAGQALAAgAGkAbgAgAHAAYQByAHQAIABvAHIAIABpAG4AIAB3AGgAbwBsAGUALAAgAG0AdQBzAHQAIABiAGUAIABkAGkAcwB0AHIAaQBiAHUAdABlAGQAIABlAG4AdABpAHIAZQBsAHkAIAB1AG4AZABlAHIAIAB0AGgAaQBzACAAbABpAGMAZQBuAHMAZQAsACAAYQBuAGQAIABtAHUAcwB0ACAAbgBvAHQAIABiAGUAIABkAGkAcwB0AHIAaQBiAHUAdABlAGQAIAB1AG4AZABlAHIAIABhAG4AeQAgAG8AdABoAGUAcgAgAGwAaQBjAGUAbgBzAGUALgAgAFQAaABlACAAcgBlAHEAdQBpAHIAZQBtAGUAbgB0ACAAZgBvAHIAIABmAG8AbgB0AHMAIAB0AG8AIAByAGUAbQBhAGkAbgAgAHUAbgBkAGUAcgAgAHQAaABpAHMAIABsAGkAYwBlAG4AcwBlACAAZABvAGUAcwAgAG4AbwB0ACAAYQBwAHAAbAB5ACAAdABvACAAYQBuAHkAIABkAG8AYwB1AG0AZQBuAHQAIABjAHIAZQBhAHQAZQBkACAAdQBzAGkAbgBnACAAdABoAGUAIABGAG8AbgB0ACAAUwBvAGYAdAB3AGEAcgBlAC4ADQAKAA0ACgBUAEUAUgBNAEkATgBBAFQASQBPAE4ADQAKAFQAaABpAHMAIABsAGkAYwBlAG4AcwBlACAAYgBlAGMAbwBtAGUAcwAgAG4AdQBsAGwAIABhAG4AZAAgAHYAbwBpAGQAIABpAGYAIABhAG4AeQAgAG8AZgAgAHQAaABlACAAYQBiAG8AdgBlACAAYwBvAG4AZABpAHQAaQBvAG4AcwAgAGEAcgBlACAAbgBvAHQAIABtAGUAdAAuAA0ACgANAAoARABJAFMAQwBMAEEASQBNAEUAUgANAAoAVABIAEUAIABGAE8ATgBUACAAUwBPAEYAVABXAEEAUgBFACAASQBTACAAUABSAE8AVgBJAEQARQBEACAAIgBBAFMAIABJAFMAIgAsACAAVwBJAFQASABPAFUAVAAgAFcAQQBSAFIAQQBOAFQAWQAgAE8ARgAgAEEATgBZACAASwBJAE4ARAAsACAARQBYAFAAUgBFAFMAUwAgAE8AUgAgAEkATQBQAEwASQBFAEQALAAgAEkATgBDAEwAVQBEAEkATgBHACAAQgBVAFQAIABOAE8AVAAgAEwASQBNAEkAVABFAEQAIABUAE8AIABBAE4AWQAgAFcAQQBSAFIAQQBOAFQASQBFAFMAIABPAEYAIABNAEUAUgBDAEgAQQBOAFQAQQBCAEkATABJAFQAWQAsACAARgBJAFQATgBFAFMAUwAgAEYATwBSACAAQQAgAFAAQQBSAFQASQBDAFUATABBAFIAIABQAFUAUgBQAE8AUwBFACAAQQBOAEQAIABOAE8ATgBJAE4ARgBSAEkATgBHAEUATQBFAE4AVAAgAE8ARgAgAEMATwBQAFkAUgBJAEcASABUACwAIABQAEEAVABFAE4AVAAsACAAVABSAEEARABFAE0AQQBSAEsALAAgAE8AUgAgAE8AVABIAEUAUgAgAFIASQBHAEgAVAAuACAASQBOACAATgBPACAARQBWAEUATgBUACAAUwBIAEEATABMACAAVABIAEUAIABDAE8AUABZAFIASQBHAEgAVAAgAEgATwBMAEQARQBSACAAQgBFACAATABJAEEAQgBMAEUAIABGAE8AUgAgAEEATgBZACAAQwBMAEEASQBNACwAIABEAEEATQBBAEcARQBTACAATwBSACAATwBUAEgARQBSACAATABJAEEAQgBJAEwASQBUAFkALAAgAEkATgBDAEwAVQBEAEkATgBHACAAQQBOAFkAIABHAEUATgBFAFIAQQBMACwAIABTAFAARQBDAEkAQQBMACwAIABJAE4ARABJAFIARQBDAFQALAAgAEkATgBDAEkARABFAE4AVABBAEwALAAgAE8AUgAgAEMATwBOAFMARQBRAFUARQBOAFQASQBBAEwAIABEAEEATQBBAEcARQBTACwAIABXAEgARQBUAEgARQBSACAASQBOACAAQQBOACAAQQBDAFQASQBPAE4AIABPAEYAIABDAE8ATgBUAFIAQQBDAFQALAAgAFQATwBSAFQAIABPAFIAIABPAFQASABFAFIAVwBJAFMARQAsACAAQQBSAEkAUwBJAE4ARwAgAEYAUgBPAE0ALAAgAE8AVQBUACAATwBGACAAVABIAEUAIABVAFMARQAgAE8AUgAgAEkATgBBAEIASQBMAEkAVABZACAAVABPACAAVQBTAEUAIABUAEgARQAgAEYATwBOAFQAIABTAE8ARgBUAFcAQQBSAEUAIABPAFIAIABGAFIATwBNACAATwBUAEgARQBSACAARABFAEEATABJAE4ARwBTACAASQBOACAAVABIAEUAIABGAE8ATgBUACAAUwBPAEYAVABXAEEAUgBFAC4ADQAKAGgAdAB0AHAAOgAvAC8AdwB3AHcALgBhAGQAbwBiAGUALgBjAG8AbQAvAHQAeQBwAGUALwBsAGUAZwBhAGwALgBoAHQAbQBsAAAAAAAFAAAAAwAAADgAAAAEAAABUAABAAAAAAAsAAMAAQAAADgAAwAKAAABUAAGAAwAAAAAAAEAAAAEARgAAABCAEAABQACB/8P/xf/H/8n/y//N/8//0f/T/9X/1//Z/9v/3f/f/+H/4//l/+f/6f/r/+3/7//x//P/9f/5//v//f//c///f//AAAAAAgAEAAYACAAKAAwADgAQABIAFAAWABgAGgAcAB4AIAAiACQAJgAoACoALAAuADAAMgA0ADgAOgA8AD4AP3w//8AAfgB8AHoAeAB2AHQAcgBwAG4AbABqAGgAZgBkAGIAYABeAFwAWgBYAFYAVABSAFAATgBMAEgARgBEAEIAQgBAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAZkAAAAAAAAAIgAAAAAAAAB/8AAAABAAAIAAAAD/8AAAABAAAQAAAAF/8AAAABAAAYAAAAH/8AAAABAAAgAAAAJ/8AAAABAAAoAAAAL/8AAAABAAAwAAAAN/8AAAABAAA4AAAAP/8AAAABAABAAAAAR/8AAAABAABIAAAAT/8AAAABAABQAAAAV/8AAAABAABYAAAAX/8AAAABAABgAAAAZ/8AAAABAABoAAAAb/8AAAABAABwAAAAd/8AAAABAAB4AAAAf/8AAAABAACAAAAAh/8AAAABAACIAAAAj/8AAAABAACQAAAAl/8AAAABAACYAAAAn/8AAAABAACgAAAAp/8AAAABAACoAAAAr/8AAAABAACwAAAAt/8AAAABAAC4AAAAv/8AAAABAADAAAAAx/8AAAABAADIAAAAz/8AAAABAADQAAAA1/8AAAABAADgAAAA5/8AAAABAADoAAAA7/8AAAABAADwAAAA9/8AAAABAAD4AAAA/c8AAAABAAD98AAA//0AAAXxAAEAAAABB/8AAAABAAEIAAABD/8AAAABAAEQAAABF/8AAAABAAEYAAABH/8AAAABAAEgAAABJ/8AAAABAAEoAAABL/8AAAABAAEwAAABN/8AAAABAAE4AAABP/8AAAABAAFAAAABR/8AAAABAAFIAAABT/8AAAABAAFQAAABV/8AAAABAAFYAAABX/8AAAABAAFgAAABZ/8AAAABAAFoAAABb/8AAAABAAFwAAABd/8AAAABAAF4AAABf/8AAAABAAGAAAABh/8AAAABAAGIAAABj/8AAAABAAGQAAABl/8AAAABAAGYAAABn/8AAAABAAGgAAABp/8AAAABAAGoAAABr/8AAAABAAGwAAABt/8AAAABAAG4AAABv/8AAAABAAHAAAABx/8AAAABAAHIAAABz/8AAAABAAHQAAAB1/8AAAABAAHYAAAB3/8AAAABAAHgAAAB5/8AAAABAAHoAAAB7/8AAAABAAHwAAAB9/8AAAABAAH4AAAB//0AAAABAAIAAAACB/8AAAABAAIIAAACD/8AAAABAAIQAAACF/8AAAABAAIYAAACH/8AAAABAAIgAAACJ/8AAAABAAIoAAACL/8AAAABAAIwAAACN/8AAAABAAI4AAACP/8AAAABAAJAAAACR/8AAAABAAJIAAACT/8AAAABAAJQAAACV/8AAAABAAJYAAACX/8AAAABAAJgAAACZ/8AAAABAAJoAAACb/8AAAABAAJwAAACd/8AAAABAAJ4AAACf/8AAAABAAKAAAACh/8AAAABAAKIAAACj/8AAAABAAKQAAACl/8AAAABAAKYAAACn/8AAAABAAKgAAACp/8AAAABAAKoAAACr/8AAAABAAKwAAACt/8AAAABAAK4AAACv/8AAAABAALAAAACx/8AAAABAALIAAACz/8AAAABAALQAAAC1/8AAAABAALYAAAC3/8AAAABAALgAAAC5/8AAAABAALoAAAC7/8AAAABAALwAAAC9/8AAAABAAL4AAAC//0AAAABAAMAAAADB/8AAAABAAMIAAADD/8AAAABAAMQAAADF/8AAAABAAMYAAADH/8AAAABAAMgAAADJ/8AAAABAAMoAAADL/8AAAABAAMwAAADN/8AAAABAAM4AAADP/8AAAABAANAAAADR/8AAAABAANIAAADT/8AAAABAANQAAADV/8AAAABAANYAAADX/8AAAABAANgAAADZ/8AAAABAANoAAADb/8AAAABAANwAAADd/8AAAABAAN4AAADf/8AAAABAAOAAAADh/8AAAABAAOIAAADj/8AAAABAAOQAAADl/8AAAABAAOYAAADn/8AAAABAAOgAAADp/8AAAABAAOoAAADr/8AAAABAAOwAAADt/8AAAABAAO4AAADv/8AAAABAAPAAAADx/8AAAABAAPIAAADz/8AAAABAAPQAAAD1/8AAAABAAPYAAAD3/8AAAABAAPgAAAD5/8AAAABAAPoAAAD7/8AAAABAAPwAAAD9/8AAAABAAP4AAAD//0AAAABAAQAAAAEB/8AAAABAAQIAAAED/8AAAABAAQQAAAEF/8AAAABAAQYAAAEH/8AAAABAAQgAAAEJ/8AAAABAAQoAAAEL/8AAAABAAQwAAAEN/8AAAABAAQ4AAAEP/8AAAABAARAAAAER/8AAAABAARIAAAET/8AAAABAARQAAAEV/8AAAABAARYAAAEX/8AAAABAARgAAAEZ/8AAAABAARoAAAEb/8AAAABAARwAAAEd/8AAAABAAR4AAAEf/8AAAABAASAAAAEh/8AAAABAASIAAAEj/8AAAABAASQAAAEl/8AAAABAASYAAAEn/8AAAABAASgAAAEp/8AAAABAASoAAAEr/8AAAABAASwAAAEt/8AAAABAAS4AAAEv/8AAAABAATAAAAEx/8AAAABAATIAAAEz/8AAAABAATQAAAE1/8AAAABAATYAAAE3/8AAAABAATgAAAE5/8AAAABAAToAAAE7/8AAAABAATwAAAE9/8AAAABAAT4AAAE//0AAAABAAUAAAAFB/8AAAABAAUIAAAFD/8AAAABAAUQAAAFF/8AAAABAAUYAAAFH/8AAAABAAUgAAAFJ/8AAAABAAUoAAAFL/8AAAABAAUwAAAFN/8AAAABAAU4AAAFP/8AAAABAAVAAAAFR/8AAAABAAVIAAAFT/8AAAABAAVQAAAFV/8AAAABAAVYAAAFX/8AAAABAAVgAAAFZ/8AAAABAAVoAAAFb/8AAAABAAVwAAAFd/8AAAABAAV4AAAFf/8AAAABAAWAAAAFh/8AAAABAAWIAAAFj/8AAAABAAWQAAAFl/8AAAABAAWYAAAFn/8AAAABAAWgAAAFp/8AAAABAAWoAAAFr/8AAAABAAWwAAAFt/8AAAABAAW4AAAFv/8AAAABAAXAAAAFx/8AAAABAAXIAAAFz/8AAAABAAXQAAAF1/8AAAABAAXYAAAF3/8AAAABAAXgAAAF5/8AAAABAAXoAAAF7/8AAAABAAXwAAAF9/8AAAABAAX4AAAF//0AAAABAAYAAAAGB/8AAAABAAYIAAAGD/8AAAABAAYQAAAGF/8AAAABAAYYAAAGH/8AAAABAAYgAAAGJ/8AAAABAAYoAAAGL/8AAAABAAYwAAAGN/8AAAABAAY4AAAGP/8AAAABAAZAAAAGR/8AAAABAAZIAAAGT/8AAAABAAZQAAAGV/8AAAABAAZYAAAGX/8AAAABAAZgAAAGZ/8AAAABAAZoAAAGb/8AAAABAAZwAAAGd/8AAAABAAZ4AAAGf/8AAAABAAaAAAAGh/8AAAABAAaIAAAGj/8AAAABAAaQAAAGl/8AAAABAAaYAAAGn/8AAAABAAagAAAGp/8AAAABAAaoAAAGr/8AAAABAAawAAAGt/8AAAABAAa4AAAGv/8AAAABAAbAAAAGx/8AAAABAAbIAAAGz/8AAAABAAbQAAAG1/8AAAABAAbYAAAG3/8AAAABAAbgAAAG5/8AAAABAAboAAAG7/8AAAABAAbwAAAG9/8AAAABAAb4AAAG//0AAAABAAcAAAAHB/8AAAABAAcIAAAHD/8AAAABAAcQAAAHF/8AAAABAAcYAAAHH/8AAAABAAcgAAAHJ/8AAAABAAcoAAAHL/8AAAABAAcwAAAHN/8AAAABAAc4AAAHP/8AAAABAAdAAAAHR/8AAAABAAdIAAAHT/8AAAABAAdQAAAHV/8AAAABAAdYAAAHX/8AAAABAAdgAAAHZ/8AAAABAAdoAAAHb/8AAAABAAdwAAAHd/8AAAABAAd4AAAHf/8AAAABAAeAAAAHh/8AAAABAAeIAAAHj/8AAAABAAeQAAAHl/8AAAABAAeYAAAHn/8AAAABAAegAAAHp/8AAAABAAeoAAAHr/8AAAABAAewAAAHt/8AAAABAAe4AAAHv/8AAAABAAfAAAAHx/8AAAABAAfIAAAHz/8AAAABAAfQAAAH1/8AAAABAAfYAAAH3/8AAAABAAfgAAAH5/8AAAABAAfoAAAH7/8AAAABAAfwAAAH9/8AAAABAAf4AAAH//0AAAABAAgAAAAIB/8AAAABAAgIAAAID/8AAAABAAgQAAAIF/8AAAABAAgYAAAIH/8AAAABAAggAAAIJ/8AAAABAAgoAAAIL/8AAAABAAgwAAAIN/8AAAABAAg4AAAIP/8AAAABAAhAAAAIR/8AAAABAAhIAAAIT/8AAAABAAhQAAAIV/8AAAABAAhYAAAIX/8AAAABAAhgAAAIZ/8AAAABAAhoAAAIb/8AAAABAAhwAAAId/8AAAABAAh4AAAIf/8AAAABAAiAAAAIh/8AAAABAAiIAAAIj/8AAAABAAiQAAAIl/8AAAABAAiYAAAIn/8AAAABAAigAAAIp/8AAAABAAioAAAIr/8AAAABAAiwAAAIt/8AAAABAAi4AAAIv/8AAAABAAjAAAAIx/8AAAABAAjIAAAIz/8AAAABAAjQAAAI1/8AAAABAAjYAAAI3/8AAAABAAjgAAAI5/8AAAABAAjoAAAI7/8AAAABAAjwAAAI9/8AAAABAAj4AAAI//0AAAABAAkAAAAJB/8AAAABAAkIAAAJD/8AAAABAAkQAAAJF/8AAAABAAkYAAAJH/8AAAABAAkgAAAJJ/8AAAABAAkoAAAJL/8AAAABAAkwAAAJN/8AAAABAAk4AAAJP/8AAAABAAlAAAAJR/8AAAABAAlIAAAJT/8AAAABAAlQAAAJV/8AAAABAAlYAAAJX/8AAAABAAlgAAAJZ/8AAAABAAloAAAJb/8AAAABAAlwAAAJd/8AAAABAAl4AAAJf/8AAAABAAmAAAAJh/8AAAABAAmIAAAJj/8AAAABAAmQAAAJl/8AAAABAAmYAAAJn/8AAAABAAmgAAAJp/8AAAABAAmoAAAJr/8AAAABAAmwAAAJt/8AAAABAAm4AAAJv/8AAAABAAnAAAAJx/8AAAABAAnIAAAJz/8AAAABAAnQAAAJ1/8AAAABAAnYAAAJ3/8AAAABAAngAAAJ5/8AAAABAAnoAAAJ7/8AAAABAAnwAAAJ9/8AAAABAAn4AAAJ//0AAAABAAoAAAAKB/8AAAABAAoIAAAKD/8AAAABAAoQAAAKF/8AAAABAAoYAAAKH/8AAAABAAogAAAKJ/8AAAABAAooAAAKL/8AAAABAAowAAAKN/8AAAABAAo4AAAKP/8AAAABAApAAAAKR/8AAAABAApIAAAKT/8AAAABAApQAAAKV/8AAAABAApYAAAKX/8AAAABAApgAAAKZ/8AAAABAApoAAAKb/8AAAABAApwAAAKd/8AAAABAAp4AAAKf/8AAAABAAqAAAAKh/8AAAABAAqIAAAKj/8AAAABAAqQAAAKl/8AAAABAAqYAAAKn/8AAAABAAqgAAAKp/8AAAABAAqoAAAKr/8AAAABAAqwAAAKt/8AAAABAAq4AAAKv/8AAAABAArAAAAKx/8AAAABAArIAAAKz/8AAAABAArQAAAK1/8AAAABAArYAAAK3/8AAAABAArgAAAK5/8AAAABAAroAAAK7/8AAAABAArwAAAK9/8AAAABAAr4AAAK//0AAAABAAsAAAALB/8AAAABAAsIAAALD/8AAAABAAsQAAALF/8AAAABAAsYAAALH/8AAAABAAsgAAALJ/8AAAABAAsoAAALL/8AAAABAAswAAALN/8AAAABAAs4AAALP/8AAAABAAtAAAALR/8AAAABAAtIAAALT/8AAAABAAtQAAALV/8AAAABAAtYAAALX/8AAAABAAtgAAALZ/8AAAABAAtoAAALb/8AAAABAAtwAAALd/8AAAABAAt4AAALf/8AAAABAAuAAAALh/8AAAABAAuIAAALj/8AAAABAAuQAAALl/8AAAABAAuYAAALn/8AAAABAAugAAALp/8AAAABAAuoAAALr/8AAAABAAuwAAALt/8AAAABAAu4AAALv/8AAAABAAvAAAALx/8AAAABAAvIAAALz/8AAAABAAvQAAAL1/8AAAABAAvYAAAL3/8AAAABAAvgAAAL5/8AAAABAAvoAAAL7/8AAAABAAvwAAAL9/8AAAABAAv4AAAL//0AAAABAAwAAAAMB/8AAAABAAwIAAAMD/8AAAABAAwQAAAMF/8AAAABAAwYAAAMH/8AAAABAAwgAAAMJ/8AAAABAAwoAAAML/8AAAABAAwwAAAMN/8AAAABAAw4AAAMP/8AAAABAAxAAAAMR/8AAAABAAxIAAAMT/8AAAABAAxQAAAMV/8AAAABAAxYAAAMX/8AAAABAAxgAAAMZ/8AAAABAAxoAAAMb/8AAAABAAxwAAAMd/8AAAABAAx4AAAMf/8AAAABAAyAAAAMh/8AAAABAAyIAAAMj/8AAAABAAyQAAAMl/8AAAABAAyYAAAMn/8AAAABAAygAAAMp/8AAAABAAyoAAAMr/8AAAABAAywAAAMt/8AAAABAAy4AAAMv/8AAAABAAzAAAAMx/8AAAABAAzIAAAMz/8AAAABAAzQAAAM1/8AAAABAAzYAAAM3/8AAAABAAzgAAAM5/8AAAABAAzoAAAM7/8AAAABAAzwAAAM9/8AAAABAAz4AAAM//0AAAABAA0AAAANB/8AAAABAA0IAAAND/8AAAABAA0QAAANF/8AAAABAA0YAAANH/8AAAABAA0gAAANJ/8AAAABAA0oAAANL/8AAAABAA0wAAANN/8AAAABAA04AAANP/8AAAABAA1AAAANR/8AAAABAA1IAAANT/8AAAABAA1QAAANV/8AAAABAA1YAAANX/8AAAABAA1gAAANZ/8AAAABAA1oAAANb/8AAAABAA1wAAANd/8AAAABAA14AAANf/8AAAABAA2AAAANh/8AAAABAA2IAAANj/8AAAABAA2QAAANl/8AAAABAA2YAAANn/8AAAABAA2gAAANp/8AAAABAA2oAAANr/8AAAABAA2wAAANt/8AAAABAA24AAANv/8AAAABAA3AAAANx/8AAAABAA3IAAANz/8AAAABAA3QAAAN1/8AAAABAA3YAAAN3/8AAAABAA3gAAAN5/8AAAABAA3oAAAN7/8AAAABAA3wAAAN9/8AAAABAA34AAAN//0AAAABAA4AAAAOB/8AAAABAA4IAAAOD/8AAAABAA4QAAAOF/8AAAABAA4YAAAOH/8AAAABAA4gAAAOJ/8AAAABAA4oAAAOL/8AAAABAA4wAAAON/8AAAABAA44AAAOP/8AAAABAA5AAAAOR/8AAAABAA5IAAAOT/8AAAABAA5QAAAOV/8AAAABAA5YAAAOX/8AAAABAA5gAAAOZ/8AAAABAA5oAAAOb/8AAAABAA5wAAAOd/8AAAABAA54AAAOf/8AAAABAA6AAAAOh/8AAAABAA6IAAAOj/8AAAABAA6QAAAOl/8AAAABAA6YAAAOn/8AAAABAA6gAAAOp/8AAAABAA6oAAAOr/8AAAABAA6wAAAOt/8AAAABAA64AAAOv/8AAAABAA7AAAAOx/8AAAABAA7IAAAOz/8AAAABAA7QAAAO1/8AAAABAA7YAAAO3/8AAAABAA7gAAAO5/8AAAABAA7oAAAO7/8AAAABAA7wAAAO9/8AAAABAA74AAAO//0AAAABAA8AAAAPB/8AAAABAA8IAAAPD/8AAAABAA8QAAAPF/8AAAABAA8YAAAPH/8AAAABAA8gAAAPJ/8AAAABAA8oAAAPL/8AAAABAA8wAAAPN/8AAAABAA84AAAPP/8AAAABAA9AAAAPR/8AAAABAA9IAAAPT/8AAAABAA9QAAAPV/8AAAABAA9YAAAPX/8AAAABAA9gAAAPZ/8AAAABAA9oAAAPb/8AAAABAA9wAAAPd/8AAAABAA94AAAPf/8AAAABAA+AAAAPh/8AAAABAA+IAAAPj/8AAAABAA+QAAAPl/8AAAABAA+YAAAPn/8AAAABAA+gAAAPp/8AAAABAA+oAAAPr/8AAAABAA+wAAAPt/8AAAABAA+4AAAPv/8AAAABAA/AAAAPx/8AAAABAA/IAAAPz/8AAAABAA/QAAAP1/8AAAABAA/YAAAP3/8AAAABAA/gAAAP5/8AAAABAA/oAAAP7/8AAAABAA/wAAAP9/8AAAABAA/4AAAP//0AAAABABAAAAAQB/8AAAABABAIAAAQD/8AAAABABAQAAAQF/8AAAABABAYAAAQH/8AAAABABAgAAAQJ/8AAAABABAoAAAQL/8AAAABABAwAAAQN/8AAAABABA4AAAQP/8AAAABABBAAAAQR/8AAAABABBIAAAQT/8AAAABABBQAAAQV/8AAAABABBYAAAQX/8AAAABABBgAAAQZ/8AAAABABBoAAAQb/8AAAABABBwAAAQd/8AAAABABB4AAAQf/8AAAABABCAAAAQh/8AAAABABCIAAAQj/8AAAABABCQAAAQl/8AAAABABCYAAAQn/8AAAABABCgAAAQp/8AAAABABCoAAAQr/8AAAABABCwAAAQt/8AAAABABC4AAAQv/8AAAABABDAAAAQx/8AAAABABDIAAAQz/8AAAABABDQAAAQ1/8AAAABABDYAAAQ3/8AAAABABDgAAAQ5/8AAAABABDoAAAQ7/8AAAABABDwAAAQ9/8AAAABABD4AAAQ//0AAAABAAMAAAAAAAD/tQAyAAAAAAAAAAAAAAAAAAAAAAAAAAABAAQCAAEBAQtBZG9iZUJsYW5rAAEBATD4G/gciwwe+B0B+B4Ci/sM+gD6BAUeGgA/DB8cCAEMIvdMD/dZEfdRDCUcGRYMJAAFAQEGDk1YZ0Fkb2JlSWRlbnRpdHlDb3B5cmlnaHQgMjAxMyBBZG9iZSBTeXN0ZW1zIEluY29ycG9yYXRlZC4gQWxsIFJpZ2h0cyBSZXNlcnZlZC5BZG9iZSBCbGFua0Fkb2JlQmxhbmstMjA0OQAAAgABB/8DAAEAAAAIAQgBAgABAEsATABNAE4ATwBQAFEAUgBTAFQAVQBWAFcAWABZAFoAWwBcAF0AXgBfAGAAYQBiAGMAZABlAGYAZwBoAGkAagBrAGwAbQBuAG8AcABxAHIAcwB0AHUAdgB3AHgAeQB6AHsAfAB9AH4AfwCAAIEAggCDAIQAhQCGAIcAiACJAIoAiwCMAI0AjgCPAJAAkQCSAJMAlACVAJYAlwCYAJkAmgCbAJwAnQCeAJ8AoAChAKIAowCkAKUApgCnAKgAqQCqAKsArACtAK4ArwCwALEAsgCzALQAtQC2ALcAuAC5ALoAuwC8AL0AvgC/AMAAwQDCAMMAxADFAMYAxwDIAMkAygDLAMwAzQDOAM8A0ADRANIA0wDUANUA1gDXANgA2QDaANsA3ADdAN4A3wDgAOEA4gDjAOQA5QDmAOcA6ADpAOoA6wDsAO0A7gDvAPAA8QDyAPMA9AD1APYA9wD4APkA+gD7APwA/QD+AP8BAAEBAQIBAwEEAQUBBgEHAQgBCQEKAQsBDAENAQ4BDwEQAREBEgETARQBFQEWARcBGAEZARoBGwEcAR0BHgEfASABIQEiASMBJAElASYBJwEoASkBKgErASwBLQEuAS8BMAExATIBMwE0ATUBNgE3ATgBOQE6ATsBPAE9AT4BPwFAAUEBQgFDAUQBRQFGAUcBSAFJAUoBSwFMAU0BTgFPAVABUQFSAVMBVAFVAVYBVwFYAVkBWgFbAVwBXQFeAV8BYAFhAWIBYwFkAWUBZgFnAWgBaQFqAWsBbAFtAW4BbwFwAXEBcgFzAXQBdQF2AXcBeAF5AXoBewF8AX0BfgF/AYABgQGCAYMBhAGFAYYBhwGIAYkBigGLAYwBjQGOAY8BkAGRAZIBkwGUAZUBlgGXAZgBmQGaAZsBnAGdAZ4BnwGgAaEBogGjAaQBpQGmAacBqAGpAaoBqwGsAa0BrgGvAbABsQGyAbMBtAG1AbYBtwG4AbkBugG7AbwBvQG+Ab8BwAHBAcIBwwHEAcUBxgHHAcgByQHKAcsBzAHNAc4BzwHQAdEB0gHTAdQB1QHWAdcB2AHZAdoB2wHcAd0B3gHfAeAB4QHiAeMB5AHlAeYB5wHoAekB6gHrAewB7QHuAe8B8AHxAfIB8wH0AfUB9gH3AfgB+QH6AfsB/AH9Af4B/wIAAgECAgIDAgQCBQIGAgcCCAIJAgoCCwIMAg0CDgIPAhACEQISAhMCFAIVAhYCFwIYAhkCGgIbAhwCHQIeAh8CIAIhAiICIwIkAiUCJgInAigCKQIqAisCLAItAi4CLwIwAjECMgIzAjQCNQI2AjcCOAI5AjoCOwI8Aj0CPgI/AkACQQJCAkMCRAJFAkYCRwJIAkkCSgJLAkwCTQJOAk8CUAJRAlICUwJUAlUCVgJXAlgCWQJaAlsCXAJdAl4CXwJgAmECYgJjAmQCZQJmAmcCaAJpAmoCawJsAm0CbgJvAnACcQJyAnMCdAJ1AnYCdwJ4AnkCegJ7AnwCfQJ+An8CgAKBAoICgwKEAoUChgKHAogCiQKKAosCjAKNAo4CjwKQApECkgKTApQClQKWApcCmAKZApoCmwKcAp0CngKfAqACoQKiAqMCpAKlAqYCpwKoAqkCqgKrAqwCrQKuAq8CsAKxArICswK0ArUCtgK3ArgCuQK6ArsCvAK9Ar4CvwLAAsECwgLDAsQCxQLGAscCyALJAsoCywLMAs0CzgLPAtAC0QLSAtMC1ALVAtYC1wLYAtkC2gLbAtwC3QLeAt8C4ALhAuIC4wLkAuUC5gLnAugC6QLqAusC7ALtAu4C7wLwAvEC8gLzAvQC9QL2AvcC+AL5AvoC+wL8Av0C/gL/AwADAQMCAwMDBAMFAwYDBwMIAwkDCgMLAwwDDQMOAw8DEAMRAxIDEwMUAxUDFgMXAxgDGQMaAxsDHAMdAx4DHwMgAyEDIgMjAyQDJQMmAycDKAMpAyoDKwMsAy0DLgMvAzADMQMyAzMDNAM1AzYDNwM4AzkDOgM7AzwDPQM+Az8DQANBA0IDQwNEA0UDRgNHA0gDSQNKA0sDTANNA04DTwNQA1EDUgNTA1QDVQNWA1cDWANZA1oDWwNcA10DXgNfA2ADYQNiA2MDZANlA2YDZwNoA2kDagNrA2wDbQNuA28DcANxA3IDcwN0A3UDdgN3A3gDeQN6A3sDfAN9A34DfwOAA4EDggODA4QDhQOGA4cDiAOJA4oDiwOMA40DjgOPA5ADkQOSA5MDlAOVA5YDlwOYA5kDmgObA5wDnQOeA58DoAOhA6IDowOkA6UDpgOnA6gDqQOqA6sDrAOtA64DrwOwA7EDsgOzA7QDtQO2A7cDuAO5A7oDuwO8A70DvgO/A8ADwQPCA8MDxAPFA8YDxwPIA8kDygPLA8wDzQPOA88D0APRA9ID0wPUA9UD1gPXA9gD2QPaA9sD3APdA94D3wPgA+ED4gPjA+QD5QPmA+cD6APpA+oD6wPsA+0D7gPvA/AD8QPyA/MD9AP1A/YD9wP4A/kD+gP7A/wD/QP+A/8EAAQBBAIEAwQEBAUEBgQHBAgECQQKBAsEDAQNBA4EDwQQBBEEEgQTBBQEFQQWBBcEGAQZBBoEGwQcBB0EHgQfBCAEIQQiBCMEJAQlBCYEJwQoBCkEKgQrBCwELQQuBC8EMAQxBDIEMwQ0BDUENgQ3BDgEOQQ6BDsEPAQ9BD4EPwRABEEEQgRDBEQERQRGBEcESARJBEoESwRMBE0ETgRPBFAEUQRSBFMEVARVBFYEVwRYBFkEWgRbBFwEXQReBF8EYARhBGIEYwRkBGUEZgRnBGgEaQRqBGsEbARtBG4EbwRwBHEEcgRzBHQEdQR2BHcEeAR5BHoEewR8BH0EfgR/BIAEgQSCBIMEhASFBIYEhwSIBIkEigSLBIwEjQSOBI8EkASRBJIEkwSUBJUElgSXBJgEmQSaBJsEnASdBJ4EnwSgBKEEogSjBKQEpQSmBKcEqASpBKoEqwSsBK0ErgSvBLAEsQSyBLMEtAS1BLYEtwS4BLkEugS7BLwEvQS+BL8EwATBBMIEwwTEBMUExgTHBMgEyQTKBMsEzATNBM4EzwTQBNEE0gTTBNQE1QTWBNcE2ATZBNoE2wTcBN0E3gTfBOAE4QTiBOME5ATlBOYE5wToBOkE6gTrBOwE7QTuBO8E8ATxBPIE8wT0BPUE9gT3BPgE+QT6BPsE/AT9BP4E/wUABQEFAgUDBQQFBQUGBQcFCAUJBQoFCwUMBQ0FDgUPBRAFEQUSBRMFFAUVBRYFFwUYBRkFGgUbBRwFHQUeBR8FIAUhBSIFIwUkBSUFJgUnBSgFKQUqBSsFLAUtBS4FLwUwBTEFMgUzBTQFNQU2BTcFOAU5BToFOwU8BT0FPgU/BUAFQQVCBUMFRAVFBUYFRwVIBUkFSgVLBUwFTQVOBU8FUAVRBVIFUwVUBVUFVgVXBVgFWQVaBVsFXAVdBV4FXwVgBWEFYgVjBWQFZQVmBWcFaAVpBWoFawVsBW0FbgVvBXAFcQVyBXMFdAV1BXYFdwV4BXkFegV7BXwFfQV+BX8FgAWBBYIFgwWEBYUFhgWHBYgFiQWKBYsFjAWNBY4FjwWQBZEFkgWTBZQFlQWWBZcFmAWZBZoFmwWcBZ0FngWfBaAFoQWiBaMFpAWlBaYFpwWoBakFqgWrBawFrQWuBa8FsAWxBbIFswW0BbUFtgW3BbgFuQW6BbsFvAW9Bb4FvwXABcEFwgXDBcQFxQXGBccFyAXJBcoFywXMBc0FzgXPBdAF0QXSBdMF1AXVBdYF1wXYBdkF2gXbBdwF3QXeBd8F4AXhBeIF4wXkBeUF5gXnBegF6QXqBesF7AXtBe4F7wXwBfEF8gXzBfQF9QX2BfcF+AX5BfoF+wX8Bf0F/gX/BgAGAQYCBgMGBAYFBgYGBwYIBgkGCgYLBgwGDQYOBg8GEAYRBhIGEwYUBhUGFgYXBhgGGQYaBhsGHAYdBh4GHwYgBiEGIgYjBiQGJQYmBicGKAYpBioGKwYsBi0GLgYvBjAGMQYyBjMGNAY1BjYGNwY4BjkGOgY7BjwGPQY+Bj8GQAZBBkIGQwZEBkUGRgZHBkgGSQZKBksGTAZNBk4GTwZQBlEGUgZTBlQGVQZWBlcGWAZZBloGWwZcBl0GXgZfBmAGYQZiBmMGZAZlBmYGZwZoBmkGagZrBmwGbQZuBm8GcAZxBnIGcwZ0BnUGdgZ3BngGeQZ6BnsGfAZ9Bn4GfwaABoEGggaDBoQGhQaGBocGiAaJBooGiwaMBo0GjgaPBpAGkQaSBpMGlAaVBpYGlwaYBpkGmgabBpwGnQaeBp8GoAahBqIGowakBqUGpganBqgGqQaqBqsGrAatBq4GrwawBrEGsgazBrQGtQa2BrcGuAa5BroGuwa8Br0Gvga/BsAGwQbCBsMGxAbFBsYGxwbIBskGygbLBswGzQbOBs8G0AbRBtIG0wbUBtUG1gbXBtgG2QbaBtsG3AbdBt4G3wbgBuEG4gbjBuQG5QbmBucG6AbpBuoG6wbsBu0G7gbvBvAG8QbyBvMG9Ab1BvYG9wb4BvkG+gb7BvwG/Qb+Bv8HAAcBBwIHAwcEBwUHBgcHBwgHCQcKBwsHDAcNBw4HDwcQBxEHEgcTBxQHFQcWBxcHGAcZBxoHGwccBx0HHgcfByAHIQciByMHJAclByYHJwcoBykHKgcrBywHLQcuBy8HMAcxBzIHMwc0BzUHNgc3BzgHOQc6BzsHPAc9Bz4HPwdAB0EHQgdDB0QHRQdGB0cHSAdJB0oHSwdMB00HTgdPB1AHUQdSB1MHVAdVB1YHVwdYB1kHWgdbB1wHXQdeB18HYAdhB2IHYwdkB2UHZgdnB2gHaQdqB2sHbAdtB24HbwdwB3EHcgdzB3QHdQd2B3cHeAd5B3oHewd8B30Hfgd/B4AHgQeCB4MHhAeFB4YHhweIB4kHigeLB4wHjQeOB48HkAeRB5IHkweUB5UHlgeXB5gHmQeaB5sHnAedB54HnwegB6EHogejB6QHpQemB6cHqAepB6oHqwesB60HrgevB7AHsQeyB7MHtAe1B7YHtwe4B7kHuge7B7wHvQe+B78HwAfBB8IHwwfEB8UHxgfHB8gHyQfKB8sHzAfNB84HzwfQB9EH0gfTB9QH1QfWB9cH2AfZB9oH2wfcB90H3gffB+AH4QfiB+MH5AflB+YH5wfoB+kH6gfrB+wH7QfuB+8H8AfxB/IH8wf0B/UH9gf3B/gH+Qf6B/sH/Af9B/4H/wgACAEIAggDCAQIBQgGCAcICAgJCAoICwgMCA0IDggPCBAIEQgSCBMIFAgVCBYIFwgYCBkIGggbCBwIHQgeCB8IIAghCCIIIwgkCCUIJggnCCgIKQgqCCsILAgtCC4ILwgwCDEIMggzCDQINQg2CDcIOAg5CDoIOwg8CD0IPgg/CEAIQQhCCEMIRAhFCEYIRwhICEkISghLIPsMt/oktwH3ELf5LLcD9xD6BBX+fPmE+nwH/Vj+JxX50gf3xfwzBaawFfvF+DcF+PYGpmIV/dIH+8X4MwVwZhX3xfw3Bfz2Bg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODg4ODgABAQEK+B8MJpocGSQS+46LHAVGiwa9Cr0L+ucVAAPoAHwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAA') format('truetype'); }";
+    FontLoader.fontStyleAliasesMap = {"n": "normal", "b": "bold", "i": "italic", "o": "oblique"};
+	
+	FontLoader.prototype = {
+		constructor: FontLoader,
+		loadFonts: function() {
+			var self = this,
+                newFontVariations;
+			
+			if (this._numberOfFonts === 0) {
+				this._finish();
+				return;
+			}
+			
+			if (this.timeout !== null) {
+				this._timeoutId = window.setTimeout(function timeoutFire() {
+					self._finish();
+				}, this.timeout);
+			}
+			
+			// Use constant line-height so there won't be changes in height because Adobe Blank uses zero width but not zero height.
+			this._testContainer = this._document.createElement("div");
+			this._testContainer.style.cssText = "position:absolute; left:-10000px; top:-10000px; white-space:nowrap; font-size:20px; line-height:20px; visibility:hidden;";
+
+            // Create testDiv template that will be cloned for each font
+            this._testDiv = this._document.createElement("div");
+            this._testDiv.style.position = "absolute";
+            this._testDiv.appendChild(this._document.createTextNode(FontLoader.referenceText));
+
+            if (!FontLoader.useAdobeBlank) {
+                // AdobeBlank is not used
+                // We need to extract dimensions of reference font-families for each requested font variation.
+                // The extracted dimensions are stored in a static property "referenceFontFamilyVariationSizes",
+                // so we might already have some or all of them all.
+                newFontVariations = this._getNewFontVariationsFromFonts(this._fontsArray);
+                if (newFontVariations.length) {
+                    this._extractReferenceFontSizes(newFontVariations);
+                }
+                this._loadFonts();
+            } else if (FontLoader.adobeBlankReferenceSize) {
+                // AdobeBlank is used, and was loaded
+                this._loadFonts();
+            } else {
+                // AdobeBlank is used but was not loaded
+                this._loadAdobeBlankFont();
+            }
+		},
+        _extractReferenceFontSizes: function(newFontVariations) {
+			var clonedDiv, j, i,
+                key, size, fontVariation;
+
+            clonedDiv = this._testDiv.cloneNode(true);
+            this._testContainer.appendChild(clonedDiv);
+            this._document.body.appendChild(this._testContainer);
+
+            for (i = 0; i < newFontVariations.length; i++) {
+                fontVariation = newFontVariations[i];
+                key = fontVariation.key;
+                FontLoader.referenceFontFamilyVariationSizes[key] = [];
+                for (j = 0; j < FontLoader.referenceFontFamilies.length; j++) {
+                    clonedDiv.style.fontFamily = FontLoader.referenceFontFamilies[j];
+                    clonedDiv.style.fontWeight = fontVariation.weight;
+                    clonedDiv.style.fontStyle = fontVariation.style;
+                    size = new Size(clonedDiv.offsetWidth, clonedDiv.offsetHeight);
+                    FontLoader.referenceFontFamilyVariationSizes[key].push(size);
+                }
+            }
+
+            this._testContainer.parentNode.removeChild(this._testContainer);
+            clonedDiv.parentNode.removeChild(clonedDiv);
+		},
+        _loadAdobeBlankFont: function() {
+            var self = this,
+                adobeBlankDiv,
+                adobeBlankFallbackFont = "serif";
+
+            this._addAdobeBlankFontFaceIfNeeded();
+
+            adobeBlankDiv = this._testDiv.cloneNode(true);
+            this._testContainer.appendChild(adobeBlankDiv);
+            this._document.body.appendChild(this._testContainer);
+
+            // When using AdobeBlank (all browsers except IE < 11) only interval checking and size watcher methods
+            // are available for watching element size.
+            if (FontLoader.useIntervalChecking) {
+                adobeBlankDiv.style.fontFamily = FontLoader.referenceFontFamilies[0] + ", " + adobeBlankFallbackFont;
+                this._testContainer.appendChild(adobeBlankDiv);
+                // Start polling element sizes but also do first synchronous check in case all fonts where already loaded.
+                this._intervalId = window.setInterval(function intervalFire() {
+                    self._checkAdobeBlankSize();
+                }, this._intervalDelay);
+                this._checkAdobeBlankSize();
+            } else {
+                adobeBlankDiv.style.fontFamily = adobeBlankFallbackFont;
+                this._adobeBlankSizeWatcher = new SizeWatcher(/** @type HTMLElement */adobeBlankDiv, {
+                    container: this._testContainer,
+                    delegate: this,
+                    continuous: true,
+                    direction: SizeWatcher.directions.decrease,
+                    dimension: SizeWatcher.dimensions.horizontal,
+                    document: this._document
+                });
+                this._adobeBlankSizeWatcher.prepareForWatch();
+                this._adobeBlankSizeWatcher.beginWatching();
+                adobeBlankDiv.style.fontFamily = FontLoader.referenceFontFamilies[0] + ", " + adobeBlankFallbackFont;
+            }
+        },
+        _getNewFontVariationsFromFonts: function(fonts) {
+            var font, key, i,
+                variations = [],
+                variationsMap = {};
+
+            for (i = 0; i < fonts.length; i++) {
+                font = fonts[i];
+                key = this._fontVariationKeyForFont(font);
+                if (!(key in variationsMap) && !(key in FontLoader.referenceFontFamilyVariationSizes)) {
+                    variationsMap[key] = true;
+                    variations.push({
+                        key: key,
+                        weight: font.weight,
+                        style: font.style
+                    });
+                }
+            }
+            return variations;
+        },
+		_parseFonts: function(fonts) {
+			var processedFonts = [];
+
+			fonts.forEach(function (font) {
+                if (typeof font === "string") {
+                    if (font.indexOf(':') > -1) {
+                        processedFonts = processedFonts.concat(this._convertShorthandToFontObjects(font));
+                    } else {
+                        processedFonts.push({
+                            family: font,
+                            weight: 400,
+                            style: 'normal'
+                        });
+                    }
+                } else if (this._isValidFontObject(font)) {
+                    processedFonts.push(font);
+                } else {
+                    throw new Error("Invalid font format");
+                }
+			}, this);
+
+			return processedFonts;
+		},
+        /**
+         * @param {FontDescriptor} fontObject
+         * @returns {boolean}
+         * @private
+         */
+		_isValidFontObject: function(fontObject) {
+			if (!fontObject.family || !fontObject.weight || !fontObject.style) {
+				return false;
+			}
+			return ['normal', 'italic', 'bold', 'oblique'].indexOf(fontObject.style) !== -1;
+		},
+        /**
+         * @param {string} fontString
+         * @returns {Array.<FontDescriptor>}
+         * @private
+         */
+		_convertShorthandToFontObjects: function(fontString) {
+			var fonts = [],
+                parts = fontString.split(':'),
+			    variants,
+			    fontFamily;
+
+            fontFamily = parts[0];
+            variants = parts[1].split(',');
+
+			variants.forEach(function (variant) {
+                var styleAlias,
+                    weightAlias,
+                    weight,
+                    style;
+
+                if (variant.length !== 2) {
+                    throw new Error("Invalid Font Variation Description: '" + variant + "' for font string: '" + fontString + "'");
+                }
+
+                styleAlias = variant[0];
+                weightAlias = variant[1];
+
+                if (styleAlias in FontLoader.fontStyleAliasesMap) {
+                    style = FontLoader.fontStyleAliasesMap[styleAlias];
+                } else {
+                    return;
+                }
+
+                weight = parseInt(weightAlias, 10);
+                if (isNaN(weight)) {
+                    return;
+                } else {
+                    weight *= 100;
+                }
+
+                fonts.push({
+					family: fontFamily,
+					weight: weight,
+					style: style
+				});
+			});
+
+			return fonts;
+		},
+        _addAdobeBlankFontFaceIfNeeded: function() {
+            var adobeBlankFontFaceStyle;
+            if (!this._document.getElementById(FontLoader.adobeBlankFontFaceStyleId)) {
+                adobeBlankFontFaceStyle = this._document.createElement("style");
+                adobeBlankFontFaceStyle.setAttribute("type", "text/css");
+                adobeBlankFontFaceStyle.setAttribute("id", FontLoader.adobeBlankFontFaceStyleId);
+                adobeBlankFontFaceStyle.appendChild(this._document.createTextNode(FontLoader.adobeBlankFontFaceRule));
+                this._document.getElementsByTagName("head")[0].appendChild(adobeBlankFontFaceStyle);
+            }
+        },
+		_checkAdobeBlankSize: function() {
+			var adobeBlankDiv = this._testContainer.firstChild;
+			this._adobeBlankLoaded(adobeBlankDiv);
+		},
+		_adobeBlankLoaded: function(adobeBlankDiv) {
+			// Prevent false size change, for example if AdobeBlank height is higher than fallback font.
+			if (adobeBlankDiv.offsetWidth !== 0) {
+				return;
+			}
+			
+			FontLoader.adobeBlankReferenceSize = new Size(adobeBlankDiv.offsetWidth, adobeBlankDiv.offsetHeight);
+			
+			if (this._adobeBlankSizeWatcher !== null) {
+				// SizeWatcher method
+				this._adobeBlankSizeWatcher.endWatching();
+				this._adobeBlankSizeWatcher.removeScrollWatchers();
+				this._adobeBlankSizeWatcher = null;
+			} else {
+				// Polling method (IE)
+				window.clearInterval(this._intervalId);
+				adobeBlankDiv.parentNode.removeChild(adobeBlankDiv);
+			}
+			
+			this._testContainer.parentNode.removeChild(this._testContainer);
+
+			this._loadFonts();
+		},
+		_cloneNodeSetStyleAndAttributes: function(font, fontKey, referenceFontFamilyIndex) {
+			var clonedDiv = this._testDiv.cloneNode(true);
+            clonedDiv.style.fontWeight = font.weight;
+            clonedDiv.style.fontStyle = font.style;
+            clonedDiv.setAttribute("data-font-map-key", fontKey);
+			clonedDiv.setAttribute("data-ref-font-family-index", String(referenceFontFamilyIndex));
+			return clonedDiv;
+		},
+        _getFontMapKeyFromElement: function(element) {
+            return element.getAttribute("data-font-map-key");
+        },
+        _getFontFromElement: function(element) {
+            var fontKey = this._getFontMapKeyFromElement(element);
+            return this._fontsMap[fontKey];
+        },
+        _getFontFamilyFromElement: function(element) {
+            var font = this._getFontFromElement(element);
+            return font.family;
+        },
+        _getReferenceFontFamilyIndexFromElement: function(element) {
+            return element.getAttribute("data-ref-font-family-index");
+        },
+        _getReferenceFontFamilyFromElement: function(element) {
+            var referenceFontFamilyIndex = this._getReferenceFontFamilyIndexFromElement(element);
+            return FontLoader.referenceFontFamilies[referenceFontFamilyIndex];
+        },
+        _fontVariationKeyForFont: function(font) {
+            return font.weight + font.style;
+        },
+        _fontsMapKeyForFont: function(font) {
+            return font.family + font.weight + font.style
+        },
+		_loadFonts: function() {
+			var i, j, clonedDiv, sizeWatcher,
+                font,
+                fontKey,
+                fontVariationKey,
+                referenceFontSize,
+                sizeWatcherDirection,
+                sizeWatcherDimension,
+				self = this;
+
+			// Add div for each font-family
+			for (i = 0; i < this._numberOfFonts; i++) {
+                font = this._fontsArray[i];
+                fontKey = this._fontsMapKeyForFont(font);
+				this._fontsMap[fontKey] = font;
+
+				for (j = 0; j < FontLoader.referenceFontFamilies.length; j++) {
+                    clonedDiv = this._cloneNodeSetStyleAndAttributes(font, fontKey, j);
+					if (FontLoader.useResizeEvent) {
+                        clonedDiv.style.fontFamily = FontLoader.referenceFontFamilies[j];
+                        this._testContainer.appendChild(clonedDiv);
+					} else if (FontLoader.useIntervalChecking) {
+						clonedDiv.style.fontFamily = "'" + font.family + "', " + FontLoader.referenceFontFamilies[j];
+                        this._testContainer.appendChild(clonedDiv);
+					} else {
+                        clonedDiv.style.fontFamily = FontLoader.referenceFontFamilies[j];
+                        if (FontLoader.useAdobeBlank) {
+                            referenceFontSize = FontLoader.adobeBlankReferenceSize;
+                            sizeWatcherDirection = SizeWatcher.directions.increase;
+                            sizeWatcherDimension = SizeWatcher.dimensions.horizontal;
+                        } else {
+                            fontVariationKey = this._fontVariationKeyForFont(font);
+                            referenceFontSize = FontLoader.referenceFontFamilyVariationSizes[fontVariationKey][j];
+                            sizeWatcherDirection = SizeWatcher.directions.both;
+                            sizeWatcherDimension = SizeWatcher.dimensions.both;
+                        }
+						sizeWatcher = new SizeWatcher(/** @type HTMLElement */clonedDiv, {
+							container: this._testContainer,
+							delegate: this,
+							size: referenceFontSize,
+							direction: sizeWatcherDirection,
+							dimension: sizeWatcherDimension,
+							document: this._document
+						});
+						// The prepareForWatch() and beginWatching() methods will be invoked in separate iterations to
+						// reduce number of browser's CSS recalculations.
+						this._sizeWatchers.push(sizeWatcher);
+					}
+				}
+			}
+
+			// Append the testContainer after all test elements to minimize DOM insertions
+			this._document.body.appendChild(this._testContainer);
+
+			if (FontLoader.useResizeEvent) {
+				for (j = 0; j < this._testContainer.childNodes.length; j++) {
+					clonedDiv = this._testContainer.childNodes[j];
+					// "resize" event works only with attachEvent
+					clonedDiv.attachEvent("onresize", (function(self, clonedDiv) {
+						return function() {
+							self._elementSizeChanged(clonedDiv);
+						}
+					})(this, clonedDiv));
+				}
+				window.setTimeout(function() {
+					for (j = 0; j < self._testContainer.childNodes.length; j++) {
+						clonedDiv = self._testContainer.childNodes[j];
+						clonedDiv.style.fontFamily = "'" + self._getFontFamilyFromElement(clonedDiv) + "', " + self._getReferenceFontFamilyFromElement(clonedDiv);
+					}
+				}, 0);
+			} else if (FontLoader.useIntervalChecking) {
+				// Start polling element sizes but also do first synchronous check in case all fonts where already loaded.
+				this._intervalId = window.setInterval(function intervalFire() {
+					self._checkSizes();
+				}, this._intervalDelay);
+				this._checkSizes();
+			} else {
+				// We are dividing the prepareForWatch() and beginWatching() methods to optimize browser performance by
+				// removing CSS recalculation from each iteration to the end of iterations.
+                for (i = 0; i < this._sizeWatchers.length; i++) {
+                    sizeWatcher = this._sizeWatchers[i];
+                    sizeWatcher.prepareForWatch();
+                }
+                for (i = 0; i < this._sizeWatchers.length; i++) {
+                    sizeWatcher = this._sizeWatchers[i];
+                    sizeWatcher.beginWatching();
+                    // Apply tested font-family
+                    clonedDiv = sizeWatcher.getWatchedElement();
+                    clonedDiv.style.fontFamily = "'" + this._getFontFamilyFromElement(clonedDiv) + "', " + self._getReferenceFontFamilyFromElement(clonedDiv);
+                }
+			}
+		},
+		_checkSizes: function() {
+			var i, testDiv, font, fontVariationKey, currSize, refSize, refFontFamilyIndex;
+
+			for (i = this._testContainer.childNodes.length - 1; i >= 0; i--) {
+				testDiv = this._testContainer.childNodes[i];
+				currSize = new Size(testDiv.offsetWidth, testDiv.offsetHeight);
+                if (FontLoader.useAdobeBlank) {
+                    refSize = FontLoader.adobeBlankReferenceSize;
+                } else {
+                    font = this._getFontFromElement(testDiv);
+                    fontVariationKey = this._fontVariationKeyForFont(font);
+                    refFontFamilyIndex = this._getReferenceFontFamilyIndexFromElement(testDiv);
+                    refSize = FontLoader.referenceFontFamilyVariationSizes[fontVariationKey][refFontFamilyIndex];
+                }
+				if (!refSize.isEqual(currSize)) {
+					// Element dimensions changed, this means its font loaded, remove it from testContainer div
+					testDiv.parentNode.removeChild(testDiv);
+					this._elementSizeChanged(testDiv);
+				}
+			}
+		},
+		_elementSizeChanged: function(element) {
+			var font, fontKey;
+
+			if (this._finished) {
+				return;
+			}
+
+            fontKey = this._getFontMapKeyFromElement(element);
+
+			// Check that the font of this element wasn't already marked as loaded by an element with different reference font family.
+			if (typeof this._fontsMap[fontKey] === "undefined") {
+				return;
+			}
+
+            font = this._fontsMap[fontKey];
+
+			this._numberOfLoadedFonts++;
+			delete this._fontsMap[fontKey];
+
+			if (this.delegate && typeof this.delegate.fontLoaded === "function") {
+				this.delegate.fontLoaded(font);
+			}
+
+			if (this._numberOfLoadedFonts === this._numberOfFonts) {
+				this._finish();
+			}
+		},
+		_finish: function() {
+			var error, i, sizeWatcher,
+                fontKey,
+				notLoadedFonts = [];
+			
+			if (this._finished) {
+				return;
+			}
+			
+			this._finished = true;
+			
+			if (this._adobeBlankSizeWatcher !== null) {
+                if (this._adobeBlankSizeWatcher.getState() === SizeWatcher.states.watchingForSizeChange) {
+                    this._adobeBlankSizeWatcher.endWatching();
+                }
+				this._adobeBlankSizeWatcher = null;
+			}
+
+            for (i = 0; i < this._sizeWatchers.length; i++) {
+                sizeWatcher = this._sizeWatchers[i];
+                if (sizeWatcher.getState() === SizeWatcher.states.watchingForSizeChange) {
+                    sizeWatcher.endWatching();
+                }
+            }
+            this._sizeWatchers = [];
+			
+			if (this._testContainer !== null) {
+				this._testContainer.parentNode.removeChild(this._testContainer);
+			}
+			
+			if (this._timeoutId !== null) {
+				window.clearTimeout(this._timeoutId);
+			}
+			
+			if (this._intervalId !== null) {
+				window.clearInterval(this._intervalId);
+			}
+			
+            if (this.delegate) {
+                if (this._numberOfLoadedFonts < this._numberOfFonts) {
+                    for (fontKey in this._fontsMap) {
+                        if (this._fontsMap.hasOwnProperty(fontKey)) {
+                            notLoadedFonts.push(this._fontsMap[fontKey]);
+                        }
+                    }
+                    error = {
+                        message: "Not all fonts were loaded (" + this._numberOfLoadedFonts + "/" + this._numberOfFonts + ")",
+                        notLoadedFonts: notLoadedFonts
+                    };
+                } else {
+                    error = null;
+                }
+                if (typeof this.delegate.complete === "function") {
+                    this.delegate.complete(error);
+                } else if (typeof this.delegate.fontsLoaded === "function") {
+                    this.delegate.fontsLoaded(error);
+                }
+            }
+		},
+		/**
+		 * SizeWatcher delegate method
+		 * @param {SizeWatcher} sizeWatcher
+		 */
+		sizeWatcherChangedSize: function(sizeWatcher) {
+			var watchedElement = sizeWatcher.getWatchedElement();
+			if (sizeWatcher === this._adobeBlankSizeWatcher) {
+				this._adobeBlankLoaded(watchedElement);
+			} else {
+				this._elementSizeChanged(watchedElement);
+			}
+		}
+	};
+
+	/**
+	 * Size object
+	 *
+	 * @param width
+	 * @param height
+	 * @constructor
+	 */
+	function Size(width, height) {
+		this.width = width;
+		this.height = height;
+	}
+
+    Size.sizeFromString = function(sizeString) {
+        var arr = sizeString.split(",");
+        if (arr.length !== 2) {
+            return null;
+        }
+        return new Size(arr[0], arr[1]);
+    };
+
+	/**
+	 * Compares receiver object to passed in size object.
+	 * 
+	 * @param otherSize
+	 * @returns {boolean}
+	 */
+	Size.prototype.isEqual = function(otherSize) {
+		return (this.width === otherSize.width && this.height === otherSize.height);
+	};
+
+    Size.prototype.toString = function() {
+        return this.width + "," + this.height;
+    };
+
+	/**
+	 * SizeWatcher observes size of an element and notifies when its size is changed. It doesn't use any timeouts
+	 * to check the element size, when change in size occurs a callback method immediately invoked.
+	 * 
+	 * To watch for element's size changes the element, and other required elements are appended to a container element
+	 * you specify, and which must be added to the DOM tree before invoking prepareForWatch() method. Your container
+	 * element should be positioned outside of client's visible area. Therefore you shouldn't use SizeWatcher to watch
+	 * for size changes of elements used for UI.
+	 * Such container element could be a simple <div> that is a child of the <body> element:
+	 * <div style="position:absolute; left:-10000px; top:-10000px;"></div>
+	 * 
+	 * You must invoke SizeWatcher's methods in a specific order to establish size change listeners:
+	 * 
+	 * 1. Create SizeWatcher instance by invoke SizeWatcher constructor passing the element (size of which you want to
+	 *    observe), the container element, the delegate object and optional size parameter of type Size which should be
+	 *    the pre-calculated initial size of your element.
+	 * 4. Invoke prepareForWatch() method. This method will calculate element size if you didn't passed it to the constructor.
+	 * 5. Invoke beginWatching() method. This method will set event listeners and invoke your delegate's method once
+	 *    element size changes. 
+	 * 
+	 * Failing to invoke above methods in their predefined order will throw an exception.
+	 * 
+	 * @param {HTMLElement}   element An element, size of which will be observed for changes.
+	 * @param {Object}        options
+	 * @param {HTMLElement}   options.container An element to which special observing elements will be added. Must be in DOM tree
+	 *                        when prepareForWatch() method is called.
+	 * @param {Object}        options.delegate A delegate object with a sizeWatcherChangedSize method which will be invoked, in
+	 *                        context of the delegate object, when change in size occurs. This method is invoked with single
+	 *                        parameter which is the current SizeWatcher instance.
+	 * @param {Size}          [options.size] The pre-calculated initial size of your element. When passed, the element is not
+	 *                        asked for offsetWidth and offsetHeight, which may be useful to reduce browser's CSS
+	 *                        recalculations. If you will not pass the size parameter then its size calculation will be
+	 *                        deferred to prepareForWatch() method.
+	 * @param {Boolean}       [options.continuous=false] A boolean flag indicating if the SizeWatcher will watch only for
+	 *                        the first size change (default) or will continuously watch for size changes.
+	 * @param {Number}        [options.direction=SizeWatcher.directions.both] The direction of size change that should be
+	 *                        watched: SizeWatcher.directions.increase, SizeWatcher.directions.decrease or
+	 *                        SizeWatcher.directions.both
+	 * @param {Number}        [options.dimension=SizeWatcher.dimensions.both] The dimension of size change that should be
+	 *                        watched: SizeWatcher.dimensions.horizontal, SizeWatcher.dimensions.vertical or
+	 *                        SizeWatcher.dimensions.both
+	 * @param {HTMLDocument}  [options.document] The DOM tree context to use, if none provided then it will be the document.
+	 * @constructor
+	 */
+	function SizeWatcher(element, options) {
+		this._element = element;
+		this._delegate = options.delegate;
+		this._size = null;
+		this._continuous = !!options.continuous;
+		this._direction = options.direction ? options.direction : SizeWatcher.directions.both;
+		this._dimension = options.dimension ? options.dimension : SizeWatcher.dimensions.both;
+		this._sizeIncreaseWatcherContentElm = null;
+		this._sizeDecreaseWatcherElm = null;
+		this._sizeIncreaseWatcherElm = null;
+		this._state = SizeWatcher.states.initialized;
+		this._scrollAmount = 2;
+		this._document = options.document || document;
+
+		this._generateScrollWatchers(options.size);
+		this._appendScrollWatchersToElement(options.container);
+	}
+	
+	SizeWatcher.states = {
+		initialized: 0,
+		generatedScrollWatchers: 1,
+		appendedScrollWatchers: 2,
+		preparedScrollWatchers: 3,
+		watchingForSizeChange: 4
+	};
+
+	SizeWatcher.directions = {
+		decrease: 1,
+		increase: 2,
+		both: 3
+	};
+
+	SizeWatcher.dimensions = {
+		horizontal: 1,
+		vertical: 2,
+		both: 3
+	};
+	
+	//noinspection JSUnusedLocalSymbols
+	SizeWatcher.prototype = {
+		constructor: SizeWatcher,
+		getWatchedElement: function() {
+			return this._element;
+		},
+        getState: function() {
+            return this._state;
+        },
+		setSize: function(size) {
+			this._size = size;
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.increase) {
+				this._sizeIncreaseWatcherContentElm.style.cssText = "width: " + (size.width + this._scrollAmount) + "px; height: " + (size.height + this._scrollAmount) + "px;";
+			}
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.decrease) {
+				this._sizeDecreaseWatcherElm.style.cssText = "position:absolute; left: 0px; top: 0px; overflow: hidden; width: " + (size.width - this._scrollAmount) + "px; height: " + (size.height - this._scrollAmount) + "px;";
+			}
+		},
+		_generateScrollWatchers: function(size) {
+
+			this._element.style.position = "absolute";
+			
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.increase) {
+				this._sizeIncreaseWatcherContentElm = this._document.createElement("div");
+				
+				this._sizeIncreaseWatcherElm = this._document.createElement("div");
+				this._sizeIncreaseWatcherElm.style.cssText = "position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden;";
+				this._sizeIncreaseWatcherElm.appendChild(this._sizeIncreaseWatcherContentElm);
+
+				this._element.appendChild(this._sizeIncreaseWatcherElm);
+			}
+
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.decrease) {
+				this._sizeDecreaseWatcherElm = this._document.createElement("div");
+				this._sizeDecreaseWatcherElm.appendChild(this._element);
+			}
+			
+			if (size) {
+				this.setSize(size);
+			}
+			
+			this._state = SizeWatcher.states.generatedScrollWatchers;
+		},
+		_appendScrollWatchersToElement: function(container) {
+			if (this._state !== SizeWatcher.states.generatedScrollWatchers) {
+				throw new Error("SizeWatcher._appendScrollWatchersToElement() was invoked before SizeWatcher._generateScrollWatchers()");
+			}
+
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.decrease) {
+				container.appendChild(this._sizeDecreaseWatcherElm);
+			} else {
+				container.appendChild(this._element);
+			}
+			
+			this._state = SizeWatcher.states.appendedScrollWatchers;
+		},
+		removeScrollWatchers: function() {
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.decrease) {
+				if (this._sizeDecreaseWatcherElm.parentNode) {
+					this._sizeDecreaseWatcherElm.parentNode.removeChild(this._sizeDecreaseWatcherElm);
+				}
+			} else if (this._element.parentNode) {
+				this._element.parentNode.removeChild(this._element);
+			}
+		},
+		prepareForWatch: function() {
+			var parentNode,
+				sizeDecreaseWatcherElmScrolled = true,
+				sizeIncreaseWatcherElmScrolled = true;
+			
+			if (this._state !== SizeWatcher.states.appendedScrollWatchers) {
+				throw new Error("SizeWatcher.prepareForWatch() invoked before SizeWatcher._appendScrollWatchersToElement()");
+			}
+			
+			if (this._size === null) {
+				this.setSize(new Size(this._element.offsetWidth, this._element.offsetHeight));
+			}
+
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.decrease) {
+				sizeDecreaseWatcherElmScrolled = this._scrollElementToBottomRight(this._sizeDecreaseWatcherElm);
+			}
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.increase) {
+				sizeIncreaseWatcherElmScrolled = this._scrollElementToBottomRight(this._sizeIncreaseWatcherElm);
+			}
+			
+			// Check if scroll positions updated.
+			if (!sizeDecreaseWatcherElmScrolled || !sizeIncreaseWatcherElmScrolled) {
+				
+				// Traverse tree to the top node to see if element is in the DOM tree.
+				parentNode = this._element.parentNode;
+				while (parentNode !== this._document && parentNode !== null) {
+					parentNode = parentNode.parentNode;
+				}
+				
+				if (parentNode === null) {
+					throw new Error("Can't set scroll position of scroll watchers. SizeWatcher is not in the DOM tree.");
+				} else if (console && typeof console.warn === "function") {
+					console.warn("SizeWatcher can't set scroll position of scroll watchers.");
+				}
+			}
+			
+			this._state = SizeWatcher.states.preparedScrollWatchers;
+		},
+		_scrollElementToBottomRight: function(element) {
+			var elementScrolled = true;
+			//noinspection JSBitwiseOperatorUsage
+			if (this._dimension & SizeWatcher.dimensions.vertical) {
+				element.scrollTop = this._scrollAmount;
+				elementScrolled = elementScrolled && element.scrollTop > 0;
+			}
+			//noinspection JSBitwiseOperatorUsage
+			if (this._dimension & SizeWatcher.dimensions.horizontal) {
+				element.scrollLeft = this._scrollAmount;
+				elementScrolled = elementScrolled && element.scrollLeft > 0;
+			}
+			return elementScrolled;
+		},
+		beginWatching: function() {
+			if (this._state !== SizeWatcher.states.preparedScrollWatchers) {
+				throw new Error("SizeWatcher.beginWatching() invoked before SizeWatcher.prepareForWatch()");
+			}
+
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.decrease) {
+				//noinspection JSValidateTypes
+				this._sizeDecreaseWatcherElm.addEventListener("scroll", this, false);
+			}
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.increase) {
+				//noinspection JSValidateTypes
+				this._sizeIncreaseWatcherElm.addEventListener("scroll", this, false);
+			}
+			
+			this._state = SizeWatcher.states.watchingForSizeChange;
+		},
+		endWatching: function() {
+			if (this._state !== SizeWatcher.states.watchingForSizeChange) {
+				throw new Error("SizeWatcher.endWatching() invoked before SizeWatcher.beginWatching()");
+			}
+
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.decrease) {
+				//noinspection JSValidateTypes
+				this._sizeDecreaseWatcherElm.removeEventListener("scroll", this, false);
+			}
+			//noinspection JSBitwiseOperatorUsage
+			if (this._direction & SizeWatcher.directions.increase) {
+				//noinspection JSValidateTypes
+				this._sizeIncreaseWatcherElm.removeEventListener("scroll", this, false);
+			}
+			this._state = SizeWatcher.states.appendedScrollWatchers;
+		},
+		/**
+		 * @private
+		 */
+		handleEvent: function(event) {
+			var newSize, oldSize;
+			
+			// This is not suppose to happen because when we run endWatching() we remove scroll listeners.
+			// But some browsers will fire second scroll event which was pushed into event stack before listener was
+			// removed so do this check anyway.
+			if (this._state !== SizeWatcher.states.watchingForSizeChange) {
+				return;
+			}
+			
+			newSize = new Size(this._element.offsetWidth, this._element.offsetHeight);
+			oldSize = this._size;
+
+			// Check if element size is changed. How come that element size isn't changed but scroll event fired?
+			// This can happen in two cases: when double scroll occurs or immediately after calling prepareForWatch()
+			// (event if scroll event listeners attached after it).
+			// The double scroll event happens when one size dimension (e.g.:width) is increased and another
+			// (e.g.:height) is decreased.
+			if (oldSize.isEqual(newSize)) {
+				return;
+			}
+			
+			if (this._delegate && typeof this._delegate.sizeWatcherChangedSize === "function") {
+				this._delegate.sizeWatcherChangedSize(this);
+				
+				// Check that endWatching() wasn't invoked from within the delegate.
+				if (this._state !== SizeWatcher.states.watchingForSizeChange) {
+					return;
+				}
+			}
+
+			if (!this._continuous) {
+				this.endWatching();
+			} else {
+				// Set the new size so in case of double scroll event we won't cause the delegate method to be executed twice
+				// and also to update to the new watched size.
+				this.setSize(newSize);
+				// change state so prepareFowWatch() won't throw exception about wrong order invocation.
+				this._state = SizeWatcher.states.appendedScrollWatchers;
+				// Run prepareForWatch to reset the scroll watchers, we have already set the size
+				this.prepareForWatch();
+				// Set state to listeningForSizeChange, there is no need to invoke beginWatching() method as scroll event
+				// listeners and callback are already set.
+				this._state = SizeWatcher.states.watchingForSizeChange;
+				
+			}
+		}
+	};
+	
+	return FontLoader;
+	
+}));
+
+(function(root) {
+	'use strict';
+
+	var CSSOM = root.CSSOM = {};
+/**
+ * @constructor
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleDeclaration
+ */
+CSSOM.CSSStyleDeclaration = function CSSStyleDeclaration(){
+	this.length = 0;
+	this.parentRule = null;
+
+	// NON-STANDARD
+	this._importants = {};
+};
+
+
+CSSOM.CSSStyleDeclaration.prototype = {
+
+	constructor: CSSOM.CSSStyleDeclaration,
+
+	/**
+	 *
+	 * @param {string} name
+	 * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleDeclaration-getPropertyValue
+	 * @return {string} the value of the property if it has been explicitly set for this declaration block.
+	 * Returns the empty string if the property has not been set.
+	 */
+	getPropertyValue: function(name) {
+		return this[name] || "";
+	},
+
+	/**
+	 *
+	 * @param {string} name
+	 * @param {string} value
+	 * @param {string} [priority=null] "important" or null
+	 * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleDeclaration-setProperty
+	 */
+	setProperty: function(name, value, priority) {
+		if (this[name]) {
+			// Property already exist. Overwrite it.
+			var index = Array.prototype.indexOf.call(this, name);
+			if (index < 0) {
+				this[this.length] = name;
+				this.length++;
+			}
+		} else {
+			// New property.
+			this[this.length] = name;
+			this.length++;
+		}
+		this[name] = value;
+		this._importants[name] = priority;
+	},
+
+	/**
+	 *
+	 * @param {string} name
+	 * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleDeclaration-removeProperty
+	 * @return {string} the value of the property if it has been explicitly set for this declaration block.
+	 * Returns the empty string if the property has not been set or the property name does not correspond to a known CSS property.
+	 */
+	removeProperty: function(name) {
+		if (!(name in this)) {
+			return "";
+		}
+		var index = Array.prototype.indexOf.call(this, name);
+		if (index < 0) {
+			return "";
+		}
+		var prevValue = this[name];
+		this[name] = "";
+
+		// That's what WebKit and Opera do
+		Array.prototype.splice.call(this, index, 1);
+
+		// That's what Firefox does
+		//this[index] = ""
+
+		return prevValue;
+	},
+
+	getPropertyCSSValue: function() {
+		//FIXME
+	},
+
+	/**
+	 *
+	 * @param {String} name
+	 */
+	getPropertyPriority: function(name) {
+		return this._importants[name] || "";
+	},
+
+
+	/**
+	 *   element.style.overflow = "auto"
+	 *   element.style.getPropertyShorthand("overflow-x")
+	 *   -> "overflow"
+	 */
+	getPropertyShorthand: function() {
+		//FIXME
+	},
+
+	isPropertyImplicit: function() {
+		//FIXME
+	},
+
+	// Doesn't work in IE < 9
+	get cssText(){
+		var properties = [];
+		for (var i=0, length=this.length; i < length; ++i) {
+			var name = this[i];
+			var value = this.getPropertyValue(name);
+			var priority = this.getPropertyPriority(name);
+			if (priority) {
+				priority = " !" + priority;
+			}
+			properties[i] = name + ": " + value + priority + ";";
+		}
+		return properties.join(" ");
+	},
+
+	set cssText(text){
+		var i, name;
+		for (i = this.length; i--;) {
+			name = this[i];
+			this[name] = "";
+		}
+		Array.prototype.splice.call(this, 0, this.length);
+		this._importants = {};
+
+		var dummyRule = CSSOM.parse('#bogus{' + text + '}').cssRules[0].style;
+		var length = dummyRule.length;
+		for (i = 0; i < length; ++i) {
+			name = dummyRule[i];
+			this.setProperty(dummyRule[i], dummyRule.getPropertyValue(name), dummyRule.getPropertyPriority(name));
+		}
+	}
+};
+
+
+
+/**
+ * @constructor
+ * @see http://dev.w3.org/csswg/cssom/#the-cssrule-interface
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSRule
+ */
+CSSOM.CSSRule = function CSSRule() {
+	this.parentRule = null;
+	this.parentStyleSheet = null;
+};
+
+CSSOM.CSSRule.UNKNOWN_RULE = 0;                 // obsolete
+CSSOM.CSSRule.STYLE_RULE = 1;
+CSSOM.CSSRule.CHARSET_RULE = 2;                 // obsolete
+CSSOM.CSSRule.IMPORT_RULE = 3;
+CSSOM.CSSRule.MEDIA_RULE = 4;
+CSSOM.CSSRule.FONT_FACE_RULE = 5;
+CSSOM.CSSRule.PAGE_RULE = 6;
+CSSOM.CSSRule.KEYFRAMES_RULE = 7;
+CSSOM.CSSRule.KEYFRAME_RULE = 8;
+CSSOM.CSSRule.MARGIN_RULE = 9;
+CSSOM.CSSRule.NAMESPACE_RULE = 10;
+CSSOM.CSSRule.COUNTER_STYLE_RULE = 11;
+CSSOM.CSSRule.SUPPORTS_RULE = 12;
+CSSOM.CSSRule.DOCUMENT_RULE = 13;
+CSSOM.CSSRule.FONT_FEATURE_VALUES_RULE = 14;
+CSSOM.CSSRule.VIEWPORT_RULE = 15;
+CSSOM.CSSRule.REGION_STYLE_RULE = 16;
+
+
+CSSOM.CSSRule.prototype = {
+	constructor: CSSOM.CSSRule
+	//FIXME
+};
+
+
+
+/**
+ * @constructor
+ * @see http://dev.w3.org/csswg/cssom/#cssstylerule
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleRule
+ */
+CSSOM.CSSStyleRule = function CSSStyleRule() {
+	CSSOM.CSSRule.call(this);
+	this.selectorText = "";
+	this.style = new CSSOM.CSSStyleDeclaration();
+	this.style.parentRule = this;
+};
+
+CSSOM.CSSStyleRule.prototype = new CSSOM.CSSRule();
+CSSOM.CSSStyleRule.prototype.constructor = CSSOM.CSSStyleRule;
+CSSOM.CSSStyleRule.prototype.type = 1;
+
+Object.defineProperty(CSSOM.CSSStyleRule.prototype, "cssText", {
+	get: function() {
+		var text;
+		if (this.selectorText) {
+			text = this.selectorText + " {" + this.style.cssText + "}";
+		} else {
+			text = "";
+		}
+		return text;
+	},
+	set: function(cssText) {
+		var rule = CSSOM.CSSStyleRule.parse(cssText);
+		this.style = rule.style;
+		this.selectorText = rule.selectorText;
+	}
+});
+
+
+/**
+ * NON-STANDARD
+ * lightweight version of parse.js.
+ * @param {string} ruleText
+ * @return CSSStyleRule
+ */
+CSSOM.CSSStyleRule.parse = function(ruleText) {
+	var i = 0;
+	var state = "selector";
+	var index;
+	var j = i;
+	var buffer = "";
+
+	var SIGNIFICANT_WHITESPACE = {
+		"selector": true,
+		"value": true
+	};
+
+	var styleRule = new CSSOM.CSSStyleRule();
+	var name, priority="";
+
+	for (var character; (character = ruleText.charAt(i)); i++) {
+
+		switch (character) {
+
+		case " ":
+		case "\t":
+		case "\r":
+		case "\n":
+		case "\f":
+			if (SIGNIFICANT_WHITESPACE[state]) {
+				// Squash 2 or more white-spaces in the row into 1
+				switch (ruleText.charAt(i - 1)) {
+					case " ":
+					case "\t":
+					case "\r":
+					case "\n":
+					case "\f":
+						break;
+					default:
+						buffer += " ";
+						break;
+				}
+			}
+			break;
+
+		// String
+		case '"':
+			j = i + 1;
+			index = ruleText.indexOf('"', j) + 1;
+			if (!index) {
+				throw '" is missing';
+			}
+			buffer += ruleText.slice(i, index);
+			i = index - 1;
+			break;
+
+		case "'":
+			j = i + 1;
+			index = ruleText.indexOf("'", j) + 1;
+			if (!index) {
+				throw "' is missing";
+			}
+			buffer += ruleText.slice(i, index);
+			i = index - 1;
+			break;
+
+		// Comment
+		case "/":
+			if (ruleText.charAt(i + 1) === "*") {
+				i += 2;
+				index = ruleText.indexOf("*/", i);
+				if (index === -1) {
+					throw new SyntaxError("Missing */");
+				} else {
+					i = index + 1;
+				}
+			} else {
+				buffer += character;
+			}
+			break;
+
+		case "{":
+			if (state === "selector") {
+				styleRule.selectorText = buffer.trim();
+				buffer = "";
+				state = "name";
+			}
+			break;
+
+		case ":":
+			if (state === "name") {
+				name = buffer.trim();
+				buffer = "";
+				state = "value";
+			} else {
+				buffer += character;
+			}
+			break;
+
+		case "!":
+			if (state === "value" && ruleText.indexOf("!important", i) === i) {
+				priority = "important";
+				i += "important".length;
+			} else {
+				buffer += character;
+			}
+			break;
+
+		case ";":
+			if (state === "value") {
+				styleRule.style.setProperty(name, buffer.trim(), priority);
+				priority = "";
+				buffer = "";
+				state = "name";
+			} else {
+				buffer += character;
+			}
+			break;
+
+		case "}":
+			if (state === "value") {
+				styleRule.style.setProperty(name, buffer.trim(), priority);
+				priority = "";
+				buffer = "";
+			} else if (state === "name") {
+				break;
+			} else {
+				buffer += character;
+			}
+			state = "selector";
+			break;
+
+		default:
+			buffer += character;
+			break;
+
+		}
+	}
+
+	return styleRule;
+
+};
+
+
+
+/**
+ * @constructor
+ * @see http://dev.w3.org/csswg/cssom/#the-medialist-interface
+ */
+CSSOM.MediaList = function MediaList(){
+	this.length = 0;
+};
+
+CSSOM.MediaList.prototype = {
+
+	constructor: CSSOM.MediaList,
+
+	/**
+	 * @return {string}
+	 */
+	get mediaText() {
+		return Array.prototype.join.call(this, ", ");
+	},
+
+	/**
+	 * @param {string} value
+	 */
+	set mediaText(value) {
+		var values = value.split(",");
+		var length = this.length = values.length;
+		for (var i=0; i<length; i++) {
+			this[i] = values[i].trim();
+		}
+	},
+
+	/**
+	 * @param {string} medium
+	 */
+	appendMedium: function(medium) {
+		if (Array.prototype.indexOf.call(this, medium) === -1) {
+			this[this.length] = medium;
+			this.length++;
+		}
+	},
+
+	/**
+	 * @param {string} medium
+	 */
+	deleteMedium: function(medium) {
+		var index = Array.prototype.indexOf.call(this, medium);
+		if (index !== -1) {
+			Array.prototype.splice.call(this, index, 1);
+		}
+	}
+
+};
+
+
+
+/**
+ * @constructor
+ * @see http://dev.w3.org/csswg/cssom/#cssmediarule
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSMediaRule
+ */
+CSSOM.CSSMediaRule = function CSSMediaRule() {
+	CSSOM.CSSRule.call(this);
+	this.media = new CSSOM.MediaList();
+	this.cssRules = [];
+};
+
+CSSOM.CSSMediaRule.prototype = new CSSOM.CSSRule();
+CSSOM.CSSMediaRule.prototype.constructor = CSSOM.CSSMediaRule;
+CSSOM.CSSMediaRule.prototype.type = 4;
+//FIXME
+//CSSOM.CSSMediaRule.prototype.insertRule = CSSStyleSheet.prototype.insertRule;
+//CSSOM.CSSMediaRule.prototype.deleteRule = CSSStyleSheet.prototype.deleteRule;
+
+// http://opensource.apple.com/source/WebCore/WebCore-658.28/css/CSSMediaRule.cpp
+Object.defineProperty(CSSOM.CSSMediaRule.prototype, "cssText", {
+  get: function() {
+    var cssTexts = [];
+    for (var i=0, length=this.cssRules.length; i < length; i++) {
+      cssTexts.push(this.cssRules[i].cssText);
+    }
+    return "@media " + this.media.mediaText + " {" + cssTexts.join("") + "}";
+  }
+});
+
+
+
+/**
+ * @constructor
+ * @see http://dev.w3.org/csswg/cssom/#cssimportrule
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSImportRule
+ */
+CSSOM.CSSImportRule = function CSSImportRule() {
+	CSSOM.CSSRule.call(this);
+	this.href = "";
+	this.media = new CSSOM.MediaList();
+	this.styleSheet = new CSSOM.CSSStyleSheet();
+};
+
+CSSOM.CSSImportRule.prototype = new CSSOM.CSSRule();
+CSSOM.CSSImportRule.prototype.constructor = CSSOM.CSSImportRule;
+CSSOM.CSSImportRule.prototype.type = 3;
+
+Object.defineProperty(CSSOM.CSSImportRule.prototype, "cssText", {
+  get: function() {
+    var mediaText = this.media.mediaText;
+    return "@import url(" + this.href + ")" + (mediaText ? " " + mediaText : "") + ";";
+  },
+  set: function(cssText) {
+    var i = 0;
+
+    /**
+     * @import url(partial.css) screen, handheld;
+     *        ||               |
+     *        after-import     media
+     *         |
+     *         url
+     */
+    var state = '';
+
+    var buffer = '';
+    var index;
+    for (var character; (character = cssText.charAt(i)); i++) {
+
+      switch (character) {
+        case ' ':
+        case '\t':
+        case '\r':
+        case '\n':
+        case '\f':
+          if (state === 'after-import') {
+            state = 'url';
+          } else {
+            buffer += character;
+          }
+          break;
+
+        case '@':
+          if (!state && cssText.indexOf('@import', i) === i) {
+            state = 'after-import';
+            i += 'import'.length;
+            buffer = '';
+          }
+          break;
+
+        case 'u':
+          if (state === 'url' && cssText.indexOf('url(', i) === i) {
+            index = cssText.indexOf(')', i + 1);
+            if (index === -1) {
+              throw i + ': ")" not found';
+            }
+            i += 'url('.length;
+            var url = cssText.slice(i, index);
+            if (url[0] === url[url.length - 1]) {
+              if (url[0] === '"' || url[0] === "'") {
+                url = url.slice(1, -1);
+              }
+            }
+            this.href = url;
+            i = index;
+            state = 'media';
+          }
+          break;
+
+        case '"':
+          if (state === 'url') {
+            index = cssText.indexOf('"', i + 1);
+            if (!index) {
+              throw i + ": '\"' not found";
+            }
+            this.href = cssText.slice(i + 1, index);
+            i = index;
+            state = 'media';
+          }
+          break;
+
+        case "'":
+          if (state === 'url') {
+            index = cssText.indexOf("'", i + 1);
+            if (!index) {
+              throw i + ': "\'" not found';
+            }
+            this.href = cssText.slice(i + 1, index);
+            i = index;
+            state = 'media';
+          }
+          break;
+
+        case ';':
+          if (state === 'media') {
+            if (buffer) {
+              this.media.mediaText = buffer.trim();
+            }
+          }
+          break;
+
+        default:
+          if (state === 'media') {
+            buffer += character;
+          }
+          break;
+      }
+    }
+  }
+});
+
+
+
+/**
+ * @constructor
+ * @see http://dev.w3.org/csswg/cssom/#css-font-face-rule
+ */
+CSSOM.CSSFontFaceRule = function CSSFontFaceRule() {
+	CSSOM.CSSRule.call(this);
+	this.style = new CSSOM.CSSStyleDeclaration();
+	this.style.parentRule = this;
+};
+
+CSSOM.CSSFontFaceRule.prototype = new CSSOM.CSSRule();
+CSSOM.CSSFontFaceRule.prototype.constructor = CSSOM.CSSFontFaceRule;
+CSSOM.CSSFontFaceRule.prototype.type = 5;
+//FIXME
+//CSSOM.CSSFontFaceRule.prototype.insertRule = CSSStyleSheet.prototype.insertRule;
+//CSSOM.CSSFontFaceRule.prototype.deleteRule = CSSStyleSheet.prototype.deleteRule;
+
+// http://www.opensource.apple.com/source/WebCore/WebCore-955.66.1/css/WebKitCSSFontFaceRule.cpp
+Object.defineProperty(CSSOM.CSSFontFaceRule.prototype, "cssText", {
+  get: function() {
+    return "@font-face {" + this.style.cssText + "}";
+  }
+});
+
+
+
+/**
+ * @constructor
+ * @see http://dev.w3.org/csswg/cssom/#the-stylesheet-interface
+ */
+CSSOM.StyleSheet = function StyleSheet() {
+	this.parentStyleSheet = null;
+};
+
+
+
+/**
+ * @constructor
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleSheet
+ */
+CSSOM.CSSStyleSheet = function CSSStyleSheet() {
+	CSSOM.StyleSheet.call(this);
+	this.cssRules = [];
+};
+
+
+CSSOM.CSSStyleSheet.prototype = new CSSOM.StyleSheet();
+CSSOM.CSSStyleSheet.prototype.constructor = CSSOM.CSSStyleSheet;
+
+
+/**
+ * Used to insert a new rule into the style sheet. The new rule now becomes part of the cascade.
+ *
+ *   sheet = new Sheet("body {margin: 0}")
+ *   sheet.toString()
+ *   -> "body{margin:0;}"
+ *   sheet.insertRule("img {border: none}", 0)
+ *   -> 0
+ *   sheet.toString()
+ *   -> "img{border:none;}body{margin:0;}"
+ *
+ * @param {string} rule
+ * @param {number} index
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleSheet-insertRule
+ * @return {number} The index within the style sheet's rule collection of the newly inserted rule.
+ */
+CSSOM.CSSStyleSheet.prototype.insertRule = function(rule, index) {
+	if (index < 0 || index > this.cssRules.length) {
+		throw new RangeError("INDEX_SIZE_ERR");
+	}
+	var cssRule = CSSOM.parse(rule).cssRules[0];
+	cssRule.parentStyleSheet = this;
+	this.cssRules.splice(index, 0, cssRule);
+	return index;
+};
+
+
+/**
+ * Used to delete a rule from the style sheet.
+ *
+ *   sheet = new Sheet("img{border:none} body{margin:0}")
+ *   sheet.toString()
+ *   -> "img{border:none;}body{margin:0;}"
+ *   sheet.deleteRule(0)
+ *   sheet.toString()
+ *   -> "body{margin:0;}"
+ *
+ * @param {number} index within the style sheet's rule list of the rule to remove.
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSStyleSheet-deleteRule
+ */
+CSSOM.CSSStyleSheet.prototype.deleteRule = function(index) {
+	if (index < 0 || index >= this.cssRules.length) {
+		throw new RangeError("INDEX_SIZE_ERR");
+	}
+	this.cssRules.splice(index, 1);
+};
+
+
+/**
+ * NON-STANDARD
+ * @return {string} serialize stylesheet
+ */
+CSSOM.CSSStyleSheet.prototype.toString = function() {
+	var result = "";
+	var rules = this.cssRules;
+	for (var i=0; i<rules.length; i++) {
+		result += rules[i].cssText + "\n";
+	}
+	return result;
+};
+
+
+
+/**
+ * @constructor
+ * @see http://www.w3.org/TR/css3-animations/#DOM-CSSKeyframesRule
+ */
+CSSOM.CSSKeyframesRule = function CSSKeyframesRule() {
+	CSSOM.CSSRule.call(this);
+	this.name = '';
+	this.cssRules = [];
+};
+
+CSSOM.CSSKeyframesRule.prototype = new CSSOM.CSSRule();
+CSSOM.CSSKeyframesRule.prototype.constructor = CSSOM.CSSKeyframesRule;
+CSSOM.CSSKeyframesRule.prototype.type = 8;
+//FIXME
+//CSSOM.CSSKeyframesRule.prototype.insertRule = CSSStyleSheet.prototype.insertRule;
+//CSSOM.CSSKeyframesRule.prototype.deleteRule = CSSStyleSheet.prototype.deleteRule;
+
+// http://www.opensource.apple.com/source/WebCore/WebCore-955.66.1/css/WebKitCSSKeyframesRule.cpp
+Object.defineProperty(CSSOM.CSSKeyframesRule.prototype, "cssText", {
+  get: function() {
+    var cssTexts = [];
+    for (var i=0, length=this.cssRules.length; i < length; i++) {
+      cssTexts.push("  " + this.cssRules[i].cssText);
+    }
+    return "@" + (this._vendorPrefix || '') + "keyframes " + this.name + " { \n" + cssTexts.join("\n") + "\n}";
+  }
+});
+
+
+
+/**
+ * @constructor
+ * @see http://www.w3.org/TR/css3-animations/#DOM-CSSKeyframeRule
+ */
+CSSOM.CSSKeyframeRule = function CSSKeyframeRule() {
+	CSSOM.CSSRule.call(this);
+	this.keyText = '';
+	this.style = new CSSOM.CSSStyleDeclaration();
+	this.style.parentRule = this;
+};
+
+CSSOM.CSSKeyframeRule.prototype = new CSSOM.CSSRule();
+CSSOM.CSSKeyframeRule.prototype.constructor = CSSOM.CSSKeyframeRule;
+CSSOM.CSSKeyframeRule.prototype.type = 9;
+//FIXME
+//CSSOM.CSSKeyframeRule.prototype.insertRule = CSSStyleSheet.prototype.insertRule;
+//CSSOM.CSSKeyframeRule.prototype.deleteRule = CSSStyleSheet.prototype.deleteRule;
+
+// http://www.opensource.apple.com/source/WebCore/WebCore-955.66.1/css/WebKitCSSKeyframeRule.cpp
+Object.defineProperty(CSSOM.CSSKeyframeRule.prototype, "cssText", {
+  get: function() {
+    return this.keyText + " {" + this.style.cssText + "} ";
+  }
+});
+
+
+
+/**
+ * @constructor
+ * @see https://developer.mozilla.org/en/CSS/@-moz-document
+ */
+CSSOM.MatcherList = function MatcherList(){
+    this.length = 0;
+};
+
+CSSOM.MatcherList.prototype = {
+
+    constructor: CSSOM.MatcherList,
+
+    /**
+     * @return {string}
+     */
+    get matcherText() {
+        return Array.prototype.join.call(this, ", ");
+    },
+
+    /**
+     * @param {string} value
+     */
+    set matcherText(value) {
+        // just a temporary solution, actually it may be wrong by just split the value with ',', because a url can include ','.
+        var values = value.split(",");
+        var length = this.length = values.length;
+        for (var i=0; i<length; i++) {
+            this[i] = values[i].trim();
+        }
+    },
+
+    /**
+     * @param {string} matcher
+     */
+    appendMatcher: function(matcher) {
+        if (Array.prototype.indexOf.call(this, matcher) === -1) {
+            this[this.length] = matcher;
+            this.length++;
+        }
+    },
+
+    /**
+     * @param {string} matcher
+     */
+    deleteMatcher: function(matcher) {
+        var index = Array.prototype.indexOf.call(this, matcher);
+        if (index !== -1) {
+            Array.prototype.splice.call(this, index, 1);
+        }
+    }
+
+};
+
+
+
+/**
+ * @constructor
+ * @see https://developer.mozilla.org/en/CSS/@-moz-document
+ */
+CSSOM.CSSDocumentRule = function CSSDocumentRule() {
+    CSSOM.CSSRule.call(this);
+    this.matcher = new CSSOM.MatcherList();
+    this.cssRules = [];
+};
+
+CSSOM.CSSDocumentRule.prototype = new CSSOM.CSSRule();
+CSSOM.CSSDocumentRule.prototype.constructor = CSSOM.CSSDocumentRule;
+CSSOM.CSSDocumentRule.prototype.type = 10;
+//FIXME
+//CSSOM.CSSDocumentRule.prototype.insertRule = CSSStyleSheet.prototype.insertRule;
+//CSSOM.CSSDocumentRule.prototype.deleteRule = CSSStyleSheet.prototype.deleteRule;
+
+Object.defineProperty(CSSOM.CSSDocumentRule.prototype, "cssText", {
+  get: function() {
+    var cssTexts = [];
+    for (var i=0, length=this.cssRules.length; i < length; i++) {
+        cssTexts.push(this.cssRules[i].cssText);
+    }
+    return "@-moz-document " + this.matcher.matcherText + " {" + cssTexts.join("") + "}";
+  }
+});
+
+
+
+/**
+ * @constructor
+ * @see http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSValue
+ *
+ * TODO: add if needed
+ */
+CSSOM.CSSValue = function CSSValue() {
+};
+
+CSSOM.CSSValue.prototype = {
+	constructor: CSSOM.CSSValue,
+
+	// @see: http://www.w3.org/TR/DOM-Level-2-Style/css.html#CSS-CSSValue
+	set cssText(text) {
+		var name = this._getConstructorName();
+
+		throw new Error('DOMException: property "cssText" of "' + name + '" is readonly and can not be replaced with "' + text + '"!');
+	},
+
+	get cssText() {
+		var name = this._getConstructorName();
+
+		throw new Error('getter "cssText" of "' + name + '" is not implemented!');
+	},
+
+	_getConstructorName: function() {
+		var s = this.constructor.toString(),
+				c = s.match(/function\s([^\(]+)/),
+				name = c[1];
+
+		return name;
+	}
+};
+
+
+
+/**
+ * @constructor
+ * @see http://msdn.microsoft.com/en-us/library/ms537634(v=vs.85).aspx
+ *
+ */
+CSSOM.CSSValueExpression = function CSSValueExpression(token, idx) {
+	this._token = token;
+	this._idx = idx;
+};
+
+CSSOM.CSSValueExpression.prototype = new CSSOM.CSSValue();
+CSSOM.CSSValueExpression.prototype.constructor = CSSOM.CSSValueExpression;
+
+/**
+ * parse css expression() value
+ *
+ * @return {Object}
+ *         - error:
+ *         or
+ *         - idx:
+ *         - expression:
+ *
+ * Example:
+ *
+ * .selector {
+ *		zoom: expression(documentElement.clientWidth > 1000 ? '1000px' : 'auto');
+ * }
+ */
+CSSOM.CSSValueExpression.prototype.parse = function() {
+	var token = this._token,
+			idx = this._idx;
+
+	var character = '',
+			expression = '',
+			error = '',
+			info,
+			paren = [];
+
+
+	for (; ; ++idx) {
+		character = token.charAt(idx);
+
+		// end of token
+		if (character === '') {
+			error = 'css expression error: unfinished expression!';
+			break;
+		}
+
+		switch(character) {
+			case '(':
+				paren.push(character);
+				expression += character;
+				break;
+
+			case ')':
+				paren.pop(character);
+				expression += character;
+				break;
+
+			case '/':
+				if ((info = this._parseJSComment(token, idx))) { // comment?
+					if (info.error) {
+						error = 'css expression error: unfinished comment in expression!';
+					} else {
+						idx = info.idx;
+						// ignore the comment
+					}
+				} else if ((info = this._parseJSRexExp(token, idx))) { // regexp
+					idx = info.idx;
+					expression += info.text;
+				} else { // other
+					expression += character;
+				}
+				break;
+
+			case "'":
+			case '"':
+				info = this._parseJSString(token, idx, character);
+				if (info) { // string
+					idx = info.idx;
+					expression += info.text;
+				} else {
+					expression += character;
+				}
+				break;
+
+			default:
+				expression += character;
+				break;
+		}
+
+		if (error) {
+			break;
+		}
+
+		// end of expression
+		if (paren.length === 0) {
+			break;
+		}
+	}
+
+	var ret;
+	if (error) {
+		ret = {
+			error: error
+		};
+	} else {
+		ret = {
+			idx: idx,
+			expression: expression
+		};
+	}
+
+	return ret;
+};
+
+
+/**
+ *
+ * @return {Object|false}
+ *          - idx:
+ *          - text:
+ *          or
+ *          - error:
+ *          or
+ *          false
+ *
+ */
+CSSOM.CSSValueExpression.prototype._parseJSComment = function(token, idx) {
+	var nextChar = token.charAt(idx + 1),
+			text;
+
+	if (nextChar === '/' || nextChar === '*') {
+		var startIdx = idx,
+				endIdx,
+				commentEndChar;
+
+		if (nextChar === '/') { // line comment
+			commentEndChar = '\n';
+		} else if (nextChar === '*') { // block comment
+			commentEndChar = '*/';
+		}
+
+		endIdx = token.indexOf(commentEndChar, startIdx + 1 + 1);
+		if (endIdx !== -1) {
+			endIdx = endIdx + commentEndChar.length - 1;
+			text = token.substring(idx, endIdx + 1);
+			return {
+				idx: endIdx,
+				text: text
+			};
+		} else {
+			var error = 'css expression error: unfinished comment in expression!';
+			return {
+				error: error
+			};
+		}
+	} else {
+		return false;
+	}
+};
+
+
+/**
+ *
+ * @return {Object|false}
+ *					- idx:
+ *					- text:
+ *					or 
+ *					false
+ *
+ */
+CSSOM.CSSValueExpression.prototype._parseJSString = function(token, idx, sep) {
+	var endIdx = this._findMatchedIdx(token, idx, sep),
+			text;
+
+	if (endIdx === -1) {
+		return false;
+	} else {
+		text = token.substring(idx, endIdx + sep.length);
+
+		return {
+			idx: endIdx,
+			text: text
+		};
+	}
+};
+
+
+/**
+ * parse regexp in css expression
+ *
+ * @return {Object|false}
+ *				- idx:
+ *				- regExp:
+ *				or 
+ *				false
+ */
+
+/*
+
+all legal RegExp
+ 
+/a/
+(/a/)
+[/a/]
+[12, /a/]
+
+!/a/
+
++/a/
+-/a/
+* /a/
+/ /a/
+%/a/
+
+===/a/
+!==/a/
+==/a/
+!=/a/
+>/a/
+>=/a/
+</a/
+<=/a/
+
+&/a/
+|/a/
+^/a/
+~/a/
+<</a/
+>>/a/
+>>>/a/
+
+&&/a/
+||/a/
+?/a/
+=/a/
+,/a/
+
+		delete /a/
+				in /a/
+instanceof /a/
+				new /a/
+		typeof /a/
+			void /a/
+
+*/
+CSSOM.CSSValueExpression.prototype._parseJSRexExp = function(token, idx) {
+	var before = token.substring(0, idx).replace(/\s+$/, ""),
+			legalRegx = [
+				/^$/,
+				/\($/,
+				/\[$/,
+				/\!$/,
+				/\+$/,
+				/\-$/,
+				/\*$/,
+				/\/\s+/,
+				/\%$/,
+				/\=$/,
+				/\>$/,
+				/<$/,
+				/\&$/,
+				/\|$/,
+				/\^$/,
+				/\~$/,
+				/\?$/,
+				/\,$/,
+				/delete$/,
+				/in$/,
+				/instanceof$/,
+				/new$/,
+				/typeof$/,
+				/void$/
+			];
+
+	var isLegal = legalRegx.some(function(reg) {
+		return reg.test(before);
+	});
+
+	if (!isLegal) {
+		return false;
+	} else {
+		var sep = '/';
+
+		// same logic as string
+		return this._parseJSString(token, idx, sep);
+	}
+};
+
+
+/**
+ *
+ * find next sep(same line) index in `token`
+ *
+ * @return {Number}
+ *
+ */
+CSSOM.CSSValueExpression.prototype._findMatchedIdx = function(token, idx, sep) {
+	var startIdx = idx,
+			endIdx;
+
+	var NOT_FOUND = -1;
+
+	while(true) {
+		endIdx = token.indexOf(sep, startIdx + 1);
+
+		if (endIdx === -1) { // not found
+			endIdx = NOT_FOUND;
+			break;
+		} else {
+			var text = token.substring(idx + 1, endIdx),
+					matched = text.match(/\\+$/);
+			if (!matched || matched[0] % 2 === 0) { // not escaped
+				break;
+			} else {
+				startIdx = endIdx;
+			}
+		}
+	}
+
+	// boundary must be in the same line(js sting or regexp)
+	var nextNewLineIdx = token.indexOf('\n', idx + 1);
+	if (nextNewLineIdx < endIdx) {
+		endIdx = NOT_FOUND;
+	}
+
+
+	return endIdx;
+};
+
+
+
+
+
+/**
+ * @param {string} token
+ */
+CSSOM.parse = function parse(token) {
+
+	var i = 0;
+
+	/**
+		"before-selector" or
+		"selector" or
+		"atRule" or
+		"atBlock" or
+		"before-name" or
+		"name" or
+		"before-value" or
+		"value"
+	*/
+	var state = "before-selector";
+
+	var index;
+	var buffer = "";
+
+	var SIGNIFICANT_WHITESPACE = {
+		"selector": true,
+		"value": true,
+		"atRule": true,
+		"importRule-begin": true,
+		"importRule": true,
+		"atBlock": true,
+		'documentRule-begin': true
+	};
+
+	var styleSheet = new CSSOM.CSSStyleSheet();
+
+	// @type CSSStyleSheet|CSSMediaRule|CSSFontFaceRule|CSSKeyframesRule|CSSDocumentRule
+	var currentScope = styleSheet;
+
+	// @type CSSMediaRule|CSSKeyframesRule|CSSDocumentRule
+	var parentRule;
+
+	var name, priority="", styleRule, mediaRule, importRule, fontFaceRule, keyframesRule, documentRule;
+
+	var atKeyframesRegExp = /@(-(?:\w+-)+)?keyframes/g;
+
+	var parseError = function(message) {
+		var lines = token.substring(0, i).split('\n');
+		var lineCount = lines.length;
+		var charCount = lines.pop().length + 1;
+		var error = new Error(message + ' (line ' + lineCount + ', char ' + charCount + ')');
+		error.line = lineCount;
+		/* jshint sub : true */
+		error['char'] = charCount;
+		error.styleSheet = styleSheet;
+		throw error;
+	};
+
+	for (var character; (character = token.charAt(i)); i++) {
+
+		switch (character) {
+
+		case " ":
+		case "\t":
+		case "\r":
+		case "\n":
+		case "\f":
+			if (SIGNIFICANT_WHITESPACE[state]) {
+				buffer += character;
+			}
+			break;
+
+		// String
+		case '"':
+			index = i + 1;
+			do {
+				index = token.indexOf('"', index) + 1;
+				if (!index) {
+					parseError('Unmatched "');
+				}
+			} while (token[index - 2] === '\\');
+			buffer += token.slice(i, index);
+			i = index - 1;
+			switch (state) {
+				case 'before-value':
+					state = 'value';
+					break;
+				case 'importRule-begin':
+					state = 'importRule';
+					break;
+			}
+			break;
+
+		case "'":
+			index = i + 1;
+			do {
+				index = token.indexOf("'", index) + 1;
+				if (!index) {
+					parseError("Unmatched '");
+				}
+			} while (token[index - 2] === '\\');
+			buffer += token.slice(i, index);
+			i = index - 1;
+			switch (state) {
+				case 'before-value':
+					state = 'value';
+					break;
+				case 'importRule-begin':
+					state = 'importRule';
+					break;
+			}
+			break;
+
+		// Comment
+		case "/":
+			if (token.charAt(i + 1) === "*") {
+				i += 2;
+				index = token.indexOf("*/", i);
+				if (index === -1) {
+					parseError("Missing */");
+				} else {
+					i = index + 1;
+				}
+			} else {
+				buffer += character;
+			}
+			if (state === "importRule-begin") {
+				buffer += " ";
+				state = "importRule";
+			}
+			break;
+
+		// At-rule
+		case "@":
+			if (token.indexOf("@-moz-document", i) === i) {
+				state = "documentRule-begin";
+				documentRule = new CSSOM.CSSDocumentRule();
+				documentRule.__starts = i;
+				i += "-moz-document".length;
+				buffer = "";
+				break;
+			} else if (token.indexOf("@media", i) === i) {
+				state = "atBlock";
+				mediaRule = new CSSOM.CSSMediaRule();
+				mediaRule.__starts = i;
+				i += "media".length;
+				buffer = "";
+				break;
+			} else if (token.indexOf("@import", i) === i) {
+				state = "importRule-begin";
+				i += "import".length;
+				buffer += "@import";
+				break;
+			} else if (token.indexOf("@font-face", i) === i) {
+				state = "fontFaceRule-begin";
+				i += "font-face".length;
+				fontFaceRule = new CSSOM.CSSFontFaceRule();
+				fontFaceRule.__starts = i;
+				buffer = "";
+				break;
+			} else {
+				atKeyframesRegExp.lastIndex = i;
+				var matchKeyframes = atKeyframesRegExp.exec(token);
+				if (matchKeyframes && matchKeyframes.index === i) {
+					state = "keyframesRule-begin";
+					keyframesRule = new CSSOM.CSSKeyframesRule();
+					keyframesRule.__starts = i;
+					keyframesRule._vendorPrefix = matchKeyframes[1]; // Will come out as undefined if no prefix was found
+					i += matchKeyframes[0].length - 1;
+					buffer = "";
+					break;
+				} else if (state === "selector") {
+					state = "atRule";
+				}
+			}
+			buffer += character;
+			break;
+
+		case "{":
+			if (state === "selector" || state === "atRule") {
+				styleRule.selectorText = buffer.trim();
+				styleRule.style.__starts = i;
+				buffer = "";
+				state = "before-name";
+			} else if (state === "atBlock") {
+				mediaRule.media.mediaText = buffer.trim();
+				currentScope = parentRule = mediaRule;
+				mediaRule.parentStyleSheet = styleSheet;
+				buffer = "";
+				state = "before-selector";
+			} else if (state === "fontFaceRule-begin") {
+				if (parentRule) {
+					fontFaceRule.parentRule = parentRule;
+				}
+				fontFaceRule.parentStyleSheet = styleSheet;
+				styleRule = fontFaceRule;
+				buffer = "";
+				state = "before-name";
+			} else if (state === "keyframesRule-begin") {
+				keyframesRule.name = buffer.trim();
+				if (parentRule) {
+					keyframesRule.parentRule = parentRule;
+				}
+				keyframesRule.parentStyleSheet = styleSheet;
+				currentScope = parentRule = keyframesRule;
+				buffer = "";
+				state = "keyframeRule-begin";
+			} else if (state === "keyframeRule-begin") {
+				styleRule = new CSSOM.CSSKeyframeRule();
+				styleRule.keyText = buffer.trim();
+				styleRule.__starts = i;
+				buffer = "";
+				state = "before-name";
+			} else if (state === "documentRule-begin") {
+				// FIXME: what if this '{' is in the url text of the match function?
+				documentRule.matcher.matcherText = buffer.trim();
+				if (parentRule) {
+					documentRule.parentRule = parentRule;
+				}
+				currentScope = parentRule = documentRule;
+				documentRule.parentStyleSheet = styleSheet;
+				buffer = "";
+				state = "before-selector";
+			}
+			break;
+
+		case ":":
+			if (state === "name") {
+				name = buffer.trim();
+				buffer = "";
+				state = "before-value";
+			} else {
+				buffer += character;
+			}
+			break;
+
+		case "(":
+			if (state === 'value') {
+				// ie css expression mode
+				if (buffer.trim() === 'expression') {
+					var info = (new CSSOM.CSSValueExpression(token, i)).parse();
+
+					if (info.error) {
+						parseError(info.error);
+					} else {
+						buffer += info.expression;
+						i = info.idx;
+					}
+				} else {
+					state = 'value-parenthesis';
+					buffer += character;
+				}
+			} else {
+				buffer += character;
+			}
+			break;
+
+		case ")":
+			if (state === 'value-parenthesis') {
+				state = 'value';
+			}
+			buffer += character;
+			break;
+
+		case "!":
+			if (state === "value" && token.indexOf("!important", i) === i) {
+				priority = "important";
+				i += "important".length;
+			} else {
+				buffer += character;
+			}
+			break;
+
+		case ";":
+			switch (state) {
+				case "value":
+					styleRule.style.setProperty(name, buffer.trim(), priority);
+					priority = "";
+					buffer = "";
+					state = "before-name";
+					break;
+				case "atRule":
+					buffer = "";
+					state = "before-selector";
+					break;
+				case "importRule":
+					importRule = new CSSOM.CSSImportRule();
+					importRule.parentStyleSheet = importRule.styleSheet.parentStyleSheet = styleSheet;
+					importRule.cssText = buffer + character;
+					styleSheet.cssRules.push(importRule);
+					buffer = "";
+					state = "before-selector";
+					break;
+				default:
+					buffer += character;
+					break;
+			}
+			break;
+
+		case "}":
+			switch (state) {
+				case "value":
+					styleRule.style.setProperty(name, buffer.trim(), priority);
+					priority = "";
+					/* falls through */
+				case "before-name":
+				case "name":
+					styleRule.__ends = i + 1;
+					if (parentRule) {
+						styleRule.parentRule = parentRule;
+					}
+					styleRule.parentStyleSheet = styleSheet;
+					currentScope.cssRules.push(styleRule);
+					buffer = "";
+					if (currentScope.constructor === CSSOM.CSSKeyframesRule) {
+						state = "keyframeRule-begin";
+					} else {
+						state = "before-selector";
+					}
+					break;
+				case "keyframeRule-begin":
+				case "before-selector":
+				case "selector":
+					// End of media/document rule.
+					if (!parentRule) {
+						parseError("Unexpected }");
+					}
+					currentScope.__ends = i + 1;
+					// Nesting rules aren't supported yet
+					styleSheet.cssRules.push(currentScope);
+					currentScope = styleSheet;
+					parentRule = null;
+					buffer = "";
+					state = "before-selector";
+					break;
+			}
+			break;
+
+		default:
+			switch (state) {
+				case "before-selector":
+					state = "selector";
+					styleRule = new CSSOM.CSSStyleRule();
+					styleRule.__starts = i;
+					break;
+				case "before-name":
+					state = "name";
+					break;
+				case "before-value":
+					state = "value";
+					break;
+				case "importRule-begin":
+					state = "importRule";
+					break;
+			}
+			buffer += character;
+			break;
+		}
+	}
+
+	return styleSheet;
+};
+
+
+
+/**
+ * Produces a deep copy of stylesheet — the instance variables of stylesheet are copied recursively.
+ * @param {CSSStyleSheet|CSSOM.CSSStyleSheet} stylesheet
+ * @nosideeffects
+ * @return {CSSOM.CSSStyleSheet}
+ */
+CSSOM.clone = function clone(stylesheet) {
+
+	var cloned = new CSSOM.CSSStyleSheet();
+
+	var rules = stylesheet.cssRules;
+	if (!rules) {
+		return cloned;
+	}
+
+	var RULE_TYPES = {
+		1: CSSOM.CSSStyleRule,
+		4: CSSOM.CSSMediaRule,
+		//3: CSSOM.CSSImportRule,
+		//5: CSSOM.CSSFontFaceRule,
+		//6: CSSOM.CSSPageRule,
+		8: CSSOM.CSSKeyframesRule,
+		9: CSSOM.CSSKeyframeRule
+	};
+
+	for (var i=0, rulesLength=rules.length; i < rulesLength; i++) {
+		var rule = rules[i];
+		var ruleClone = cloned.cssRules[i] = new RULE_TYPES[rule.type]();
+
+		var style = rule.style;
+		if (style) {
+			var styleClone = ruleClone.style = new CSSOM.CSSStyleDeclaration();
+			for (var j=0, styleLength=style.length; j < styleLength; j++) {
+				var name = styleClone[j] = style[j];
+				styleClone[name] = style[name];
+				styleClone._importants[name] = style.getPropertyPriority(name);
+			}
+			styleClone.length = style.length;
+		}
+
+		if (rule.hasOwnProperty('keyText')) {
+			ruleClone.keyText = rule.keyText;
+		}
+
+		if (rule.hasOwnProperty('selectorText')) {
+			ruleClone.selectorText = rule.selectorText;
+		}
+
+		if (rule.hasOwnProperty('mediaText')) {
+			ruleClone.mediaText = rule.mediaText;
+		}
+
+		if (rule.hasOwnProperty('cssRules')) {
+			ruleClone.cssRules = clone(rule).cssRules;
+		}
+	}
+
+	return cloned;
+
+};
+
+
+})(this);
+define("cssom", (function (global) {
+    return function () {
+        var ret, fn;
+        return ret || global.CSSOM;
+>>>>>>> upstream/develop
+    };
+
+<<<<<<< HEAD
     /**
      *
      * @param {HTMLElement} element
@@ -48268,6 +70662,1701 @@ ReaderView.VIEW_TYPE_FIXED = 2;
 ReaderView.VIEW_TYPE_SCROLLED_DOC = 3;
 ReaderView.VIEW_TYPE_SCROLLED_CONTINUOUS = 4;
 return ReaderView;
+=======
+//  Created by Juan Corona <juanc@evidentpoint.com>
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+//TODO: This could be made into a plugin in the future.
+// A plugin would be ideal because we can make a light-weight alternative that doesn't need the FontLoader shim and the CSSOM parser.
+define('readium_shared_js/views/font_loader',["jquery", "underscore", "FontLoader", "cssom"], function($, _, FontLoader, CSSOM) {
+
+var FontLoaderFallback = function(document, options) {
+    var debug = options.debug;
+
+    var getRestrictedCssRules = function (styleSheet, callback) {
+        $.get(styleSheet.href).done(function(data) {
+            callback(CSSOM.parse(data).cssRules);
+        }).fail(function() {
+            callback(null);
+        });
+    };
+
+    var getUsedFonts = function(callback) {
+        var styleSheets = document.styleSheets;
+        var fontFamilies = [];
+        var fontFamilyRules = [];
+
+        // if no style sheets are found return immediately
+        if (!styleSheets || styleSheets.length <= 0) {
+            callback([]);
+            return;
+        }
+
+        var getFontFamilyFromRule = function(rule) {
+            if (rule.style && (rule.style.getPropertyValue || rule.style.fontFamily)) {
+                return rule.style.getPropertyValue("font-family") || rule.style.fontFamily;
+            }
+        }
+
+        var returnUsedFonts = function() {
+            if (debug) {
+                console.log(fontFamilies);
+            }
+            var usedFontFamilies = [];
+            _.each(fontFamilyRules, function(rule) {
+                var usedFontFamily = _.find(fontFamilies, function(family) {
+                    var fontFamily = getFontFamilyFromRule(rule);
+                    if (fontFamily && ~fontFamily.indexOf(family[1])) {
+                        return true;
+                    }
+                });
+
+                if (usedFontFamily && rule.selectorText && !_.contains(usedFontFamilies, usedFontFamily[0]) && document.querySelector(rule.selectorText)) {
+                    usedFontFamilies.push(usedFontFamily[0]);
+                }
+            });
+
+            if (debug) {
+                console.log(usedFontFamilies);
+            }
+
+            callback(usedFontFamilies);
+        };
+
+        var processedCount = 0;
+        var processCssRules = function(cssRules) {
+            _.each(cssRules, function(rule) {
+                var fontFamily = getFontFamilyFromRule(rule);
+                if (fontFamily) {
+                    if (rule.type === CSSRule.FONT_FACE_RULE) {
+                        fontFamilies.push([fontFamily.replace(/(^['"]|['"]$)/g, '').replace(/\\(['"])/g, '$1'), fontFamily]);
+                    } else {
+                        fontFamilyRules.push(rule);
+                    }
+                }
+            });
+
+            processedCount++;
+
+            if (processedCount >= styleSheets.length) {
+                returnUsedFonts();
+            }
+        };
+
+        _.each(styleSheets, function(styleSheet) {
+            var cssRules;
+            // Firefox (and possibly IE as well) throw a security exception if the CSS was loaded from a different domain.
+            // Other browsers just have null as the value of cssRules for that case.
+            try {
+                cssRules = styleSheet.cssRules || styleSheet.rules;
+            } catch (ignored) {}
+
+            if (!cssRules) {
+                getRestrictedCssRules(styleSheet, processCssRules);
+            } else {
+                processCssRules(cssRules);
+            }
+        });
+    };
+
+    return function(callback) {
+        callback = _.once(callback);
+        var loadCount = 0;
+
+        getUsedFonts(function(usedFontFamilies){
+            var fontLoader = new FontLoader(usedFontFamilies, {
+                "fontsLoaded": function(error) {
+                    if (debug) {
+                        if (error !== null) {
+                            // Reached the timeout but not all fonts were loaded
+                            console.log("font loader: " + error.message, error.notLoadedFonts);
+                        } else {
+                            // All fonts were loaded
+                            console.log("font loader: all fonts were loaded");
+                        }
+                    }
+                    callback();
+                },
+                "fontLoaded": function(font) {
+                    loadCount++;
+                    if (debug) {
+                        console.log("font loaded: " + font.family);
+                    }
+                    if (usedFontFamilies.length > options.minLoadCount && (loadCount / usedFontFamilies.length) >= options.minLoadRatio) {
+
+                        if (debug) {
+                            console.log('font loader: early callback');
+                        }
+                        callback();
+                    }
+                }
+            }, options.timeout, document);
+
+            fontLoader.loadFonts();
+        });
+    };
+};
+
+var FontLoaderNative = function(document, options) {
+    var debug = options.debug;
+
+    return function(callback) {
+        callback = _.once(callback);
+        var loadCount = 0;
+
+        var fontFaceCount = document.fonts.size;
+        var fontLoaded = function(font) {
+            loadCount++;
+            if (debug) {
+                console.log("(native) font loaded: " + font.family);
+            }
+            if (fontFaceCount > options.minLoadCount && (loadCount / fontFaceCount) >= options.minLoadRatio) {
+
+                if (debug) {
+                    console.log('(native) font loader: early callback');
+                }
+                callback();
+            }
+        }
+
+        var fontIterator = function(font) {
+            font.loaded.then(function() {
+                fontLoaded(font);
+            });
+        };
+
+        // For some reason (at this time) Chrome's implementation has a .forEach
+        // but it is not Array-like. This is opposite with Firefox's though.
+        if (document.fonts.forEach) {
+            document.fonts.forEach(fontIterator);
+        } else {
+            _.each(document.fonts, fontIterator);
+        }
+        var fontsReady = document.fonts.ready;
+        // In older implementations (chromium 35 for example) this is a method not a property
+        if (_.isFunction(fontsReady)) {
+            fontsReady = fontsReady.call(document.fonts);
+        }
+        fontsReady.then(function() {
+            if (debug) {
+                // All fonts were loaded
+                console.log("(native) font loader: all fonts were loaded");
+            }
+            callback();
+        });
+
+        window.setTimeout(function() {
+            if (debug && loadCount !== fontFaceCount) {
+                console.log('(native) font loader: timeout, not all fonts loaded/required');
+            } else if (debug) {
+                console.log('(native) font loader: timeout');
+            }
+            callback();
+        }, options.timeout);
+    }
+}
+
+var FontLoaderWrapper = function($iframe, options) {
+    options = options || {};
+
+    options.debug = options.debug || false;
+    options.timeout = options.timeout || 1500;
+    options.minLoadCount = options.minLoadCount || 3;
+    options.minLoadRatio = options.minLoadRatio || 0.75;
+
+    var document = $iframe[0].contentDocument;
+
+    // For browsers without CSS Font Loading Module
+    var fallbackNeeded = !document.fonts;
+
+    var fontLoader = fallbackNeeded ? FontLoaderFallback : FontLoaderNative;
+
+    this.waitForFonts = fontLoader(document, options);
+};
+
+return FontLoaderWrapper;
+
+});
+
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/views/reflowable_view',["../globals", "jquery", "underscore", "eventEmitter", "../models/bookmark_data", "./cfi_navigation_logic",
+    "../models/current_pages_info", "../helpers", "../models/page_open_request",
+    "../models/viewer_settings", "./font_loader"],
+    function(Globals, $, _, EventEmitter, BookmarkData, CfiNavigationLogic,
+             CurrentPagesInfo, Helpers, PageOpenRequest,
+             ViewerSettings, FontLoader) {
+/**
+ * Renders reflowable content using CSS columns
+ * @param options
+ * @constructor
+ */
+var ReflowableView = function(options, reader){
+
+    $.extend(this, new EventEmitter());
+
+    var self = this;
+
+    var _$viewport = options.$viewport;
+    var _spine = options.spine;
+    var _userStyles = options.userStyles;
+    var _bookStyles = options.bookStyles;
+    var _iframeLoader = options.iframeLoader;
+
+    var _currentSpineItem;
+    var _isWaitingFrameRender = false;
+    var _deferredPageRequest;
+    var _fontSize = 100;
+    var _$contentFrame;
+    var _navigationLogic;
+    var _$el;
+    var _$iframe;
+    var _$epubHtml;
+
+    var _$htmlBody;
+
+    var _htmlBodyIsVerticalWritingMode;
+    var _htmlBodyIsLTRDirection;
+    var _htmlBodyIsLTRWritingMode;
+
+
+    var _currentOpacity = -1;
+
+    var _lastViewPortSize = {
+        width: undefined,
+        height: undefined
+    };
+
+    var _paginationInfo = {
+
+        visibleColumnCount : 2,
+        columnGap : 20,
+        columnMaxWidth: 550,
+        columnMinWidth: 400,
+        spreadCount : 0,
+        currentSpreadIndex : 0,
+        columnWidth : undefined,
+        pageOffset : 0,
+        columnCount: 0
+    };
+
+    this.render = function(){
+
+        var template = Helpers.loadTemplate("reflowable_book_frame", {});
+
+        _$el = $(template);
+        _$viewport.append(_$el);
+
+        var settings = reader.viewerSettings();
+        if (!settings || typeof settings.enableGPUHardwareAccelerationCSS3D === "undefined")
+        {
+            //defaults
+            settings = new ViewerSettings({});
+        }
+        if (settings.enableGPUHardwareAccelerationCSS3D) {
+            // This fixes rendering issues with WebView (native apps), which clips content embedded in iframes unless GPU hardware acceleration is enabled for CSS rendering.
+            _$el.css("transform", "translateZ(0)");
+        }
+
+        // See ReaderView.handleViewportResize
+        // var lazyResize = _.debounce(self.onViewportResize, 100);
+        // $(window).on("resize.ReadiumSDK.reflowableView", _.bind(lazyResize, self));
+        renderIframe();
+
+        return self;
+    };
+
+    function setFrameSizesToRectangle(rectangle) {
+        _$contentFrame.css("left", rectangle.left + "px");
+        _$contentFrame.css("top", rectangle.top + "px");
+        _$contentFrame.css("right", rectangle.right + "px");
+        _$contentFrame.css("bottom", rectangle.bottom + "px");
+
+    }
+
+    this.remove = function() {
+
+        //$(window).off("resize.ReadiumSDK.reflowableView");
+        _$el.remove();
+
+    };
+
+    this.isReflowable = function() {
+        return true;
+    };
+
+    this.onViewportResize = function() {
+
+        if(updateViewportSize()) {
+            updatePagination();
+        }
+    };
+
+    var _viewSettings = undefined;
+    this.setViewSettings = function(settings) {
+
+        _viewSettings = settings;
+
+        _paginationInfo.columnGap = settings.columnGap;
+        _paginationInfo.columnMaxWidth = settings.columnMaxWidth;
+        _paginationInfo.columnMinWidth = settings.columnMinWidth;
+        
+        _fontSize = settings.fontSize;
+
+        updateHtmlFontSize();
+        updateColumnGap();
+
+        updateViewportSize();
+        updatePagination();
+    };
+    
+    function getFrameDimensions() {
+        return {
+            width: _$iframe[0].clientWidth,
+            height: _$iframe[0].clientHeight
+        };
+    }
+
+    function renderIframe() {
+        if (_$contentFrame) {
+            //destroy old contentFrame
+            _$contentFrame.remove();
+        }
+
+        var template = Helpers.loadTemplate("reflowable_book_page_frame", {});
+        var $bookFrame = $(template);
+        $bookFrame = _$el.append($bookFrame);
+
+        _$contentFrame = $("#reflowable-content-frame", $bookFrame);
+
+        _$iframe = $("#epubContentIframe", $bookFrame);
+
+        _$iframe.css("left", "");
+        _$iframe.css("right", "");
+        _$iframe.css("position", "relative");
+        //_$iframe.css(_spine.isLeftToRight() ? "left" : "right", "0px");
+        _$iframe.css("overflow", "hidden");
+
+        _navigationLogic = new CfiNavigationLogic({
+            $iframe: _$iframe,
+            frameDimensions: getFrameDimensions,
+            paginationInfo: _paginationInfo
+        });
+    }
+
+    function loadSpineItem(spineItem) {
+
+        if(_currentSpineItem != spineItem) {
+
+            //create & append iframe to container frame
+            renderIframe();
+
+            _paginationInfo.pageOffset = 0;
+            _paginationInfo.currentSpreadIndex = 0;
+            _currentSpineItem = spineItem;
+            
+            // TODO: this is a dirty hack!!
+            _currentSpineItem.paginationInfo = _paginationInfo; 
+            
+            _isWaitingFrameRender = true;
+
+            var src = _spine.package.resolveRelativeUrl(spineItem.href);
+            
+            Globals.logEvent("CONTENT_DOCUMENT_LOAD_START", "EMIT", "reflowable_view.js [ " + spineItem.href + " -- " + src + " ]");
+            self.emit(Globals.Events.CONTENT_DOCUMENT_LOAD_START, _$iframe, spineItem);
+
+            _$iframe.css("opacity", "0.01");
+
+            _iframeLoader.loadIframe(_$iframe[0], src, onIFrameLoad, self, {spineItem : spineItem});
+        }
+    }
+
+    function updateHtmlFontSize() {
+
+        if(_$epubHtml) {
+            Helpers.UpdateHtmlFontSize(_$epubHtml, _fontSize);
+        }
+    }
+
+    function updateColumnGap() {
+
+        if(_$epubHtml) {
+
+            _$epubHtml.css("column-gap", _paginationInfo.columnGap + "px");
+        }
+    }
+
+    function onIFrameLoad(success) {
+        if (!success) {
+            applyIFrameLoad(success);
+            return;
+        }
+        var fontLoader = new FontLoader(_$iframe);
+        fontLoader.waitForFonts(function () {
+            applyIFrameLoad(success);
+        });
+    }
+
+    function applyIFrameLoad(success) {
+
+        _isWaitingFrameRender = false;
+
+        //while we where loading frame new request came
+        if(_deferredPageRequest && _deferredPageRequest.spineItem != _currentSpineItem) {
+            loadSpineItem(_deferredPageRequest.spineItem);
+            return;
+        }
+
+        if(!success) {
+            _$iframe.css("opacity", "1");
+            _deferredPageRequest = undefined;
+            return;
+        }
+
+        Globals.logEvent("CONTENT_DOCUMENT_LOADED", "EMIT", "reflowable_view.js [ " + _currentSpineItem.href + " ]");
+        self.emit(Globals.Events.CONTENT_DOCUMENT_LOADED, _$iframe, _currentSpineItem);
+
+        var epubContentDocument = _$iframe[0].contentDocument;
+        _$epubHtml = $("html", epubContentDocument);
+        _$htmlBody = $("body", _$epubHtml);
+
+        // TODO: how to address this correctly across all the affected platforms?!
+        // Video surface sometimes (depends on the video codec) disappears from CSS column (i.e. reflow page) during playback
+        // (audio continues to play normally, but video canvas is invisible).
+        // https://github.com/readium/readium-js-viewer/issues/265#issuecomment-73018762
+        // ...Meanwhile, reverting https://github.com/readium/readium-js-viewer/issues/239
+        // by commenting the code below (which unfortunately only works with some GPU / codec configurations,
+        // but actually fails on several other machines!!)
+        /*
+        if(window.chrome
+            && window.navigator.vendor === "Google Inc.") // TODO: Opera (WebKit) sometimes suffers from this rendering bug too (depends on the video codec), but unfortunately GPU-accelerated rendering makes the video controls unresponsive!!
+        {
+            $("video", _$htmlBody).css("transform", "translateZ(0)");
+        }
+        */
+
+        _htmlBodyIsVerticalWritingMode = false;
+        _htmlBodyIsLTRDirection = true;
+        _htmlBodyIsLTRWritingMode = undefined;
+
+        var win = _$iframe[0].contentDocument.defaultView || _$iframe[0].contentWindow;
+
+        //Helpers.isIframeAlive
+        var htmlBodyComputedStyle = win.getComputedStyle(_$htmlBody[0], null);
+        if (htmlBodyComputedStyle)
+        {
+            _htmlBodyIsLTRDirection = htmlBodyComputedStyle.direction === "ltr";
+
+            var writingMode = undefined;
+            if (htmlBodyComputedStyle.getPropertyValue)
+            {
+                writingMode = htmlBodyComputedStyle.getPropertyValue("-webkit-writing-mode") || htmlBodyComputedStyle.getPropertyValue("-moz-writing-mode") || htmlBodyComputedStyle.getPropertyValue("-ms-writing-mode") || htmlBodyComputedStyle.getPropertyValue("-o-writing-mode") || htmlBodyComputedStyle.getPropertyValue("-epub-writing-mode") || htmlBodyComputedStyle.getPropertyValue("writing-mode");
+            }
+            else
+            {
+                writingMode = htmlBodyComputedStyle.webkitWritingMode || htmlBodyComputedStyle.mozWritingMode || htmlBodyComputedStyle.msWritingMode || htmlBodyComputedStyle.oWritingMode || htmlBodyComputedStyle.epubWritingMode || htmlBodyComputedStyle.writingMode;
+            }
+
+            if (writingMode)
+            {
+                _htmlBodyIsLTRWritingMode = writingMode.indexOf("-lr") >= 0; // || writingMode.indexOf("horizontal-") >= 0; we need explicit!
+
+                if (writingMode.indexOf("vertical") >= 0 || writingMode.indexOf("tb-") >= 0 || writingMode.indexOf("bt-") >= 0)
+                {
+                    _htmlBodyIsVerticalWritingMode = true;
+                }
+            }
+        }
+
+        if (_htmlBodyIsLTRDirection)
+        {
+            if (_$htmlBody[0].getAttribute("dir") === "rtl" || _$epubHtml[0].getAttribute("dir") === "rtl")
+            {
+                _htmlBodyIsLTRDirection = false;
+            }
+        }
+
+        // Some EPUBs may not have explicit RTL content direction (via CSS "direction" property or @dir attribute) despite having a RTL page progression direction. Readium consequently tweaks the HTML in order to restore the correct block flow in the browser renderer, resulting in the appropriate CSS columnisation (which is used to emulate pagination).
+        if (!_spine.isLeftToRight() && _htmlBodyIsLTRDirection && !_htmlBodyIsVerticalWritingMode)
+        {
+            _$htmlBody[0].setAttribute("dir", "rtl");
+            _htmlBodyIsLTRDirection = false;
+            _htmlBodyIsLTRWritingMode = false;
+        }
+
+        _paginationInfo.isVerticalWritingMode = _htmlBodyIsVerticalWritingMode; 
+
+        hideBook();
+        _$iframe.css("opacity", "1");
+
+        updateViewportSize();
+        _$epubHtml.css("height", _lastViewPortSize.height + "px");
+
+        _$epubHtml.css("position", "relative");
+        _$epubHtml.css("margin", "0");
+        _$epubHtml.css("padding", "0");
+
+        _$epubHtml.css("column-axis", (_htmlBodyIsVerticalWritingMode ? "vertical" : "horizontal"));
+
+        //
+        // /////////
+        // //Columns Debugging
+        //
+        //     _$epubHtml.css("column-rule-color", "red");
+        //     _$epubHtml.css("column-rule-style", "dashed");
+        //     _$epubHtml.css("column-rule-width", "1px");
+        // _$epubHtml.css("background-color", '#b0c4de');
+        //
+        // ////
+
+        self.applyBookStyles();
+        resizeImages();
+
+        updateHtmlFontSize();
+        updateColumnGap();
+
+
+        self.applyStyles();
+    }
+
+    this.applyStyles = function() {
+
+        Helpers.setStyles(_userStyles.getStyles(), _$el.parent());
+
+        //because left, top, bottom, right setting ignores padding of parent container
+        //we have to take it to account manually
+        var elementMargins = Helpers.Margins.fromElement(_$el);
+        setFrameSizesToRectangle(elementMargins.padding);
+
+
+        updateViewportSize();
+        updatePagination();
+    };
+
+    this.applyBookStyles = function() {
+
+        if(_$epubHtml) {
+            Helpers.setStyles(_bookStyles.getStyles(), _$epubHtml);
+        }
+    };
+
+    function openDeferredElement() {
+
+        if(!_deferredPageRequest) {
+            return;
+        }
+
+        var deferredData = _deferredPageRequest;
+        _deferredPageRequest = undefined;
+        self.openPage(deferredData);
+
+    }
+
+    this.openPage = function(pageRequest) {
+
+        if(_isWaitingFrameRender) {
+            _deferredPageRequest = pageRequest;
+            return;
+        }
+
+        // if no spine item specified we are talking about current spine item
+        if(pageRequest.spineItem && pageRequest.spineItem != _currentSpineItem) {
+            _deferredPageRequest = pageRequest;
+            loadSpineItem(pageRequest.spineItem);
+            return;
+        }
+
+        var pageIndex = undefined;
+
+
+        if(pageRequest.spineItemPageIndex !== undefined) {
+            pageIndex = pageRequest.spineItemPageIndex;
+        }
+        else if(pageRequest.elementId) {
+            pageIndex = _navigationLogic.getPageForElementId(pageRequest.elementId);
+            
+            if (pageIndex < 0) pageIndex = 0;
+        }
+        else if(pageRequest.elementCfi) {
+            try
+            {
+                pageIndex = _navigationLogic.getPageForElementCfi(pageRequest.elementCfi,
+                    ["cfi-marker", "mo-cfi-highlight"],
+                    [],
+                    ["MathJax_Message"]);
+                
+                if (pageIndex < 0) pageIndex = 0;
+            }
+            catch (e)
+            {
+                pageIndex = 0;
+                console.error(e);
+            }
+        }
+        else if(pageRequest.firstPage) {
+            pageIndex = 0;
+        }
+        else if(pageRequest.lastPage) {
+            pageIndex = _paginationInfo.columnCount - 1;
+        }
+        else {
+            console.debug("No criteria in pageRequest");
+            pageIndex = 0;
+        }
+
+        if(pageIndex >= 0 && pageIndex < _paginationInfo.columnCount) {
+            _paginationInfo.currentSpreadIndex = Math.floor(pageIndex / _paginationInfo.visibleColumnCount) ;
+            onPaginationChanged(pageRequest.initiator, pageRequest.spineItem, pageRequest.elementId);
+        }
+        else {
+            console.log('Illegal pageIndex value: ', pageIndex, 'column count is ', _paginationInfo.columnCount);
+        }
+    };
+
+    function redraw() {
+
+        var offsetVal =  -_paginationInfo.pageOffset + "px";
+
+        if (_htmlBodyIsVerticalWritingMode)
+        {
+            _$epubHtml.css("top", offsetVal);
+        }
+        else
+        {
+            var ltr = _htmlBodyIsLTRDirection || _htmlBodyIsLTRWritingMode;
+
+            _$epubHtml.css("left", ltr ? offsetVal : "");
+            _$epubHtml.css("right", !ltr ? offsetVal : "");
+        }
+
+        showBook(); // as it's no longer hidden by shifting the position
+    }
+
+    function updateViewportSize() {
+
+        var newWidth = _$contentFrame.width();
+        var newHeight = _$contentFrame.height();
+
+        if(_lastViewPortSize.width !== newWidth || _lastViewPortSize.height !== newHeight){
+
+            _lastViewPortSize.width = newWidth;
+            _lastViewPortSize.height = newHeight;
+            return true;
+        }
+
+        return false;
+    }
+
+    function onPaginationChanged_(initiator, paginationRequest_spineItem, paginationRequest_elementId) {
+
+        _paginationInfo.pageOffset = (_paginationInfo.columnWidth + _paginationInfo.columnGap) * _paginationInfo.visibleColumnCount * _paginationInfo.currentSpreadIndex;
+        
+        redraw();
+
+        _.defer(function () {
+            
+            Globals.logEvent("InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED", "EMIT", "reflowable_view.js");
+            self.emit(Globals.InternalEvents.CURRENT_VIEW_PAGINATION_CHANGED, {
+                paginationInfo: self.getPaginationInfo(),
+                initiator: initiator,
+                spineItem: paginationRequest_spineItem,
+                elementId: paginationRequest_elementId
+            });
+        });
+    }
+    var onPaginationChanged = _.debounce(onPaginationChanged_, 100);
+
+    this.openPagePrev = function (initiator) {
+
+        if(!_currentSpineItem) {
+            return;
+        }
+
+        if(_paginationInfo.currentSpreadIndex > 0) {
+            _paginationInfo.currentSpreadIndex--;
+            onPaginationChanged(initiator);
+        }
+        else {
+
+            var prevSpineItem = _spine.prevItem(_currentSpineItem, true);
+            if(prevSpineItem) {
+
+                var pageRequest = new PageOpenRequest(prevSpineItem, initiator);
+                pageRequest.setLastPage();
+                self.openPage(pageRequest);
+            }
+        }
+    };
+
+    this.openPageNext = function (initiator) {
+
+        if(!_currentSpineItem) {
+            return;
+        }
+
+        if(_paginationInfo.currentSpreadIndex < _paginationInfo.spreadCount - 1) {
+            _paginationInfo.currentSpreadIndex++;
+            onPaginationChanged(initiator);
+        }
+        else {
+
+            var nextSpineItem = _spine.nextItem(_currentSpineItem, true);
+            if(nextSpineItem) {
+
+                var pageRequest = new PageOpenRequest(nextSpineItem, initiator);
+                pageRequest.setFirstPage();
+                self.openPage(pageRequest);
+            }
+        }
+    };
+
+
+    function updatePagination() {
+
+        // At 100% font-size = 16px (on HTML, not body or descendant markup!)
+        var MAXW = _paginationInfo.columnMaxWidth;
+        var MINW = _paginationInfo.columnMinWidth;
+
+        var isDoublePageSyntheticSpread = Helpers.deduceSyntheticSpread(_$viewport, _currentSpineItem, _viewSettings);
+
+        var forced = (isDoublePageSyntheticSpread === false) || (isDoublePageSyntheticSpread === true);
+        // excludes 0 and 1 falsy/truthy values which denote non-forced result
+
+// console.debug("isDoublePageSyntheticSpread: " + isDoublePageSyntheticSpread);
+// console.debug("forced: " + forced);
+//
+        if (isDoublePageSyntheticSpread === 0)
+        {
+            isDoublePageSyntheticSpread = 1; // try double page, will shrink if doesn't fit
+// console.debug("TRYING SPREAD INSTEAD OF SINGLE...");
+        }
+
+        _paginationInfo.visibleColumnCount = isDoublePageSyntheticSpread ? 2 : 1;
+
+        if (_htmlBodyIsVerticalWritingMode)
+        {
+            MAXW *= 2;
+            isDoublePageSyntheticSpread = false;
+            forced = true;
+            _paginationInfo.visibleColumnCount = 1;
+// console.debug("Vertical Writing Mode => single CSS column, but behaves as if two-page spread");
+        }
+
+        if(!_$epubHtml) {
+            return;
+        }
+
+        hideBook(); // shiftBookOfScreen();
+
+        // "borderLeft" is the blank vertical strip (e.g. 40px wide) where the left-arrow button resides, i.e. previous page command
+        var borderLeft = parseInt(_$viewport.css("border-left-width"));
+        
+        // The "columnGap" separates two consecutive columns in a 2-page synthetic spread (e.g. 60px wide).
+        // This middle gap (blank vertical strip) actually corresponds to the left page's right-most margin, combined with the right page's left-most margin.
+        // So, "adjustedGapLeft" is half of the center strip... 
+        var adjustedGapLeft = _paginationInfo.columnGap/2;
+        // ...but we include the "borderLeft" strip to avoid wasting valuable rendering real-estate:  
+        adjustedGapLeft = Math.max(0, adjustedGapLeft-borderLeft);
+        // Typically, "adjustedGapLeft" is zero because the space available for the 'previous page' button is wider than half of the column gap!
+
+        // "borderRight" is the blank vertical strip (e.g. 40px wide) where the right-arrow button resides, i.e. next page command
+        var borderRight = parseInt(_$viewport.css("border-right-width"));
+        
+        // The "columnGap" separates two consecutive columns in a 2-page synthetic spread (e.g. 60px wide).
+        // This middle gap (blank vertical strip) actually corresponds to the left page's right-most margin, combined with the right page's left-most margin.
+        // So, "adjustedGapRight" is half of the center strip... 
+        var adjustedGapRight = _paginationInfo.columnGap/2;
+        // ...but we include the "borderRight" strip to avoid wasting valuable rendering real-estate:
+        adjustedGapRight = Math.max(0, adjustedGapRight-borderRight);
+        // Typically, "adjustedGapRight" is zero because the space available for the 'next page' button is wider than half of the column gap! (in other words, the right-most and left-most page margins are fully included in the strips reserved for the arrow buttons)
+
+        // Note that "availableWidth" does not contain "borderLeft" and "borderRight" (.width() excludes the padding and border and margin in the CSS box model of div#epub-reader-frame)  
+        var availableWidth = _$viewport.width();
+        
+        // ...So, we substract the page margins and button spacing to obtain the width available for actual text:
+        var textWidth = availableWidth - adjustedGapLeft - adjustedGapRight;
+        
+        // ...and if we have 2 pages / columns, then we split the text width in half: 
+        if (isDoublePageSyntheticSpread)
+        {
+            textWidth = (textWidth - _paginationInfo.columnGap) * 0.5;
+        }
+
+        var filler = 0;
+
+        // Now, if the resulting width actually available for document content is greater than the maximum allowed value, we create even more left+right blank space to "compress" the horizontal run of text.  
+        if (textWidth > MAXW)
+        {
+            var eachPageColumnReduction = textWidth - MAXW;
+            
+            // if we have a 2-page synthetic spread, then we "trim" left and right sides by adding "eachPageColumnReduction" blank space.
+            // if we have a single page / column, then this loss of text real estate is shared between right and left sides  
+            filler = Math.floor(eachPageColumnReduction * (isDoublePageSyntheticSpread ? 1 : 0.5));
+        }
+
+        // Let's check whether a narrow two-page synthetic spread (impeded reabability) can be reduced down to a single page / column:
+        else if (!forced && textWidth < MINW && isDoublePageSyntheticSpread)
+        {
+            isDoublePageSyntheticSpread = false;
+            _paginationInfo.visibleColumnCount = 1;
+
+            textWidth = availableWidth - adjustedGapLeft - adjustedGapRight;
+            if (textWidth > MAXW)
+            {
+                filler = Math.floor((textWidth - MAXW) * 0.5);
+            }
+        }
+        
+        _$el.css({"left": (filler+adjustedGapLeft + "px"), "right": (filler+adjustedGapRight + "px")});
+        
+        updateViewportSize(); //_$contentFrame ==> _lastViewPortSize
+
+        var resultingColumnWidth = _$el.width();
+        if (isDoublePageSyntheticSpread) {
+            resultingColumnWidth = (resultingColumnWidth - _paginationInfo.columnGap) / 2;
+        }
+        resultingColumnWidth = Math.floor(resultingColumnWidth);
+        if ((resultingColumnWidth-1) > MAXW) {
+            console.debug("resultingColumnWidth > MAXW ! " + resultingColumnWidth + " > " + MAXW);
+        }
+        
+
+        _$iframe.css("width", _lastViewPortSize.width + "px");
+        _$iframe.css("height", _lastViewPortSize.height + "px");
+
+        _$epubHtml.css("height", _lastViewPortSize.height + "px");
+
+        // below min- max- are required in vertical writing mode (height is not enough, in some cases...weird!)
+        _$epubHtml.css("min-height", _lastViewPortSize.height + "px");
+        _$epubHtml.css("max-height", _lastViewPortSize.height + "px");
+
+        //normalise spacing to avoid interference with column-isation
+        _$epubHtml.css('margin', 0);
+        _$epubHtml.css('padding', 0);
+        _$epubHtml.css('border', 0);
+        _$htmlBody.css('margin', 0);
+        _$htmlBody.css('padding', 0);
+
+        _paginationInfo.rightToLeft = _spine.isRightToLeft();
+
+        _paginationInfo.columnWidth = Math.round(((_htmlBodyIsVerticalWritingMode ? _lastViewPortSize.height : _lastViewPortSize.width) - _paginationInfo.columnGap * (_paginationInfo.visibleColumnCount - 1)) / _paginationInfo.visibleColumnCount);
+
+        var useColumnCountNotWidth = _paginationInfo.visibleColumnCount > 1; // column-count == 1 does not work in Chrome, and is not needed anyway (HTML width is full viewport width, no Firefox video flickering)
+        if (useColumnCountNotWidth) {
+            _$epubHtml.css("width", _lastViewPortSize.width + "px");
+            _$epubHtml.css("column-width", "auto");
+            _$epubHtml.css("column-count", _paginationInfo.visibleColumnCount);
+        } else {
+            _$epubHtml.css("width", (_htmlBodyIsVerticalWritingMode ? _lastViewPortSize.width : _paginationInfo.columnWidth) + "px");
+            _$epubHtml.css("column-count", "auto");
+            _$epubHtml.css("column-width", _paginationInfo.columnWidth + "px");
+        }
+
+        _$epubHtml.css("column-fill", "auto");
+
+        _$epubHtml.css({left: "0", right: "0", top: "0"});
+
+        Helpers.triggerLayout(_$iframe);
+
+        _paginationInfo.columnCount = ((_htmlBodyIsVerticalWritingMode ? _$epubHtml[0].scrollHeight : _$epubHtml[0].scrollWidth) + _paginationInfo.columnGap) / (_paginationInfo.columnWidth + _paginationInfo.columnGap);
+        _paginationInfo.columnCount = Math.round(_paginationInfo.columnCount);
+
+        var totalGaps = (_paginationInfo.columnCount-1) * _paginationInfo.columnGap;
+        var colWidthCheck = ((_htmlBodyIsVerticalWritingMode ? _$epubHtml[0].scrollHeight : _$epubHtml[0].scrollWidth) - totalGaps) / _paginationInfo.columnCount;
+        colWidthCheck = Math.round(colWidthCheck);
+
+        if (colWidthCheck > _paginationInfo.columnWidth)
+        {
+            console.debug("ADJUST COLUMN");
+            console.log(_paginationInfo.columnWidth);
+            console.log(colWidthCheck);
+
+            _paginationInfo.columnWidth = colWidthCheck;
+        }
+
+        _paginationInfo.spreadCount =  Math.ceil(_paginationInfo.columnCount / _paginationInfo.visibleColumnCount);
+
+        if(_paginationInfo.currentSpreadIndex >= _paginationInfo.spreadCount) {
+            _paginationInfo.currentSpreadIndex = _paginationInfo.spreadCount - 1;
+        }
+
+        if(_deferredPageRequest) {
+
+            //if there is a request for specific page we get here
+            openDeferredElement();
+        }
+        else {
+
+            //we get here on resizing the viewport
+
+            onPaginationChanged(self); // => redraw() => showBook(), so the trick below is not needed
+
+            // //We do this to force re-rendering of the document in the iframe.
+            // //There is a bug in WebView control with right to left columns layout - after resizing the window html document
+            // //is shifted in side the containing div. Hiding and showing the html element puts document in place.
+            // _$epubHtml.hide();
+            // setTimeout(function() {
+            //     _$epubHtml.show();
+            //     onPaginationChanged(self); // => redraw() => showBook()
+            // }, 50);
+
+        }
+    }
+
+//    function shiftBookOfScreen() {
+//
+//        if(_spine.isLeftToRight()) {
+//            _$epubHtml.css("left", (_lastViewPortSize.width + 1000) + "px");
+//        }
+//        else {
+//            _$epubHtml.css("right", (_lastViewPortSize.width + 1000) + "px");
+//        }
+//    }
+
+    function hideBook()
+    {
+        if (_currentOpacity != -1) return; // already hidden
+
+        _currentOpacity = _$epubHtml.css('opacity');
+        _$epubHtml.css('opacity', "0");
+    }
+
+    function showBook()
+    {
+        if (_currentOpacity != -1)
+        {
+            _$epubHtml.css('opacity', _currentOpacity);
+        }
+        _currentOpacity = -1;
+    }
+
+    this.getPaginationInfo = function() {
+
+        var paginationInfo = new CurrentPagesInfo(_spine, false);
+
+        if(!_currentSpineItem) {
+            return paginationInfo;
+        }
+
+        var pageIndexes = getOpenPageIndexes();
+
+        for(var i = 0, count = pageIndexes.length; i < count; i++) {
+
+            paginationInfo.addOpenPage(pageIndexes[i], _paginationInfo.columnCount, _currentSpineItem.idref, _currentSpineItem.index);
+        }
+
+        return paginationInfo;
+
+    };
+
+    function getOpenPageIndexes() {
+
+        var indexes = [];
+
+        var currentPage = _paginationInfo.currentSpreadIndex * _paginationInfo.visibleColumnCount;
+
+        for(var i = 0; i < _paginationInfo.visibleColumnCount && (currentPage + i) < _paginationInfo.columnCount; i++) {
+
+            indexes.push(currentPage + i);
+        }
+
+        return indexes;
+
+    }
+
+    //we need this styles for css columnizer not to chop big images
+    function resizeImages() {
+
+        if(!_$epubHtml) {
+            return;
+        }
+
+        var $elem;
+        var height;
+        var width;
+
+        $('img, svg', _$epubHtml).each(function(){
+
+            $elem = $(this);
+
+            // if we set max-width/max-height to 100% columnizing engine chops images embedded in the text
+            // (but not if we set it to 99-98%) go figure.
+            // TODO: CSS min-w/h is content-box, not border-box (does not take into account padding + border)? => images may still overrun?
+            $elem.css('max-width', '98%');
+            $elem.css('max-height', '98%');
+
+            if(!$elem.css('height')) {
+                $elem.css('height', 'auto');
+            }
+
+            if(!$elem.css('width')) {
+                $elem.css('width', 'auto');
+            }
+
+        });
+    }
+
+    this.bookmarkCurrentPage = function() {
+
+        if(!_currentSpineItem) {
+
+            return undefined;
+        }
+
+        return self.getFirstVisibleCfi();
+    };
+
+    this.getLoadedSpineItems = function() {
+        return [_currentSpineItem];
+    };
+
+    this.getElementByCfi = function(spineItemIdref, cfi, classBlacklist, elementBlacklist, idBlacklist) {
+
+        if(spineItemIdref != _currentSpineItem.idref) {
+            console.warn("spine item is not loaded");
+            return undefined;
+        }
+
+        return _navigationLogic.getElementByCfi(cfi, classBlacklist, elementBlacklist, idBlacklist);
+    };
+
+    this.getElementById = function(spineItemIdref, id) {
+
+        if(spineItemIdref != _currentSpineItem.idref) {
+            console.error("spine item is not loaded");
+            return undefined;
+        }
+
+        return _navigationLogic.getElementById(id);
+    };
+
+    this.getElement = function(spineItemIdref, selector) {
+
+        if(spineItemIdref != _currentSpineItem.idref) {
+            console.warn("spine item is not loaded");
+            return undefined;
+        }
+
+        return _navigationLogic.getElement(selector);
+    };
+
+    this.getFirstVisibleMediaOverlayElement = function() {
+
+        return _navigationLogic.getFirstVisibleMediaOverlayElement();
+    };
+
+    this.insureElementVisibility = function(spineItemId, element, initiator) {
+
+        var $element = $(element);
+        if(_navigationLogic.isElementVisible($element))
+        {
+            return;
+        }
+
+        var page = _navigationLogic.getPageForElement($element);
+
+        if(page == -1)
+        {
+            return;
+        }
+
+        var openPageRequest = new PageOpenRequest(_currentSpineItem, initiator);
+        openPageRequest.setPageIndex(page);
+
+        var id = element.id;
+        if (!id)
+        {
+            id = element.getAttribute("id");
+        }
+
+        if (id)
+        {
+            openPageRequest.setElementId(id);
+        }
+
+        self.openPage(openPageRequest);
+    };
+
+    this.getVisibleElementsWithFilter = function(filterFunction, includeSpineItem) {
+
+        var elements = _navigationLogic.getVisibleElementsWithFilter(null, filterFunction);
+
+        if (includeSpineItem) {
+            return [{elements: elements, spineItem:_currentSpineItem}];
+        } else {
+            return elements;
+        }
+
+    };
+
+    this.getVisibleElements = function(selector, includeSpineItem) {
+
+        var elements = _navigationLogic.getAllVisibleElementsWithSelector(selector);
+
+        if (includeSpineItem) {
+            return [{elements: elements, spineItem:_currentSpineItem}];
+        } else {
+            return elements;
+        }
+
+    };
+
+    this.isElementVisible = function ($element) {
+
+        return _navigationLogic.isElementVisible($element);
+
+    };
+
+    this.getElements = function(spineItemIdref, selector) {
+
+        if(spineItemIdref != _currentSpineItem.idref) {
+            console.warn("spine item is not loaded");
+            return undefined;
+        }
+
+        return _navigationLogic.getElements(selector);
+    };
+
+    this.isNodeFromRangeCfiVisible = function (spineIdref, partialCfi) {
+        if (_currentSpineItem.idref === spineIdref) {
+            return _navigationLogic.isNodeFromRangeCfiVisible(partialCfi);
+        }
+        return undefined;
+    };
+
+    this.isVisibleSpineItemElementCfi = function (spineIdRef, partialCfi) {
+        if (_navigationLogic.isRangeCfi(partialCfi)) {
+            return this.isNodeFromRangeCfiVisible(spineIdRef, partialCfi);
+        }
+        var $elementFromCfi = this.getElementByCfi(spineIdRef, partialCfi);
+        return ($elementFromCfi && this.isElementVisible($elementFromCfi));
+    };
+
+    this.getNodeRangeInfoFromCfi = function (spineIdRef, partialCfi) {
+        if (spineIdRef != _currentSpineItem.idref) {
+            console.warn("spine item is not loaded");
+            return undefined;
+        }
+
+        return _navigationLogic.getNodeRangeInfoFromCfi(partialCfi);
+    };
+
+    function createBookmarkFromCfi(cfi){
+        return new BookmarkData(_currentSpineItem.idref, cfi);
+    }
+
+    this.getFirstVisibleCfi = function () {
+        return createBookmarkFromCfi(_navigationLogic.getFirstVisibleCfi());
+    };
+
+    this.getLastVisibleCfi = function () {
+        return createBookmarkFromCfi(_navigationLogic.getLastVisibleCfi());
+    };
+
+    this.getDomRangeFromRangeCfi = function (rangeCfi, rangeCfi2, inclusive) {
+        if (rangeCfi2 && rangeCfi.idref !== rangeCfi2.idref) {
+            console.error("getDomRangeFromRangeCfi: both CFIs must be scoped under the same spineitem idref");
+            return undefined;
+        }
+        return _navigationLogic.getDomRangeFromRangeCfi(rangeCfi.contentCFI, rangeCfi2? rangeCfi2.contentCFI: null, inclusive);
+    };
+
+    this.getRangeCfiFromDomRange = function (domRange) {
+        return createBookmarkFromCfi(_navigationLogic.getRangeCfiFromDomRange(domRange));
+    };
+
+    this.getVisibleCfiFromPoint = function (x, y, precisePoint) {
+        return createBookmarkFromCfi(_navigationLogic.getVisibleCfiFromPoint(x, y, precisePoint));
+    };
+
+    this.getRangeCfiFromPoints = function(startX, startY, endX, endY) {
+        return createBookmarkFromCfi(_navigationLogic.getRangeCfiFromPoints(startX, startY, endX, endY));
+    };
+
+    this.getCfiForElement = function(x, y) {
+        return createBookmarkFromCfi(_navigationLogic.getCfiForElement(x, y));
+    };
+
+    this.getElementFromPoint = function(x, y) {
+        return _navigationLogic.getElementFromPoint(x,y);
+    };
+};
+    return ReflowableView;
+});
+
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/style',[], function() {
+/**
+ *
+ * @param selector
+ * @param declarations
+ * @constructor
+ */
+var Style = function(selector, declarations) {
+
+    this.selector = selector;
+    this.declarations = declarations;
+
+    this.setDeclarations = function(declarations) {
+
+        for(var prop in declarations) {
+            if(declarations.hasOwnProperty(prop)) {
+                this.declarations[prop] = declarations[prop];
+            }
+        }
+
+    }
+};
+    return Style;
+});
+
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/style_collection',["./style"], function(Style) {
+/**
+ *
+ * @constructor
+ */
+var StyleCollection = function() {
+
+    var _styles = [];
+
+    this.clear = function() {
+        _styles.length = 0;
+
+    };
+
+    this.findStyle = function(selector) {
+
+        var count = _styles.length;
+        for(var i = 0; i < count; i++) {
+            if(_styles[i].selector === selector) {
+                return _styles[i];
+            }
+        }
+
+        return undefined;
+    };
+
+    this.addStyle = function(selector, declarations) {
+
+        var style = this.findStyle(selector);
+
+        if(style) {
+            style.setDeclarations(declarations);
+        }
+        else {
+            style = new Style(selector, declarations);
+            _styles.push(style);
+        }
+
+        return style;
+    };
+
+    this.removeStyle = function(selector) {
+        
+        var count = _styles.length;
+
+        for(var i = 0; i < count; i++) {
+
+            if(_styles[i].selector === selector) {
+                _styles.splice(i, 1);
+                return;
+            }
+        }
+    };
+
+    this.getStyles = function() {
+        return _styles;
+    };
+
+    this.resetStyleValues = function() {
+
+        var count = _styles.length;
+
+        for(var i = 0; i < count; i++) {
+
+            var style = _styles[i];
+            var declarations = style.declarations;
+
+            for(var prop in declarations) {
+                if(declarations.hasOwnProperty(prop)) {
+                    declarations[prop] = '';
+                }
+            }
+        }
+    }
+
+};
+    return StyleCollection;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+define('readium_shared_js/models/switches',["jquery", "underscore"], function($, _) {
+/**
+ *
+ * @constructor
+ */
+var Switches = function() {
+
+};
+
+// Description: Parse the epub "switch" tags and hide
+// cases that are not supported
+Switches.apply = function(dom) {
+
+    function isSupported(caseNode) {
+
+        var ns = caseNode.attributes["required-namespace"];
+        if(!ns) {
+            // the namespace was not specified, that should
+            // never happen, we don't support it then
+            console.log("Encountered a case statement with no required-namespace");
+            return false;
+        }
+        // all the xmlns that readium is known to support
+        // TODO this is going to require maintenance
+        var supportedNamespaces = ["http://www.w3.org/1998/Math/MathML"];
+        return _.include(supportedNamespaces, ns.value);
+    }
+
+    var getQuery = ((window.navigator.userAgent.indexOf("Trident") > 0) || (window.navigator.userAgent.indexOf("Edge") > 0))
+        ? function (elementName) { return 'epub\\:' + elementName; }
+        : function (elementName) { return elementName; };
+
+    _.each(dom.querySelectorAll(getQuery('switch')), function(switchNode) {
+
+        // keep track of whether or now we found one
+        var found = false;
+
+        _.each(switchNode.querySelectorAll(getQuery('case')), function(caseNode) {
+
+            if( !found && isSupported(caseNode) ) {
+                found = true; // we found the node, don't remove it
+            }
+            else {
+                $(caseNode).remove(); // remove the node from the dom
+            }
+
+        });
+
+        if (found) {
+
+            // if we found a supported case, remove the default
+            _.each(switchNode.querySelectorAll(getQuery('default')), function(defaultNode) {
+                $(defaultNode).remove();
+            });
+
+        }
+
+    });
+};
+    return Switches;
+});
+
+//  LauncherOSX
+//
+//  Created by Boris Schneiderman.
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//  
+//  Redistribution and use in source and binary forms, with or without modification, 
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this 
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice, 
+//  this list of conditions and the following disclaimer in the documentation and/or 
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be 
+//  used to endorse or promote products derived from this software without specific 
+//  prior written permission.
+//  
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, 
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, 
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, 
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE 
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED 
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/trigger',["jquery", "../helpers"], function($, Helpers) {
+/**
+ * Setter fot epub Triggers
+ *
+ *
+ * @param domNode
+ */
+
+var Trigger = function(domNode) {
+    var $el = $(domNode);
+    this.action     = $el.attr("action");
+    this.ref         = $el.attr("ref");
+    this.event         = $el.attr("ev:event");
+    this.observer     = $el.attr("ev:observer");
+    this.ref         = $el.attr("ref");
+};
+
+Trigger.register = function(dom) {
+    $('trigger', dom).each(function() {
+        var trigger = new Trigger(this);
+        trigger.subscribe(dom);
+    });
+};
+
+Trigger.prototype.subscribe = function(dom) {
+    var selector = "#" + this.observer;
+    var that = this;
+    $(selector, dom).on(this.event, function() {
+        that.execute(dom);
+    });
+};
+
+Trigger.prototype.execute = function(dom) {
+    var $target = $( "#" + Helpers.escapeJQuerySelector(this.ref), dom);
+    switch(this.action)
+    {
+        case "show":
+            $target.css("visibility", "visible");
+            break;
+        case "hide":
+            $target.css("visibility", "hidden");
+            break;
+        case "play":
+            $target[0].currentTime = 0;
+            $target[0].play();
+            break;
+        case "pause":
+            $target[0].pause();
+            break;
+        case "resume":
+            $target[0].play();
+            break;
+        case "mute":
+            $target[0].muted = true;
+            break;
+        case "unmute":
+            $target[0].muted = false;
+            break;
+        default:
+            console.log("do not no how to handle trigger " + this.action);
+    }
+};
+    return Trigger;
+});
+
+//  Created by Juan Corona
+//  Copyright (c) 2014 Readium Foundation and/or its licensees. All rights reserved.
+//
+//  Redistribution and use in source and binary forms, with or without modification,
+//  are permitted provided that the following conditions are met:
+//  1. Redistributions of source code must retain the above copyright notice, this
+//  list of conditions and the following disclaimer.
+//  2. Redistributions in binary form must reproduce the above copyright notice,
+//  this list of conditions and the following disclaimer in the documentation and/or
+//  other materials provided with the distribution.
+//  3. Neither the name of the organization nor the names of its contributors may be
+//  used to endorse or promote products derived from this software without specific
+//  prior written permission.
+//
+//  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+//  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+//  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+//  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+//  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//  OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+//  OF THE POSSIBILITY OF SUCH DAMAGE.
+
+define('readium_shared_js/models/node_range_info',[],function () {
+
+    /**
+     * @class ReadiumSDK.Models.NodeRangePositionInfo
+     * @constructor
+     */
+    var NodeRangePositionInfo = function (node, offset) {
+
+        /**
+         * The actual DOM node
+         * @property node
+         * @type {Node}
+         */
+        this.node = node;
+
+        /**
+         * The position offsetf for the node
+         * @property offset
+         * @type {Number}
+         */
+        this.offset = offset;
+
+    };
+
+    /**
+     * @class ReadiumSDK.Models.NodeRangeInfo
+     * @constructor
+     */
+    var NodeRangeInfo = function (clientRect, startInfo, endInfo) {
+
+        var self = this;
+        /**
+         * Client rectangle information for the range content bounds
+         * @property clientRect
+         * @type {ClientRect}
+         */
+        this.clientRect = clientRect;
+
+        /**
+         * Node and position information providing where and which node the range starts with
+         * @property startInfo
+         * @type {ReadiumSDK.Models.NodeRangePositionInfo}
+         */
+        this.startInfo = startInfo;
+
+        /**
+         * Node and position information providing where and which node the range ends with
+         * @property endInfo
+         * @type {ReadiumSDK.Models.NodeRangePositionInfo}
+         */
+        this.endInfo = endInfo;
+
+
+        this.setStartInfo = function (info) {
+            self.startInfo = new NodeRangePositionInfo(info);
+            return self;
+        };
+
+        this.setEndInfo = function (info) {
+            self.endInfo = new NodeRangePositionInfo(info);
+            return self;
+        };
+    };
+
+    return NodeRangeInfo;
+>>>>>>> upstream/develop
 });
 
 

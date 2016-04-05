@@ -11,3 +11,4 @@ http.log
 build-output/**/*
 
 api-docs
+.idea

@@ -174,7 +174,7 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
         _pageTransitions.push(_pageTransition_SWING); // 3
 
         var _disablePageTransitions = opts.disablePageTransitions || false;
-                
+
         // TODO: page transitions are broken, sp we disable them to avoid nasty visual artefacts
         _disablePageTransitions = true;
 
@@ -335,13 +335,13 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
 
     this.remove = function () {
         this.clear();
-        
+
         _currentSpineItem = undefined;
-        
+
         if (_$el && _$el[0]) {
             _$el.remove();
         }
-        
+
         _$el = undefined;
         _$scaler = undefined;
         _$iframe = undefined;
@@ -349,7 +349,7 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
 
     this.clear = function () {
         _isIframeLoaded = false;
-        
+
         if (_$iframe && _$iframe[0]) {
             _$iframe[0].src = "";
         }
@@ -566,7 +566,7 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
             css["height"] = _meta_size.height;
             _$scaler.css(css);
         }
-                
+
         // Chrome workaround: otherwise text is sometimes invisible (probably a rendering glitch due to the 3D transform graphics backend?)
         //_$epubHtml.css("visibility", "hidden"); // "flashing" in two-page spread mode is annoying :(
         _$epubHtml.css("opacity", "0.999");
@@ -577,7 +577,7 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
             //_$epubHtml.css("visibility", "visible");
             _$epubHtml.css("opacity", "1");
         }, 0);
-        
+
         // TODO: the CSS transitions do not work anymore, tested on Firefox and Chrome.
         // The line of code below still needs to be invoked, but the logic in _pageTransitionHandler probably need adjusting to work around the animation timing issue.
         // PS: opacity=1 above seems to interfere with the fade-in transition, probably a browser issue with mixing inner-iframe effects with effects applied to the iframe parent/ancestors.
@@ -787,7 +787,7 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
 
             Globals.logEvent("OnePageView.Events.SPINE_ITEM_OPEN_START", "EMIT", "one_page_view.js [ " + spineItem.href + " -- " + src + " ]");
             self.emit(OnePageView.Events.SPINE_ITEM_OPEN_START, _$iframe, _currentSpineItem);
-            
+
             _iframeLoader.loadIframe(_$iframe[0], src, function (success) {
 
                 if (success && callback) {
@@ -873,33 +873,20 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
         return undefined;
     }
 
-    this.getFirstVisibleElementCfi = function () {
-
-        var navigation = self.getNavigator();
-        return navigation.getFirstVisibleElementCfi(0);
-
-    };
-
-    this.getLastVisibleElementCfi = function() {
-        var navigation = new CfiNavigationLogic(_$el, _$iframe);
-        var offset = $('html', _$iframe[0].contentDocument).width();
-        return navigation.getLastVisibleElementCfi(offset);
-    };
-
     function getVisibleContentOffsets() {
         return {
             top: -_$el.parent().scrollTop(),
             left: 0
         };
     }
-    
+
     function getFrameDimensions() {
         return {
             width: _$el.parent()[0].clientWidth,
             height: _$el.parent()[0].clientHeight
         };
     }
-    
+
     this.getNavigator = function () {
         return new CfiNavigationLogic({
             $iframe: _$iframe,
@@ -943,7 +930,7 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
 
     this.getFirstVisibleMediaOverlayElement = function() {
         var navigation = self.getNavigator();
-        return navigation.getFirstVisibleMediaOverlayElement({top:0, bottom: _$iframe.height()});
+        return navigation.getFirstVisibleMediaOverlayElement();
     };
 
     this.offset = function () {
@@ -955,16 +942,14 @@ var OnePageView = function (options, classes, enableBookStyleOverrides, reader) 
 
     this.getVisibleElementsWithFilter = function (filterFunction) {
         var navigation = self.getNavigator();
-        var visibleContentOffsets = {top: 0, bottom: _$iframe.height()};
-        var elements = navigation.getVisibleElementsWithFilter(visibleContentOffsets, filterFunction);
+        var elements = navigation.getVisibleElementsWithFilter(null, filterFunction);
         return elements;
     };
 
     this.getVisibleElements = function (selector) {
 
         var navigation = self.getNavigator();
-        var visibleContentOffsets = {top: 0, bottom: _$iframe.height()};
-        var elements = navigation.getAllVisibleElementsWithSelector(selector, visibleContentOffsets);
+        var elements = navigation.getAllVisibleElementsWithSelector(selector);
         return elements;
     };
 
