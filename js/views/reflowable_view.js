@@ -838,7 +838,7 @@ var ReflowableView = function(options, reader){
         //     }
 
         // });
-        var widthModifier = reader.viewerSettings.isSyntheticSpread ? 2 : 1;
+        var widthModifier = _paginationInfo.visibleColumnCount;
 
         var $targets = $();
         $targets = $targets.add(_$epubHtml.find("img"));
@@ -848,10 +848,15 @@ var ReflowableView = function(options, reader){
             .attr("preserveAspectRatio", "xMidYMid meet")
             .attr("width", "100%"));
 
+        // Also add tables because they operate in a similar fashion to the images
+        $targets = $targets.add(_$epubHtml.find("table"));
+
         // See: http://www.w3.org/TR/css3-multicol/#column-breaks
         $targets.css({
-            maxHeight: (_$iframe.height() + "px"),
-            maxWidth: ((_$iframe.width() / widthModifier) + "px"),
+            // maxHeight: (_$iframe.height() + "px"),
+            maxHeight: "95vh",
+            // maxWidth: ((_$iframe.width() / widthModifier) + "px"),
+            maxWidth: ((95 / widthModifier) + "vw"),
             "-webkit-column-break-inside": "avoid",
             "-moz-column-break-inside": "avoid",
             "-moz-page-break-inside": "avoid",
