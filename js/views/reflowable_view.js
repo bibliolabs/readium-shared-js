@@ -494,8 +494,7 @@ var ReflowableView = function(options, reader){
     }
 
     function onPaginationChanged_(initiator, paginationRequest_spineItem, paginationRequest_elementId) {
-
-        _paginationInfo.pageOffset = (_paginationInfo.columnWidth + _paginationInfo.columnGap) * _paginationInfo.visibleColumnCount * _paginationInfo.currentSpreadIndex;
+        _paginationInfo.pageOffset = _paginationInfo.pageOffsetSize * _paginationInfo.currentSpreadIndex;
 
         redraw();
 
@@ -686,6 +685,8 @@ var ReflowableView = function(options, reader){
 
         _paginationInfo.rightToLeft = _spine.isRightToLeft();
 
+        _paginationInfo.pageOffsetSize = _htmlBodyIsVerticalWritingMode ? _lastViewPortSize.height : (_lastViewPortSize.width + _paginationInfo.columnGap);
+
         _paginationInfo.columnWidth = Math.round(((_htmlBodyIsVerticalWritingMode ? _lastViewPortSize.height : _lastViewPortSize.width) - _paginationInfo.columnGap * (_paginationInfo.visibleColumnCount - 1)) / _paginationInfo.visibleColumnCount);
 
         var useColumnCountNotWidth = _paginationInfo.visibleColumnCount > 1; // column-count == 1 does not work in Chrome, and is not needed anyway (HTML width is full viewport width, no Firefox video flickering)
@@ -856,7 +857,7 @@ var ReflowableView = function(options, reader){
             // maxHeight: (_$iframe.height() + "px"),
             maxHeight: "95vh",
             // maxWidth: ((_$iframe.width() / widthModifier) + "px"),
-            maxWidth: ((95 / widthModifier) + "vw"),
+            // maxWidth: ((95 / widthModifier) + "vw"),
             "-webkit-column-break-inside": "avoid",
             "-moz-column-break-inside": "avoid",
             "-moz-page-break-inside": "avoid",
