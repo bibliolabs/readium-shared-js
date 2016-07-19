@@ -50,9 +50,8 @@ var CfiNavigationLogic = function(options) {
     };
     
     this.getBodyElement = function () {
-        
         // In SVG documents the root element can be considered the body.
-        return this.getRootDocument().body || this.getRootElement();
+        return self.getRootDocument().body || self.getRootElement(); 
     };
 
     this.getRootDocument = function () {
