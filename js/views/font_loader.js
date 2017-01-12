@@ -68,7 +68,7 @@ var FontLoaderFallback = function(document, options) {
                     }
                 });
 
-                if (usedFontFamily && rule.selectorText && !_.contains(usedFontFamilies, usedFontFamily[0]) && document.querySelector(rule.selectorText)) {
+                if (usedFontFamily && rule.selectorText && !_.includes(usedFontFamilies, usedFontFamily[0]) && document.querySelector(rule.selectorText)) {
                     usedFontFamilies.push(usedFontFamily[0]);
                 }
             });

@@ -896,7 +896,7 @@ var CfiNavigationLogic = function(options) {
         var element = visibleLeafNode.element;
         var textNode = visibleLeafNode.textNode;
 
-        if (targetLeafNode && element !== startingParent && !_.contains($(textNode || element).parents(), startingParent)) {
+        if (targetLeafNode && element !== startingParent && !_.includes($(textNode || element).parents(), startingParent)) {
             if (DEBUG) console.warn("findVisibleLeafNodeCfi: stopped recursion early");
             return null;
         }

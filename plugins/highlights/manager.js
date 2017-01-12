@@ -123,7 +123,7 @@ var HighlightsManager = function (proxyObj, options) {
 
         // check to see which spine indicies can be culled depending on the currently loaded spine items
         for(var spineIndex in liveAnnotations) {
-            if (liveAnnotations.hasOwnProperty(spineIndex) && !_.contains(loadedSpineItems, spines[spineIndex])) {
+            if (liveAnnotations.hasOwnProperty(spineIndex) && !_.includes(loadedSpineItems, spines[spineIndex])) {
                 delete liveAnnotations[spineIndex];
             }
         }

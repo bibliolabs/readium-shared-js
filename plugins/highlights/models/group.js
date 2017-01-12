@@ -262,7 +262,7 @@ function($, _, Class, TextLineInferrer, HighlightView, HighlightBorderView, High
                 } else if (node.nodeType === Node.ELEMENT_NODE && includeMedia) {
                     // non-text node element
                     // if we support this elements in the HL group
-                    if (_.contains(["img", "video", "audio"], node.tagName.toLowerCase())) {
+                    if (_.includes(["img", "video", "audio"], node.tagName.toLowerCase())) {
                         // set the Range to contain the node and its contents and push rectangle to the list
                         range.selectNode(node);
                         rectElementList.push(range.getBoundingClientRect());
