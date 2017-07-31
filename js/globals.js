@@ -27,7 +27,7 @@
 
 define(['jquery','eventEmitter'], function($, EventEmitter) {
     
-    var DEBUG = true;
+    var DEBUG = false;
     
 /**
  * Top level ReadiumSDK namespace
@@ -93,6 +93,10 @@ var Globals = {
          * @event
          */
         CONTENT_DOCUMENT_LOADED: "ContentDocumentLoaded",
+        /**
+         * @event
+         */
+        CONTENT_DOCUMENT_UNLOADED: "ContentDocumentUnloaded",
         /**
          * @event
          */

@@ -81,6 +81,14 @@ var FixedView = function(options, reader){
             self.emit(Globals.Events.CONTENT_DOCUMENT_LOAD_START, $iframe, spineItem);
         });
 
+        pageView.on(Globals.Events.CONTENT_DOCUMENT_UNLOADED, function($iframe, spineItem) {
+
+            Globals.logEvent("CONTENT_DOCUMENT_UNLOADED", "ON", "fixed_view.js [ " + spineItem.href + " ]");
+
+            Globals.logEvent("CONTENT_DOCUMENT_UNLOADED", "EMIT", "fixed_view.js [ " + spineItem.href + " ]");
+            self.emit(Globals.Events.CONTENT_DOCUMENT_UNLOADED, $iframe, spineItem);
+        });
+
         return pageView;
     }
 
@@ -130,15 +138,15 @@ var FixedView = function(options, reader){
     };
 
 
-    this.setViewSettings = function(settings) {
-
+    this.setViewSettings = function(settings, docWillChange) {
+        
         _viewSettings = settings;
 
         _spread.setSyntheticSpread(Helpers.deduceSyntheticSpread(_$viewport, getFirstVisibleItem(), _viewSettings) == true); // force boolean value (from truthy/falsey return value)
 
         var views = getDisplayingViews();
         for(var i = 0, count = views.length; i < count; i++) {
-            views[i].setViewSettings(settings);
+            views[i].setViewSettings(settings, docWillChange);
         }
     };
 
@@ -851,6 +859,27 @@ var FixedView = function(options, reader){
         return callOnPageView(spineItemIdref, function (view) {
             return view.getElementFromPoint(x,y);
         });
+    };
+
+    this.getStartCfi = function () {
+        return getDisplayingViews()[0].getStartCfi();
+    };
+
+    this.getEndCfi = function () {
+        return getDisplayingViews()[0].getEndCfi();
+    };
+
+    this.getNearestCfiFromElement = function(element) {
+        var views = getDisplayingViews();
+
+        for (var i = 0, count = views.length; i < count; i++) {
+
+            var view = views[i];
+            if (view.getLoadedContentFrames()[0].$iframe[0].contentDocument === element.ownerDocument) {
+                return view.getNearestCfiFromElement(element);
+            }
+        }
+
     };
 
 };
