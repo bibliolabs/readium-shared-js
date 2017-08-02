@@ -254,7 +254,7 @@ Helpers.UpdateHtmlFontAttributes = function ($epubHtml, fontSize, fontObj, callb
     var docHead = $("head", $epubHtml);
     var link = $("#" + FONT_FAMILY_ID, docHead);
 
-    const NOTHING = 0, ADD = 1, REMOVE = 2; //Types for css font family.
+    var NOTHING = 0, ADD = 1, REMOVE = 2; //Types for css font family.
     var changeFontFamily = NOTHING;
 
     var fontLoadCallback = function() {
