@@ -597,7 +597,7 @@ var ReflowableView = function(options, reader){
 
     function onPaginationChanged_(initiator, paginationRequest_spineItem, paginationRequest_elementId) {
         _paginationInfo.currentPageIndex = _paginationInfo.currentSpreadIndex * _paginationInfo.visibleColumnCount;
-        _paginationInfo.pageOffset = (_paginationInfo.columnWidth + _paginationInfo.columnGap) * _paginationInfo.visibleColumnCount * _paginationInfo.currentSpreadIndex;
+        _paginationInfo.pageOffset = _paginationInfo.pageOffsetSize * _paginationInfo.currentSpreadIndex;
         
         redraw();
 
