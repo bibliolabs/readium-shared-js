@@ -355,7 +355,7 @@ Helpers.UpdateHtmlFontAttributes = function ($epubHtml, fontSize, fontObj, callb
 
             var fontSizeAttr = ele.getAttribute('data-original-font-size');
             var originalFontSize = Number(fontSizeAttr);
-            $(ele).css("font-size", (originalFontSize * factor) + 'px');
+            ele.style.setProperty("font-size", (originalFontSize * factor) + 'px', 'important');
 
             var lineHeightAttr = ele.getAttribute('data-original-line-height');
             var originalLineHeight = lineHeightAttr ? Number(lineHeightAttr) : 0;
