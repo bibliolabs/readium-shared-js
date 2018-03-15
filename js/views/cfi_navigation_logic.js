@@ -47,13 +47,21 @@ var CfiNavigationLogic = function (options) {
     }
 
     this.getRootElement = function () {
+        if (!options.$iframe) {
+            return null;
+        }
 
         return options.$iframe[0].contentDocument.documentElement;
     };
 
     this.getBodyElement = function () {
-        // In SVG documents the root element can be considered the body.
-        return self.getRootDocument().body || self.getRootElement(); 
+        var rootDocument = this.getRootDocument();
+        if (rootDocument && rootDocument.body) {
+            return rootDocument.body;
+        } else {
+            // In SVG documents the root element can be considered the body.
+            return self.getRootElement();
+        }
     };
 
     this.getClassBlacklist = function () {
@@ -69,6 +77,10 @@ var CfiNavigationLogic = function (options) {
     };
 
     this.getRootDocument = function () {
+        if (!options.$iframe) {
+            return null;
+        }
+
         return options.$iframe[0].contentDocument;
     };
 
@@ -102,7 +114,16 @@ var CfiNavigationLogic = function (options) {
         } else if (endNode.nodeType === Node.TEXT_NODE) {
             range.setEnd(endNode, endOffset ? endOffset : 0);
         }
-        return normalizeRectangle(range.getBoundingClientRect(), 0, 0);
+
+        // Webkit has a bug where collapsed ranges provide an empty rect with getBoundingClientRect()
+        // https://bugs.webkit.org/show_bug.cgi?id=138949
+        // Thankfully it implements getClientRects() properly...
+        // A collapsed text range may still have geometry!
+        if (range.collapsed) {
+            return normalizeRectangle(range.getClientRects()[0], 0, 0);
+        } else {
+            return normalizeRectangle(range.getBoundingClientRect(), 0, 0);
+        }
     }
 
     function getNodeClientRectList(node, visibleContentOffsets) {
@@ -508,9 +529,9 @@ var CfiNavigationLogic = function (options) {
                 width: textRect.right - textRect.left,
                 height: textRect.bottom - textRect.top
             };
-            if (leftOffset && topOffset) {
-                offsetRectangle(plainRectObject, leftOffset, topOffset);
-            }
+            leftOffset = leftOffset || 0;
+            topOffset = topOffset || 0;
+            offsetRectangle(plainRectObject, leftOffset, topOffset);
             return plainRectObject;
         }
 
@@ -1348,6 +1369,10 @@ var CfiNavigationLogic = function (options) {
                 return true;
             }
 
+            if (_.contains(self.getElementBlacklist(), element.tagName.toLowerCase())) {
+                return true;
+            }
+
             return false;
         }
 
@@ -1571,7 +1596,7 @@ var CfiNavigationLogic = function (options) {
                 var arr = window.top._DEBUG_visibleTextRangeOffsetsRuns;
                 return arr.reduce(function (a, b) {
                     return a + b;
-                }) / arr.length;             
+                }) / arr.length;
             }
         };
 
@@ -1580,12 +1605,18 @@ var CfiNavigationLogic = function (options) {
 
         this.findFirstVisibleElement = function (visibleContentOffsets, frameDimensions) {
 
+            var bodyElement = this.getBodyElement();
+
+            if (!bodyElement) {
+                return null;
+            }
+
             var firstVisibleElement;
             var percentVisible = 0;
             var textNode;
 
             var treeWalker = document.createTreeWalker(
-                this.getBodyElement(),
+                bodyElement,
                 NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
                 function(node) {
                     if (node.nodeType === Node.ELEMENT_NODE && isElementBlacklisted(node))
@@ -1657,12 +1688,18 @@ var CfiNavigationLogic = function (options) {
 
         this.findLastVisibleElement = function (visibleContentOffsets, frameDimensions) {
 
+            var bodyElement = this.getBodyElement();
+
+            if (!bodyElement) {
+                return null;
+            }
+
             var firstVisibleElement;
             var percentVisible = 0;
             var textNode;
 
             var treeWalker = document.createTreeWalker(
-                this.getBodyElement(),
+                bodyElement,
                 NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
                 function(node) {
                     if (node.nodeType === Node.ELEMENT_NODE && isElementBlacklisted(node))

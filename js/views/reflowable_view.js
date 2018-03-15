@@ -60,8 +60,8 @@ var ReflowableView = function(options, reader){
     var _$epubHtml;
     var _lastPageRequest = undefined;
 
-    var _cfiClassBlacklist = ["cfi-marker", "mo-cfi-highlight", "resize-sensor", "resize-sensor-expand", "resize-sensor-shrink", "resize-sensor-inner"];
-    var _cfiElementBlacklist = [];
+    var _cfiClassBlacklist = ["cfi-marker", "mo-cfi-highlight", "resize-sensor", "resize-sensor-expand", "resize-sensor-shrink", "resize-sensor-inner", "js-hypothesis-config", "js-hypothesis-embed"];
+    var _cfiElementBlacklist = ["hypothesis-adder"];
     var _cfiIdBlacklist = ["MathJax_Message", "MathJax_SVG_Hidden"];
 
     var _$htmlBody;
@@ -629,7 +629,7 @@ var ReflowableView = function(options, reader){
             // Reset it so it's saved next time onPaginationChanged is called
             this.resetCurrentPosition();
             _paginationInfo.currentSpreadIndex--;
-            onPaginationChanged(initiator);
+            onPaginationChanged(initiator, _currentSpineItem);
         }
         else {
 
@@ -654,7 +654,7 @@ var ReflowableView = function(options, reader){
             // Reset it so it's saved next time onPaginationChanged is called
             this.resetCurrentPosition();
             _paginationInfo.currentSpreadIndex++;
-            onPaginationChanged(initiator);
+            onPaginationChanged(initiator, _currentSpineItem);
         }
         else {
 
@@ -793,6 +793,11 @@ var ReflowableView = function(options, reader){
         _$epubHtml.css('margin', 0);
         _$epubHtml.css('padding', 0);
         _$epubHtml.css('border', 0);
+
+        // In order for the ResizeSensor to work, the content body needs to be "positioned".
+        // This may be an issue since it changes the assumptions some content authors might make when positioning their content.
+        _$htmlBody.css('position', 'relative');
+
         _$htmlBody.css('margin', 0);
         _$htmlBody.css('padding', 0);
 
@@ -864,10 +869,10 @@ var ReflowableView = function(options, reader){
                 _paginationInfo.currentPageIndex = 0; // current page index is not stable, reset it
                 self.restoreCurrentPosition();
             } else {
-                onPaginationChanged(self); // => redraw() => showBook(), so the trick below is not needed                
+                onPaginationChanged(self, _currentSpineItem); // => redraw() => showBook(), so the trick below is not needed                
             }
 
-            //onPaginationChanged(self); // => redraw() => showBook(), so the trick below is not needed 
+            //onPaginationChanged(self, _currentSpineItem); // => redraw() => showBook(), so the trick below is not needed 
 
             // //We do this to force re-rendering of the document in the iframe.
             // //There is a bug in WebView control with right to left columns layout - after resizing the window html document
@@ -875,7 +880,7 @@ var ReflowableView = function(options, reader){
             // _$epubHtml.hide();
             // setTimeout(function() {
             //     _$epubHtml.show();
-            //     onPaginationChanged(self); // => redraw() => showBook()
+            //     onPaginationChanged(self, _currentSpineItem); // => redraw() => showBook()
             // }, 50);
 
         }
@@ -1093,15 +1098,15 @@ var ReflowableView = function(options, reader){
             return;
         }
 
-        var page = _navigationLogic.getPageForElement($element);
+        var elementCfi = _navigationLogic.getCfiForElement(element);
 
-        if(page == -1)
+        if (!elementCfi)
         {
             return;
         }
 
         var openPageRequest = new PageOpenRequest(_currentSpineItem, initiator);
-        openPageRequest.setPageIndex(page);
+        openPageRequest.setElementCfi(elementCfi);
 
         var id = element.id;
         if (!id)
